@@ -1,48 +1,18 @@
 import { clsx } from 'clsx'
 
 /**
- * A marca 4Play desenhada em SVG: "4PLAY" itálico e pesado, com "UNIFORMES"
- * em cima do Y — o mesmo desenho do site. Verde-limão sobre preto por padrão.
+ * A marca 4Play. Lima e branca, feita para fundo ESCURO — em fundo claro, ponha
+ * dentro de um bloco preto.
+ *
+ * O arquivo é `public/brand/4play.svg`: a logo da arte da parceria, vetorizada
+ * (nítida em qualquer tamanho). Se a 4Play mandar o SVG original, basta
+ * substituir o arquivo com o mesmo nome.
  */
-export const Logo = ({
-  className,
-  color = '#d9ff22',
-  subColor = '#ffffff',
-}: {
-  className?: string
-  color?: string
-  subColor?: string
-}) => (
-  <svg
-    viewBox="0 0 250 80"
-    role="img"
-    aria-label="4Play Uniformes"
-    className={clsx('h-10 w-auto', className)}
-  >
-    <text
-      x="4"
-      y="68"
-      fontFamily="Montserrat, 'Arial Black', sans-serif"
-      fontWeight={900}
-      fontStyle="italic"
-      fontSize="74"
-      letterSpacing="-5"
-      fill={color}
-    >
-      4PLAY
-    </text>
-    <text
-      x="246"
-      y="16"
-      textAnchor="end"
-      fontFamily="Montserrat, 'Arial Black', sans-serif"
-      fontWeight={900}
-      fontStyle="italic"
-      fontSize="13"
-      letterSpacing="0.5"
-      fill={subColor}
-    >
-      UNIFORMES
-    </text>
-  </svg>
+export const Logo = ({ className }: { className?: string }) => (
+  <img
+    src="/brand/4play.svg"
+    alt="4Play Uniformes"
+    draggable={false}
+    className={clsx('w-auto select-none', className ?? 'h-10')}
+  />
 )

@@ -79,3 +79,15 @@ src/
   lib/          http, formatação BR, vocabulário da produção, queries
   pages/        Login, Painel, Produção, Pedidos, Pedido, Clientes, Equipe, TrocarSenha
 ```
+
+## Marca
+
+Os arquivos da marca ficam em `public/brand/` e podem ser trocados sem mexer em código (mesmo nome, fundo transparente):
+
+| Arquivo | O que é |
+| --- | --- |
+| `4play.svg` | Logo da 4Play em vetor (nítida em qualquer tamanho). Feita para fundo escuro |
+| `aeris-one.png` | Logo horizontal do Aeris One, em branco (montada a partir do arquivo oficial do Aeris) |
+| `aeris-mark.png` | Só a marca "A1", em branco |
+
+A composição 4Play × Aeris One está em `src/components/CoBrand.tsx` (login, menu lateral e tela de criar senha) e o fundo com os raios em `src/components/Lightning.tsx`.

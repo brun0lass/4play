@@ -5,7 +5,8 @@ import { Navigate, useLocation } from 'react-router'
 
 import { login } from '@/api/auth'
 import { useAuth } from '@/auth/AuthProvider'
-import { Logo } from '@/components/Logo'
+import { CoBrand } from '@/components/CoBrand'
+import { LightningBackdrop } from '@/components/Lightning'
 import { Button, ErrorBox } from '@/components/ui'
 import { ApiError, errorMessage } from '@/lib/http'
 
@@ -45,21 +46,19 @@ export const LoginPage = () => {
   return (
     <div className="grid min-h-full lg:grid-cols-[1.15fr_1fr]">
       {/* Lado da marca */}
-      <section className="brush-bg relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex">
-        <Logo className="h-14" />
-        <div>
-          <p className="display text-6xl leading-[0.9] xl:text-7xl">
-            Uniformes
-            <br />
-            esportivos
-            <br />
-            <span className="text-lime">direto da fábrica</span>
-          </p>
-          <p className="mt-6 max-w-md text-lg font-medium text-white/70">
-            A fila de produção da 4Play: da arte aprovada à peça embalada, num quadro só.
+      <section className="relative hidden flex-col items-center justify-between overflow-hidden p-12 text-white lg:flex">
+        <LightningBackdrop />
+        <span className="relative text-[11px] font-bold tracking-[0.3em] text-white/50 uppercase">
+          Central de produção
+        </span>
+        <div className="relative flex flex-col items-center text-center">
+          <CoBrand size="lg" />
+          <p className="mt-10 max-w-md text-lg font-medium text-white/75">
+            Da arte aprovada à peça embalada, num quadro só. O sistema de gestão da 4Play, por{' '}
+            <strong className="font-extrabold text-white">Aeris One</strong>.
           </p>
         </div>
-        <div className="flex gap-8 text-xs font-bold tracking-[0.2em] text-white/50 uppercase">
+        <div className="relative flex gap-8 text-xs font-bold tracking-[0.2em] text-white/50 uppercase">
           <span>Arte</span>
           <span>Impressão</span>
           <span>Corte</span>
@@ -69,9 +68,10 @@ export const LoginPage = () => {
       </section>
 
       {/* Formulário */}
-      <section className="flex flex-col items-center justify-center bg-ink px-6 py-12 lg:bg-white">
-        <div className="w-full max-w-sm">
-          <Logo className="mb-10 h-14 lg:hidden" />
+      <section className="relative flex flex-col items-center justify-center bg-ink px-6 py-12 lg:bg-white">
+        <LightningBackdrop className="lg:hidden" />
+        <div className="relative w-full max-w-sm">
+          <CoBrand size="md" className="mb-10 lg:hidden" />
           <h1 className="display text-4xl text-white lg:text-ink">Entrar</h1>
           <p className="mt-2 mb-8 text-sm font-medium text-white/60 lg:text-muted">
             Use o seu acesso do Aeris One.

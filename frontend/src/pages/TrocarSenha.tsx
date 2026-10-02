@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router'
 
 import { changePassword } from '@/api/auth'
 import { SESSION_KEY, useAuth } from '@/auth/AuthProvider'
-import { Logo } from '@/components/Logo'
+import { CoBrand } from '@/components/CoBrand'
 import { Button, ErrorBox } from '@/components/ui'
 import { errorMessage } from '@/lib/http'
 
@@ -36,7 +36,9 @@ export const TrocarSenhaPage = () => {
   return (
     <div className="brush-bg flex min-h-full items-center justify-center px-4 py-12">
       <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-white p-8">
-        <Logo className="mb-6 h-10" color="#0a0a0a" subColor="#0a0a0a" />
+        <div className="mb-6 flex justify-center rounded-2xl bg-[#07123a] px-4 py-5">
+          <CoBrand size="sm" />
+        </div>
         <h1 className="display text-3xl">Crie sua senha</h1>
         <p className="mt-2 mb-6 text-sm text-muted">
           Bem-vindo(a) à 4Play{firstName ? `, ${firstName}` : ''}! Você entrou com uma senha temporária. Agora crie uma senha só sua

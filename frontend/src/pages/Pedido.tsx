@@ -117,11 +117,11 @@ export const PedidoPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-right">
+          <div className="grid w-full grid-cols-2 gap-2 text-right sm:w-auto sm:grid-cols-3 sm:gap-3">
             <Stat label="Peças" value={int(pieces)} />
             <Stat label="Total" value={money(order.totalAmount)} />
             <Stat label="Pago" value={money(order.paidAmount)} />
-            {order.ticketPerPiece && <Stat label="Por peça" value={money(order.ticketPerPiece)} className="col-span-3" small />}
+            {order.ticketPerPiece ? <Stat label="Por peça" value={money(order.ticketPerPiece)} /> : <span />}
           </div>
         </div>
 
@@ -140,7 +140,7 @@ export const PedidoPage = () => {
                   onClick={() => setJumpTo(stage)}
                   title={here ? meta.what : `Mover para ${meta.label}`}
                   className={clsx(
-                    'flex w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-center text-[10px] font-extrabold tracking-wide uppercase transition',
+                    'flex w-full min-w-0 flex-col items-center gap-1 rounded-2xl px-0.5 py-2.5 text-center text-[8.5px] font-extrabold uppercase transition sm:px-1 sm:text-[10px] sm:tracking-wide',
                     here && 'bg-lime text-ink shadow-[0_3px_0_0_rgb(0_0_0/0.8)]',
                     done && 'bg-white/10 text-lime hover:bg-white/20',
                     !here && !done && 'bg-white/5 text-white/50 hover:bg-white/15 hover:text-white'
@@ -295,8 +295,8 @@ const Stat = ({
   className?: string
   small?: boolean
 }) => (
-  <div className={clsx('rounded-2xl bg-white/5 px-4 py-3', className)}>
+  <div className={clsx('min-w-0 rounded-2xl bg-white/5 px-4 py-3', className)}>
     <p className="text-[10px] font-bold tracking-widest text-white/50 uppercase">{label}</p>
-    <p className={clsx('font-extrabold', small ? 'text-sm' : 'text-xl')}>{value}</p>
+    <p className={clsx('font-extrabold', small ? 'text-sm' : 'text-lg sm:text-xl')}>{value}</p>
   </div>
 )

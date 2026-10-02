@@ -17,6 +17,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 
 import { useAuth } from '@/auth/AuthProvider'
+import { CoBrand } from '@/components/CoBrand'
 import { Logo } from '@/components/Logo'
 import { NewOrderContext, useNewOrder } from '@/components/NewOrderContext'
 import { NewOrderWizard } from '@/components/NewOrderWizard'
@@ -49,11 +50,8 @@ const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
 
   return (
     <div className="brush-bg flex h-full flex-col text-white">
-      <div className="px-6 pt-7 pb-8">
-        <Logo className="h-11" />
-        <p className="mt-2 text-[10px] font-bold tracking-[0.25em] text-white/40 uppercase">
-          Central de produção
-        </p>
+      <div className="px-6 pt-7 pb-6">
+        <CoBrand size="sm" />
       </div>
 
       {canCreateOrder(can) && (
