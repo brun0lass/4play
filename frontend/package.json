@@ -1,0 +1,33 @@
+{
+  "name": "4play-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Front da 4Play Uniformes sobre o backend do Aeris One.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "sync:contracts": "node scripts/sync-contracts.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.101.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "1.27.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router": "^7.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.2.1"
+  }
+}

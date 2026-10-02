@@ -1,0 +1,12 @@
+﻿# O Aeris One é outro repositório (clone local), não faz parte deste.
+aerisone/
+
+# Configuração local do assistente / editor.
+.claude/
+
+# Dependências e builds, onde estiverem.
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local

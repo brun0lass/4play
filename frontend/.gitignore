@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.local
+*.tsbuildinfo
+
+# Cópia da especificação do Aeris (consulta local, 6,7 MB).
+openapi.json

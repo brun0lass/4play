@@ -1,0 +1,140 @@
+@import 'tailwindcss';
+
+/*
+ * A identidade da 4Play Uniformes: preto, verde-limão e Montserrat pesada.
+ * Os tokens abaixo viram utilitários do Tailwind (`bg-lime`, `text-ink`…).
+ */
+@theme {
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+
+  --color-lime: #d9ff22;
+  --color-lime-600: #b9dc00;
+  --color-lime-50: #f7ffd6;
+  --color-ink: #0a0a0a;
+  --color-ink-800: #161616;
+  --color-ink-700: #222222;
+  --color-ink-600: #2f2f2f;
+  --color-paper: #f4f5f0;
+  --color-line: #e3e5dc;
+  --color-muted: #5e6c7b;
+  --color-magenta: #e6007e;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* O título esportivo do site: itálico, pesado, caixa alta. */
+  .display {
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    line-height: 0.95;
+  }
+
+  /* As pinceladas diagonais do site, desenhadas em CSS. */
+  .brush-bg {
+    background-color: var(--color-ink);
+    background-image:
+      repeating-linear-gradient(
+        -58deg,
+        transparent 0 38px,
+        rgb(217 255 34 / 0.09) 38px 44px,
+        transparent 44px 90px
+      ),
+      repeating-linear-gradient(
+        -64deg,
+        transparent 0 70px,
+        rgb(217 255 34 / 0.06) 70px 73px,
+        transparent 73px 130px
+      );
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-line);
+    background: white;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 3px rgb(217 255 34 / 0.6);
+  }
+  .field:disabled {
+    background: #f1f2ec;
+    color: var(--color-muted);
+  }
+
+  .label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .card {
+    border-radius: 1.25rem;
+    border: 1px solid var(--color-line);
+    background: white;
+  }
+
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #c9ccc0 transparent;
+  }
+}
+
+/* Impressão: só a folha, em paisagem, sem menu nem botões. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  body {
+    background: white;
+  }
+  .no-print,
+  [aria-live] {
+    display: none !important;
+  }
+  .planilha table {
+    font-size: 9px;
+  }
+  .planilha select {
+    border: 0;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
