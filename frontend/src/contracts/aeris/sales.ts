@@ -956,6 +956,24 @@ export type PickupSalesDocumentRequest = z.input<
 >
 
 /**
+ * Pagar agora e retirar depois (F218).
+ *
+ * O cliente paga o orçamento no caixa e volta outro dia para buscar. Numa
+ * operação só, o orçamento vira pedido confirmado — a mercadoria fica separada
+ * para ele — e o pedido é pago por inteiro. A saída do estoque e a hora da
+ * retirada ficam para quando ele buscar, pela retirada de pedido (`/pickup`).
+ */
+export const PayAndHoldRequest = z.object({
+  /** A versão do ORÇAMENTO que o caixa abriu. */
+  version: z.number().int().nonnegative(),
+  /** Como na retirada: obrigatória só na loja que trabalha com caixa (F174). */
+  cashSessionId: z.string().min(1).nullable().default(null),
+  payments: z.array(TenderRequest).min(1),
+})
+
+export type PayAndHoldRequest = z.input<typeof PayAndHoldRequest>
+
+/**
  * Receber o sinal de um pedido confirmado (F173).
  *
  * Parte do total, no caixa aberto da filial. A soma não passa do que falta, e
@@ -1004,6 +1022,7 @@ export type DepositSalesDocumentBody = z.output<
 export type PickupSalesDocumentBody = z.output<
   typeof PickupSalesDocumentRequest
 >
+export type PayAndHoldBody = z.output<typeof PayAndHoldRequest>
 
 export type DispatchSalesDocumentRequest = z.input<
   typeof DispatchSalesDocumentRequest

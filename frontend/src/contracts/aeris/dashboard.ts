@@ -305,3 +305,30 @@ export const DashboardNowResponse = z.object({
 })
 
 export type DashboardNowResponse = z.infer<typeof DashboardNowResponse>
+
+/**
+ * Quem pagou, por forma — F217. Uma linha por venda e forma (o troco já sai
+ * do dinheiro) e uma por baixa de título. A soma de cada forma é o total do
+ * "Recebido por forma" do mesmo período.
+ */
+export const DashboardReceivedResponse = z.object({
+  entries: z.array(
+    z.object({
+      paymentMethodId: z.string(),
+      methodName: z.string(),
+      methodKind: z.string(),
+      at: z.string(),
+      amount: z.string(),
+      source: z.enum(['sale', 'settlement']),
+      documentNumber: z.string().nullable(),
+      documentKind: z.enum(['quote', 'order', 'sale']).nullable(),
+      customerName: z.string().nullable(),
+      description: z.string().nullable(),
+      instalment: z.string().nullable(),
+      courierName: z.string().nullable(),
+    })
+  ),
+})
+export type DashboardReceivedResponse = z.infer<
+  typeof DashboardReceivedResponse
+>

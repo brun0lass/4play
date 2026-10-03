@@ -34,7 +34,7 @@ O Aeris não envia e-mail: o acesso é criado pelo e-mail e ele devolve uma senh
 | Gerente | `manager` | (gerencia tudo) | Tudo, menos cadastrar a equipe |
 | Administrador | `admin` | (gerencia tudo) | Tudo |
 
-Atendente, Designer e Operador se combinam na mesma pessoa. O que cada um vê é decidido em `src/lib/access.ts` pelo papel **e** pela função na produção; telas fora da função mostram "Esta tela não é da sua função" mesmo digitando o endereço. **É recorte de tela:** a API do Aeris continua devolvendo valores para o papel `salesperson` — esconder de verdade exige mudança no backend do Aeris. `salesperson` não cadastra produto (`catalog.write`): no Novo pedido, produto novo só gerente/dono.
+Atendente, Designer e Operador se combinam na mesma pessoa. O que cada um vê é decidido em `src/lib/access.ts` pelo papel **e** pela função na produção; telas fora da função mostram "Esta tela não é da sua função" mesmo digitando o endereço. **A API também recorta (F220 do Aeris):** quem está só na arte e/ou na fábrica recebe valor, pago e preço nulos na fila e perde da sessão vendas, preços e PDV. Na loja sem caixa, a atendente também despacha. `salesperson` não cadastra produto (`catalog.write`): no Novo pedido, produto novo só gerente/dono.
 
 A conta precisa ter a chave **`uniformes`** ligada no Aeris. Sem ela, a API responde `feature_not_enabled` e o front mostra um aviso.
 

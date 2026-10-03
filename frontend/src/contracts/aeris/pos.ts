@@ -188,6 +188,14 @@ export const PosLookupQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(8),
   /** Absent means "the tenant's default list", which is what a till does. */
   priceListId: z.string().min(1).optional(),
+  /**
+   * A cor escolhida na lista (F215).
+   *
+   * Escolher refazia a busca pelo código, e a cor cujo código é o do GDOOR
+   * voltava junto com as irmãs: a lista reaparecia e nada entrava. Com a
+   * variação dita, a resposta é ela e só ela, já com o preço.
+   */
+  variantId: z.uuid().optional(),
 })
 
 export type PosLookupQuery = z.input<typeof PosLookupQuery>

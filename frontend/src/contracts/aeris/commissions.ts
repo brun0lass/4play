@@ -179,8 +179,35 @@ export const MyCommissionResponse = z.object({
   baseAmount: money,
   commissionAmount: money,
   statement: CommissionStatementSummary.nullable(),
+  /**
+   * O mês dia a dia, do mais novo ao mais velho (F215). Só os dias com venda
+   * ou troca. Um dia de mês anterior aparece quando a venda dele ainda não
+   * entrou em extrato — entra no fechamento deste.
+   */
+  days: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        salesCount: z.number().int().nonnegative(),
+        salesAmount: money,
+        /** Troca que virou vale e venda cancelada depois do fechamento. */
+        returnsAmount: money,
+        baseAmount: money,
+        commissionAmount: money,
+      })
+    )
+    .default([]),
 })
 export type MyCommissionResponse = z.infer<typeof MyCommissionResponse>
+
+/** As vendas e trocas de quem está logado no mês, uma a uma (F215). */
+export const MyCommissionLinesResponse = z.object({
+  period: CommissionPeriod,
+  lines: z.array(CommissionLine),
+})
+export type MyCommissionLinesResponse = z.infer<
+  typeof MyCommissionLinesResponse
+>
 
 // ---------------------------------------------------------------------------
 // A % e quem recebe

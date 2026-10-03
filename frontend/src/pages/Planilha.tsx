@@ -7,7 +7,7 @@ import { useStageMover } from '@/components/StageMover'
 import { Button, ErrorBox, Modal, Spinner } from '@/components/ui'
 import { useAccess } from '@/lib/access'
 import { money } from '@/lib/format'
-import { linesText, useSalesDocuments } from '@/lib/order-lines'
+import { linesText } from '@/lib/order-lines'
 import { useQueue } from '@/lib/queries'
 import {
   FABRIC_LABELS,
@@ -81,7 +81,7 @@ const COLUMNS: Col[] = [
   { key: 'tecido', label: 'TIPO TECIDO', print: true, cell: (o) => (o.fabric ? <span className="uppercase">{FABRIC_LABELS[o.fabric]}</span> : <span className="rounded bg-ink px-2 text-white">?</span>) },
   { key: 'personalizacao', label: <>PERSONA<br />LIZAÇÃO</>, print: true, cell: (o) => (o.personalized ? SIM : NAO) },
   { key: 'qtde', label: 'QTDE.', print: true, cell: (o) => <span className="font-bold">{o.pieces}</span> },
-  { key: 'dados', label: 'DADOS DO PEDIDO', print: true, className: 'min-w-72 max-w-md', cell: (_, dados) => <span className="text-[11px] uppercase">{dados || <span className="text-ink/30">carregando…</span>}</span> },
+  { key: 'dados', label: 'DADOS DO PEDIDO', print: true, className: 'min-w-72 max-w-md', cell: (_, dados) => <span className="text-[11px] uppercase">{dados || VAZIO}</span> },
   { key: 'valor', label: <>VALOR<br />FECHADO</>, print: false, money: true, cell: (o) => <span className="whitespace-nowrap">{money(o.totalAmount)}</span> },
   {
     key: 'sinal',
@@ -152,8 +152,9 @@ export const Planilha = () => {
     dispatchFrom: range?.from,
     dispatchTo: range?.to,
   })
+  // Os itens vêm na própria fila (F220): uma chamada só, e sem preço para
+  // quem não vê dinheiro.
   const items = queue.data?.items ?? []
-  const docs = useSalesDocuments(items.map((o) => o.id))
 
   const togglePrint = (key: string) => {
     const next = printCols.includes(key) ? printCols.filter((k) => k !== key) : [...printCols, key]
@@ -179,7 +180,6 @@ export const Planilha = () => {
         <Button variant="ink" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
           Imprimir
         </Button>
-        {docs.loading > 0 && <span className="text-xs font-semibold text-muted">Carregando os dados de {docs.loading} pedido(s)…</span>}
         {mover.lastError && <span className="text-xs font-bold text-red-600">{mover.lastError}</span>}
       </div>
 
@@ -213,7 +213,7 @@ export const Planilha = () => {
                   <tr key={o.id} onClick={() => void navigate(`/pedidos/${o.id}`)} className={clsx('cursor-pointer hover:bg-lime-50 print:break-inside-avoid', o.late && 'bg-red-50/50')}>
                     {columns.map((c) => (
                       <td key={c.key} className={clsx('border border-line px-2 py-1 text-center align-middle', c.className, hidePrint(c.key))}>
-                        {c.cell(o, linesText(docs.byId.get(o.id), seeMoney))}
+                        {c.cell(o, linesText(o.lines, seeMoney))}
                       </td>
                     ))}
                     <td className={clsx('border border-line px-1 py-1 text-center', hidePrint('status'))} onClick={(e) => e.stopPropagation()}>

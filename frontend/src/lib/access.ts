@@ -17,8 +17,10 @@ import type { UniformFunction } from '@/lib/uniforms'
  *  - Designer: a fila e a arte. Sem valores.
  *  - Operador: a fila, a produção e o estoque (só ver). Sem valores.
  *
- * ⚠️ É recorte de TELA. A API do Aeris continua devolvendo os valores para o
- * papel `salesperson`; esconder de verdade exige mudança no backend do Aeris.
+ * Desde a F220 do Aeris a API também recorta: quem está só na arte e/ou na
+ * fábrica recebe o valor nulo na fila e perde da sessão as permissões de
+ * vendas, preços e PDV. Esta regra é a da tela, e é um pouco mais estrita: o
+ * vendedor sem função nenhuma também não vê valor aqui.
  */
 export type Access = {
   ready: boolean

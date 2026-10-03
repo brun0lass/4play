@@ -243,6 +243,10 @@ export const ExchangeListQuery = z.object({
   status: ExchangeStatusSchema.optional(),
   kind: ExchangeKindSchema.optional(),
   originalSaleId: z.uuid().optional(),
+  /**
+   * Da loja (com venda do Aeris) ou da gestão antiga (sem venda, F148) — F216.
+   */
+  origin: z.enum(['store', 'old']).optional(),
   customerPartyId: z.uuid().optional(),
   /**
    * O período em que a troca foi CONCLUÍDA — F158.
@@ -298,6 +302,7 @@ export type ExchangeListRequest = {
   kind?: ExchangeKind | undefined
   originalSaleId?: string | undefined
   customerPartyId?: string | undefined
+  origin?: 'store' | 'old' | undefined
   completedFrom?: string | undefined
   completedTo?: string | undefined
   reasonCode?: ExchangeReasonCode | 'sem-motivo' | undefined
@@ -416,6 +421,11 @@ export const CustomerCreditEntrySummary = z.object({
   note: z.string().nullable(),
   actorName: z.string().nullable(),
   occurredAt: z.string(),
+  /**
+   * De quem é o vale que entrou (F216): da gestão antiga ou da loja. Nulo no
+   * que saiu. Opcional para a tela anterior continuar lendo.
+   */
+  oldManagement: z.boolean().nullable().default(null),
 })
 
 export type CustomerCreditEntrySummary = z.infer<
@@ -425,6 +435,13 @@ export type CustomerCreditEntrySummary = z.infer<
 export const CustomerCreditStatement = z.object({
   partyId: z.string(),
   balance: z.string(),
+  /**
+   * O saldo separado por gestão (F216). O que o cliente usa sai primeiro do
+   * antigo (F214).
+   */
+  byOrigin: z
+    .object({ store: z.string(), old: z.string() })
+    .default({ store: '0.00', old: '0.00' }),
   /** Tudo o que já entrou de vale, e tudo o que já foi usado (F208). */
   totals: z.object({ received: z.string(), used: z.string() }),
   /** Quantas linhas o extrato tem ao todo, para "carregar mais". */
@@ -442,6 +459,67 @@ export const CustomerCreditQuery = z.object({
 export type CustomerCreditQuery = z.infer<typeof CustomerCreditQuery>
 
 export type CustomerCreditStatement = z.infer<typeof CustomerCreditStatement>
+
+/**
+ * Dar ou tirar vale na mão (F216), com a senha de quem pode.
+ *
+ * `authorisationId` vem do `/auth/authorize` com a ação
+ * `exchange.credit.adjust`, alvo o cliente, e o `detail` igual a
+ * `{ direction, amount, oldManagement }`: a senha aprova ESTE ajuste.
+ */
+export const CreditAdjustmentRequest = z.object({
+  direction: z.enum(['give', 'take']),
+  amount: z
+    .string()
+    .trim()
+    .regex(/^\d{1,12}(\.\d{1,2})?$/, 'O valor vem como 10.50.')
+    .refine(
+      (value) => /[1-9]/.test(value),
+      'O valor tem de ser maior que zero.'
+    ),
+  oldManagement: z.boolean(),
+  reason: z.string().trim().min(3, 'Diga o motivo.').max(500),
+  authorisationId: z.uuid(),
+})
+export type CreditAdjustmentRequest = z.input<typeof CreditAdjustmentRequest>
+
+/** O que a senha aprovou, guardado na autorização e conferido no ajuste. */
+export const AuthorisedCreditAdjustment = CreditAdjustmentRequest.pick({
+  direction: true,
+  amount: true,
+  oldManagement: true,
+})
+
+export const CreditAdjustmentResponse = z.object({
+  partyId: z.string(),
+  balance: z.string(),
+  byOrigin: z.object({ store: z.string(), old: z.string() }),
+})
+export type CreditAdjustmentResponse = z.infer<typeof CreditAdjustmentResponse>
+
+/**
+ * A conta com a gestão antiga (F216): o vale antigo emitido, o que os clientes
+ * já gastaram em produto da Elite — o que a gestão antiga ressarce — e o que
+ * ainda está em aberto.
+ */
+export const OldManagementAccountResponse = z.object({
+  issued: z.string(),
+  used: z.string(),
+  open: z.string(),
+  customers: z.array(
+    z.object({
+      partyId: z.string(),
+      name: z.string(),
+      exchanges: z.number().int().nonnegative(),
+      issued: z.string(),
+      used: z.string(),
+      open: z.string(),
+    })
+  ),
+})
+export type OldManagementAccountResponse = z.infer<
+  typeof OldManagementAccountResponse
+>
 
 /**
  * O caixa (ou o vendedor) pede uma troca ou um vale ao trocador (fatia 2d).

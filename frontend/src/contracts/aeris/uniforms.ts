@@ -246,6 +246,22 @@ export const ProductionPrinterRef = z.object({
   name: z.string(),
 })
 
+/**
+ * Um item do pedido de vendas, como a planilha o lê: "29 Camisa dry" (F220).
+ *
+ * O preço vem nulo para quem não vê dinheiro (`seesMoney`) — a quantidade e o
+ * nome continuam, porque é com eles que a fábrica trabalha.
+ */
+export const ProductionOrderLine = z.object({
+  description: z.string(),
+  quantity: z.string(),
+  unit: z.string(),
+  unitPrice: z.string().nullable(),
+  lineTotal: z.string().nullable(),
+})
+
+export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
+
 export const ProductionOrderSummary = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
@@ -256,9 +272,13 @@ export const ProductionOrderSummary = z.object({
   customerCity: z.string().nullable(),
   salespersonUserId: z.string().nullable(),
   salespersonName: z.string().nullable(),
-  totalAmount: z.string(),
-  /** O que já foi pago no pedido — o sinal de verdade (F173). */
-  paidAmount: z.string(),
+  /** Nulo para quem não vê dinheiro (F220). */
+  totalAmount: z.string().nullable(),
+  /**
+   * O que já foi pago no pedido — o sinal de verdade (F173). Nulo para quem
+   * não vê dinheiro (F220).
+   */
+  paidAmount: z.string().nullable(),
   designerUserId: z.string().nullable(),
   designerName: z.string().nullable(),
   dispatchDate: z.string().nullable(),
@@ -286,8 +306,10 @@ export const ProductionOrderSummary = z.object({
   stageVersion: z.number().int(),
   /** Grade + personalizados. */
   pieces: z.number().int(),
-  /** Total ÷ peças, no centavo. Nulo sem peça. */
+  /** Total ÷ peças, no centavo. Nulo sem peça, ou para quem não vê dinheiro. */
   ticketPerPiece: z.string().nullable(),
+  /** Os itens do pedido de vendas, na ordem dele (F220). */
+  lines: z.array(ProductionOrderLine),
   printers: z.array(ProductionPrinterRef),
   /** A data de despacho passou e o pedido ainda não saiu. */
   late: z.boolean(),
@@ -621,6 +643,11 @@ export const UniformViewerResponse = z.object({
   /** `uniforms.manage` efetiva — mexe em tudo sem precisar de função. */
   manages: z.boolean(),
   functions: z.array(UniformFunctionSchema),
+  /**
+   * Vê o valor, o pago e o preço dos itens (F220). Quem a Equipe da produção
+   * pôs só na arte e/ou na fábrica não vê — a fila e a ficha mandam nulo.
+   */
+  seesMoney: z.boolean(),
 })
 
 export type UniformViewerResponseType = z.infer<typeof UniformViewerResponse>

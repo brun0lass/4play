@@ -161,6 +161,20 @@ export const PREFERENCE_SCHEMAS = {
   }),
   // O último modelo de etiqueta escolhido. Nulo é "o padrão da loja".
   'labels.lastTemplateId': z.object({ templateId: z.uuid().nullable() }),
+  /*
+   * O nome que ESTE atendente dá ao contato no Atendimento (01/10).
+   *
+   * Só dele: o cadastro do cliente, o nome de perfil do WhatsApp e o que os
+   * outros atendentes veem não mudam. Por contato (`communication_contact`),
+   * com um teto para a preferência não crescer sem fim.
+   */
+  'inbox.contactNames': z.object({
+    names: z
+      .record(z.uuid(), z.string().trim().min(1).max(60))
+      .refine((names) => Object.keys(names).length <= 2000, {
+        message: 'Nomes demais guardados. Apague alguns antes.',
+      }),
+  }),
 } as const
 
 export const PREFERENCE_KEYS = [
@@ -171,6 +185,7 @@ export const PREFERENCE_KEYS = [
   'production.view',
   'search.mode',
   'labels.lastTemplateId',
+  'inbox.contactNames',
 ] as const satisfies readonly (keyof typeof PREFERENCE_SCHEMAS)[]
 
 export const PreferenceKeySchema = z.enum(PREFERENCE_KEYS)

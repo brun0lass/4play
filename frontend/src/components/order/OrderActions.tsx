@@ -35,7 +35,8 @@ type Action = 'deposit' | 'dispatch' | 'pickup' | 'edit' | 'cancel' | null
  * recusaria:
  *  - sinal e retirada: `sales.deposit` (o atendente) — mas sem caixa só se a
  *    empresa estiver como "loja sem caixa"; com caixa, é do caixa/gerente;
- *  - despachar: `pos.operate` (caixa, gerente, administrador, dono);
+ *  - despachar: `pos.operate` (caixa, gerente, administrador, dono) — e, na
+ *    loja sem caixa, também quem recebe o sinal (F220 do Aeris);
  *  - cancelar: `sales.cancel`.
  */
 export const OrderActions = ({ orderId }: { orderId: string }) => {
@@ -61,7 +62,7 @@ export const OrderActions = ({ orderId }: { orderId: string }) => {
   const openTill = options.data?.tills[0]?.id ?? null
   const canDeposit = can('sales.deposit')
   const canPickup = (can('pos.operate') && can('payment.write')) || (!usesTill && canDeposit)
-  const canDispatch = can('pos.operate')
+  const canDispatch = can('pos.operate') || (!usesTill && canDeposit)
   const confirmed = d.status === 'confirmed'
 
   return (

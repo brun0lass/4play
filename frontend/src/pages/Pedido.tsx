@@ -170,13 +170,16 @@ export const PedidoPage = () => {
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirmRepeat(true)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-4 py-2 text-xs font-bold text-white/80 hover:border-white/50 hover:text-white"
-          >
-            <Repeat2 className="h-4 w-4" /> Repetir pedido
-          </button>
+          {/* Repetir cria um pedido: é de quem atende (a API recusa os outros). */}
+          {access.createOrder && (
+            <button
+              type="button"
+              onClick={() => setConfirmRepeat(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-4 py-2 text-xs font-bold text-white/80 hover:border-white/50 hover:text-white"
+            >
+              <Repeat2 className="h-4 w-4" /> Repetir pedido
+            </button>
+          )}
           <Link
             to={`/pedidos/${order.id}/imprimir`}
             className="inline-flex items-center gap-1.5 rounded-full border border-white/20 px-4 py-2 text-xs font-bold text-white/80 hover:border-white/50 hover:text-white"

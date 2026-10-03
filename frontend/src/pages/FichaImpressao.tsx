@@ -5,6 +5,7 @@ import { Logo } from '@/components/Logo'
 import { Button, ErrorBox, Spinner } from '@/components/ui'
 import type { GradeEntryType } from '@/contracts/aeris/uniforms.ts'
 import { errorMessage } from '@/lib/http'
+import { useAuth } from '@/auth/AuthProvider'
 import { useSalesDocument } from '@/lib/order-lines'
 import { useOrder } from '@/lib/queries'
 import { ADULT_SIZES, FABRIC_LABELS, SIZES, type Size } from '@/lib/uniforms'
@@ -87,7 +88,10 @@ const GradeTable = ({ block, blankRows }: { block: Block; blankRows: number }) =
 export const FichaImpressaoPage = () => {
   const { id = '' } = useParams()
   const detail = useOrder(id)
-  const doc = useSalesDocument(id)
+  const { can } = useAuth()
+  // O endereço vem do pedido de vendas, que o designer e o operador não leem
+  // (F220): para eles fica a cidade.
+  const doc = useSalesDocument(can('sales.read') ? id : undefined)
 
   if (detail.isPending) return <Spinner label="Montando a ficha…" />
   if (detail.isError) return <div className="p-8"><ErrorBox message={errorMessage(detail.error)} /></div>
