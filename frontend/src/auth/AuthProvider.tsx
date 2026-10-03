@@ -63,8 +63,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           await apiLogout()
         } finally {
-          queryClient.clear()
+          /*
+           * A sessão vira "ninguém" ANTES de limpar o resto. `queryClient.clear()`
+           * apagava também a consulta da sessão que a tela observa, e a tela ficava
+           * presa à consulta apagada — o "Sair" só aparecia depois de um F5.
+           * Agora a tela vai para o login na hora, e os dados da pessoa (pedidos,
+           * financeiro…) saem do cache para ninguém os ver no mesmo navegador.
+           */
           queryClient.setQueryData(SESSION_KEY, null)
+          queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SESSION_KEY[0] })
         }
       },
       can: (permission) => session?.permissions.includes(permission) ?? false,
