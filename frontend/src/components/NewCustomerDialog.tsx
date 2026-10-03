@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { Building2, ChevronDown, User } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { Building2, CheckCircle2, ChevronDown, Loader2, MapPin, User } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { createCustomer, type Party } from '@/api/sales'
 import { useToast } from '@/components/Toast'
 import { Button, ErrorBox, Modal } from '@/components/ui'
 import { UF_VALUES } from '@/contracts/aeris/party.ts'
+import { cepDigits, formatCep, lookupCep, mergeCep, type CepAddress } from '@/lib/cep'
 import { errorMessage } from '@/lib/http'
 
 /**
@@ -27,7 +28,7 @@ const EMPTY = {
   number: '',
   district: '',
   city: '',
-  uf: 'MG' as Uf,
+  uf: 'SP' as Uf,
   cep: '',
   notes: '',
 }
@@ -50,13 +51,54 @@ export const NewCustomerDialog = ({
   const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [more, setMore] = useState(false)
+  const [cepState, setCepState] = useState<'idle' | 'busy' | 'found' | 'missing'>('idle')
+  // o que a última busca preencheu (para corrigir o CEP trocar o endereço)
+  const lastLookup = useRef<CepAddress | null>(null)
+  // UF trocada à mão: a busca não passa por cima
+  const ufTouched = useRef(false)
+  const numberRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setForm({ ...EMPTY, name: initialName })
       setMore(false)
+      setCepState('idle')
+      lastLookup.current = null
+      ufTouched.current = false
     }
   }, [open, initialName])
+
+  // CEP completo → busca o endereço e preenche o que estiver vazio.
+  useEffect(() => {
+    const digits = cepDigits(form.cep)
+    if (digits.length !== 8) {
+      setCepState('idle')
+      return undefined
+    }
+    const controller = new AbortController()
+    setCepState('busy')
+    void lookupCep(digits, controller.signal).then((found) => {
+      if (controller.signal.aborted) return
+      if (!found) {
+        setCepState('missing')
+        return
+      }
+      setForm((current) => {
+        const merged = mergeCep(
+          { street: current.street, district: current.district, city: current.city, uf: ufTouched.current ? current.uf : '' },
+          found,
+          lastLookup.current
+        )
+        const uf = (UF_VALUES as readonly string[]).includes(merged.uf) ? (merged.uf as Uf) : current.uf
+        return { ...current, street: merged.street, district: merged.district, city: merged.city, uf }
+      })
+      lastLookup.current = found
+      setCepState('found')
+      // o que falta é o número: o cursor já vai para lá
+      setTimeout(() => numberRef.current?.focus(), 0)
+    })
+    return () => controller.abort()
+  }, [form.cep])
 
   const set = <K extends keyof typeof EMPTY>(key: K, value: (typeof EMPTY)[K]) =>
     setForm((current) => ({ ...current, [key]: value }))
@@ -86,7 +128,7 @@ export const NewCustomerDialog = ({
                 district: form.district,
                 city: form.city,
                 uf: form.uf,
-                cep: form.cep,
+                cep: cepDigits(form.cep),
                 isMain: true,
               },
             }
@@ -187,6 +229,29 @@ export const NewCustomerDialog = ({
                 <input id="c-doc" inputMode="numeric" maxLength={20} className="field" value={form.document} onChange={(e) => set('document', e.target.value)} />
               </div>
             </div>
+            <div>
+              <label className="label" htmlFor="c-cep">CEP</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative w-40">
+                  <MapPin className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted" />
+                  <input
+                    id="c-cep"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    placeholder="00000-000"
+                    className="field pl-9 font-bold tracking-wide"
+                    value={form.cep}
+                    onChange={(e) => set('cep', formatCep(e.target.value))}
+                  />
+                </div>
+                <span className="text-xs font-semibold" aria-live="polite">
+                  {cepState === 'busy' && <span className="inline-flex items-center gap-1 text-muted"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando endereço…</span>}
+                  {cepState === 'found' && <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Endereço encontrado — confira e complete o número.</span>}
+                  {cepState === 'missing' && <span className="text-amber-700">CEP não encontrado. Preencha o endereço à mão.</span>}
+                  {cepState === 'idle' && <span className="text-muted">Digite o CEP que o endereço se preenche sozinho.</span>}
+                </span>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_90px]">
               <div>
                 <label className="label" htmlFor="c-street">Rua</label>
@@ -194,7 +259,7 @@ export const NewCustomerDialog = ({
               </div>
               <div>
                 <label className="label" htmlFor="c-num">Número</label>
-                <input id="c-num" className="field" value={form.number} onChange={(e) => set('number', e.target.value)} />
+                <input id="c-num" ref={numberRef} className="field" value={form.number} onChange={(e) => set('number', e.target.value)} />
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_80px]">
@@ -208,7 +273,10 @@ export const NewCustomerDialog = ({
               </div>
               <div>
                 <label className="label" htmlFor="c-uf">UF</label>
-                <select id="c-uf" className="field px-2" value={form.uf} onChange={(e) => set('uf', e.target.value as Uf)}>
+                <select id="c-uf" className="field px-2" value={form.uf} onChange={(e) => {
+                    ufTouched.current = true
+                    set('uf', e.target.value as Uf)
+                  }}>
                   {UF_VALUES.map((uf) => <option key={uf}>{uf}</option>)}
                 </select>
               </div>

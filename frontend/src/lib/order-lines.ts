@@ -3,11 +3,14 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { fetchSalesDocument, type SalesDocument } from '@/api/sales'
 import { money, qty } from '@/lib/format'
 
-/** "29 Camisa dry a R$ 45,00 + 1 Frete a R$ 80,00" — a coluna DADOS DO PEDIDO. */
-export const linesText = (doc: SalesDocument | undefined): string => {
+/**
+ * "29 Camisa dry a R$ 45,00 + 1 Frete a R$ 80,00" — a coluna DADOS DO PEDIDO.
+ * Sem `withPrices`, só as quantidades: "29 Camisa dry + 1 Frete".
+ */
+export const linesText = (doc: SalesDocument | undefined, withPrices = true): string => {
   if (!doc) return ''
   return doc.lines
-    .map((line) => `${qty(line.quantity)} ${line.description} a ${money(line.unitPrice)}`)
+    .map((line) => `${qty(line.quantity)} ${line.description}${withPrices ? ` a ${money(line.unitPrice)}` : ''}`)
     .join(' + ')
 }
 

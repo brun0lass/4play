@@ -8,6 +8,7 @@ import {
   fetchQueue,
   fetchViewer,
 } from '@/api/uniforms'
+import { useAuth } from '@/auth/AuthProvider'
 
 /** As chaves de cache num lugar só, para invalidar sem errar o nome. */
 export const keys = {
@@ -34,8 +35,16 @@ export const useOrder = (id: string) =>
     refetchInterval: 60_000,
   })
 
-export const useViewer = () =>
-  useQuery({ queryKey: keys.viewer, queryFn: ({ signal }) => fetchViewer(signal), staleTime: 5 * 60_000 })
+/** Quem não vê a produção (o financeiro) receberia 403 — então nem pergunta. */
+export const useViewer = () => {
+  const { can } = useAuth()
+  return useQuery({
+    queryKey: keys.viewer,
+    queryFn: ({ signal }) => fetchViewer(signal),
+    staleTime: 5 * 60_000,
+    enabled: can('uniforms.read'),
+  })
+}
 
 export const useMembers = () =>
   useQuery({ queryKey: keys.members, queryFn: ({ signal }) => fetchMembers(signal), staleTime: 5 * 60_000 })

@@ -17,6 +17,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 
 import { useAuth } from '@/auth/AuthProvider'
+import { useAccess, type Access } from '@/lib/access'
 import { CoBrand } from '@/components/CoBrand'
 import { Logo } from '@/components/Logo'
 import { NewOrderContext, useNewOrder } from '@/components/NewOrderContext'
@@ -24,28 +25,26 @@ import { NewOrderWizard } from '@/components/NewOrderWizard'
 import { Avatar } from '@/components/ui'
 
 /**
- * Cada item aparece para quem tem a permissão dele no Aeris — o Financeiro
- * (papel caixa) não vê a produção, e a produção não vê o financeiro.
+ * Cada item aparece para quem precisa dele, pela função na 4Play (ver
+ * `lib/access.ts`): o designer vê a fila; o financeiro, o financeiro.
  */
-type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; needs: string[] }
+type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; show: (a: Access, can: (p: string) => boolean) => boolean }
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Início', icon: LayoutDashboard, end: true, needs: ['uniforms.read'] },
-  { to: '/producao', label: 'Pedidos e produção', icon: KanbanSquare, needs: ['uniforms.read'] },
-  { to: '/financeiro', label: 'Financeiro', icon: Wallet, needs: ['finance.read'] },
-  { to: '/clientes', label: 'Clientes', icon: Users, needs: ['party.read'] },
-  { to: '/produtos', label: 'Produtos', icon: Shirt, needs: ['catalog.read'] },
-  { to: '/estoque', label: 'Estoque', icon: Boxes, needs: ['inventory.read'] },
-  { to: '/equipe', label: 'Equipe e máquinas', icon: Settings2, needs: ['identity.user.read', 'uniforms.read'] },
+  { to: '/', label: 'Início', icon: LayoutDashboard, end: true, show: (_, can) => can('uniforms.read') },
+  { to: '/producao', label: 'Pedidos e produção', icon: KanbanSquare, show: (_, can) => can('uniforms.read') },
+  { to: '/financeiro', label: 'Financeiro', icon: Wallet, show: (a) => a.finance },
+  { to: '/clientes', label: 'Clientes', icon: Users, show: (a) => a.customers },
+  { to: '/produtos', label: 'Produtos', icon: Shirt, show: (a) => a.products },
+  { to: '/estoque', label: 'Estoque', icon: Boxes, show: (a) => a.stock },
+  { to: '/equipe', label: 'Equipe e máquinas', icon: Settings2, show: (a) => a.team },
 ]
-
-/** Quem pode abrir o "Novo pedido": criar venda e mexer na produção. */
-export const canCreateOrder = (can: (p: string) => boolean) => can('sales.write') && can('uniforms.write')
 
 const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const { session, logout, can } = useAuth()
+  const access = useAccess()
   const openNewOrder = useNewOrder()
-  const items = NAV.filter((item) => item.needs.some((p) => can(p)))
+  const items = access.ready ? NAV.filter((item) => item.show(access, can)) : []
   const context = session?.context
 
   return (
@@ -54,7 +53,7 @@ const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
         <CoBrand size="sm" />
       </div>
 
-      {canCreateOrder(can) && (
+      {openNewOrder && (
       <div className="px-3 pb-5">
         <button
           type="button"
@@ -120,10 +119,11 @@ export const Shell = () => {
   const [open, setOpen] = useState(false)
   const [newOrder, setNewOrder] = useState(false)
   const { hasFeature, session, can } = useAuth()
+  const access = useAccess()
   const lacksUniforms = session !== null && can('uniforms.read') && !hasFeature('uniformes')
 
   return (
-    <NewOrderContext.Provider value={canCreateOrder(can) ? () => setNewOrder(true) : null}>
+    <NewOrderContext.Provider value={access.createOrder ? () => setNewOrder(true) : null}>
     <div className="flex h-full">
       <aside className="no-print hidden w-64 shrink-0 lg:block">
         <div className="fixed inset-y-0 w-64">
@@ -135,7 +135,7 @@ export const Shell = () => {
       <div className="no-print fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between bg-ink px-4 lg:hidden">
         <Logo className="h-8" />
         <div className="flex items-center gap-1">
-        {canCreateOrder(can) && (
+        {access.createOrder && (
         <button
           type="button"
           onClick={() => setNewOrder(true)}

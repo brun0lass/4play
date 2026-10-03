@@ -7,6 +7,7 @@ import { DispatchChip } from '@/components/OrderCard'
 import { Badge, Button, Empty, ErrorBox, Spinner } from '@/components/ui'
 import { int, money } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
+import { useAccess } from '@/lib/access'
 import { useQueue } from '@/lib/queries'
 import {
   ART_STATUS_META,
@@ -26,6 +27,7 @@ const PAGE_SIZE = 50
 /** A fila em tabela — a outra cara do quadro, com ordenação e paginação. */
 export const OrderList = () => {
   const navigate = useNavigate()
+  const { seeMoney } = useAccess()
   const [search, setSearch] = useState('')
   const [stage, setStage] = useState<Stage | ''>('')
   const [drafts, setDrafts] = useState(false)
@@ -134,8 +136,8 @@ export const OrderList = () => {
                   <th className="px-3 py-3 font-bold">Arte</th>
                   {header('dispatchDate', 'Despacho')}
                   {header('pieces', 'Peças', 'text-right')}
-                  {header('total', 'Valor', 'text-right')}
-                  <th className="px-3 py-3 font-bold">Pago</th>
+                  {seeMoney && header('total', 'Valor', 'text-right')}
+                  {seeMoney && <th className="px-3 py-3 font-bold">Pago</th>}
                   <th className="px-3 py-3 font-bold">Tecido</th>
                   <th className="px-3 py-3 font-bold">Logística</th>
                   <th className="px-3 py-3 font-bold">Designer</th>
@@ -172,18 +174,22 @@ export const OrderList = () => {
                         <DispatchChip order={order} />
                       </td>
                       <td className="px-3 py-3 text-right font-bold">{int(order.pieces)}</td>
-                      <td className="px-3 py-3 text-right">
-                        <p className="font-bold">{money(order.totalAmount)}</p>
-                        {order.ticketPerPiece && (
-                          <p className="text-[11px] text-muted">{money(order.ticketPerPiece)}/pç</p>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="text-xs font-semibold">{money(order.paidAmount)}</p>
-                        {order.paymentMark === 'cortesia' && (
-                          <Badge tone={PAYMENT_MARK_META.cortesia.tone}>Cortesia</Badge>
-                        )}
-                      </td>
+                      {seeMoney && (
+                        <td className="px-3 py-3 text-right">
+                          <p className="font-bold">{money(order.totalAmount)}</p>
+                          {order.ticketPerPiece && (
+                            <p className="text-[11px] text-muted">{money(order.ticketPerPiece)}/pç</p>
+                          )}
+                        </td>
+                      )}
+                      {seeMoney && (
+                        <td className="px-3 py-3">
+                          <p className="text-xs font-semibold">{money(order.paidAmount)}</p>
+                          {order.paymentMark === 'cortesia' && (
+                            <Badge tone={PAYMENT_MARK_META.cortesia.tone}>Cortesia</Badge>
+                          )}
+                        </td>
+                      )}
                       <td className="px-3 py-3">{order.fabric ? FABRIC_LABELS[order.fabric] : '?'}</td>
                       <td className="px-3 py-3">{logisticsText(order.logistics)}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{order.designerName ?? '—'}</td>

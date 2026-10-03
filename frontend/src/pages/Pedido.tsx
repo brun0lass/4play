@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { ArrowLeft, ArrowRight, Printer, Repeat2, Save } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Grid3x3, Headset, Palette, Printer, Repeat2, Save } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { repeatOrder } from '@/api/uniforms'
 import { ArtForm, PrintersForm } from '@/components/ficha/ArtAndPrinters'
@@ -18,6 +18,7 @@ import { useStageMover } from '@/components/StageMover'
 import { useToast } from '@/components/Toast'
 import { Badge, Button, ErrorBox, Modal, Spinner } from '@/components/ui'
 import { day, int, money } from '@/lib/format'
+import { useAccess } from '@/lib/access'
 import { errorMessage } from '@/lib/http'
 import { keys, useOrder, useViewer } from '@/lib/queries'
 import { ART_STATUS_META, STAGES, STAGE_META, canWork, orderRef, type Stage } from '@/lib/uniforms'
@@ -33,6 +34,10 @@ export const PedidoPage = () => {
   const [jumpTo, setJumpTo] = useState<Stage | null>(null)
   const registry = useFichaRegistry()
   const toast = useToast()
+  const access = useAccess()
+  const [params, setParams] = useSearchParams()
+  const tab = (TABS.find((t) => t.key === params.get('aba'))?.key ?? defaultTab(access.homeTab)) as TabKey
+  const chooseTab = (key: TabKey) => setParams({ aba: key }, { replace: true })
 
   // "Gravar tudo": um bloco por vez; a versão da ficha passa de um para o outro.
   const saveAll = useMutation({
@@ -117,12 +122,18 @@ export const PedidoPage = () => {
             </div>
           </div>
 
-          <div className="grid w-full grid-cols-2 gap-2 text-right sm:w-auto sm:grid-cols-3 sm:gap-3">
-            <Stat label="Peças" value={int(pieces)} />
-            <Stat label="Total" value={money(order.totalAmount)} />
-            <Stat label="Pago" value={money(order.paidAmount)} />
-            {order.ticketPerPiece ? <Stat label="Por peça" value={money(order.ticketPerPiece)} /> : <span />}
-          </div>
+          {access.seeMoney ? (
+            <div className="grid w-full grid-cols-2 gap-2 text-right sm:w-auto sm:grid-cols-3 sm:gap-3">
+              <Stat label="Peças" value={int(pieces)} />
+              <Stat label="Total" value={money(order.totalAmount)} />
+              <Stat label="Pago" value={money(order.paidAmount)} />
+              {order.ticketPerPiece ? <Stat label="Por peça" value={money(order.ticketPerPiece)} /> : <span />}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 text-right">
+              <Stat label="Peças" value={int(pieces)} />
+            </div>
+          )}
         </div>
 
         {/* Etapas */}
@@ -186,31 +197,72 @@ export const PedidoPage = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-6">
-          <GradeEditor
-            orderId={order.id}
-            version={order.sheetVersion}
-            grade={grade}
-            editable={open && canWork(viewer, 'atendimento')}
-            readOnlyReason={closedReason}
-          />
-          <PersonalizationEditor
-            orderId={order.id}
-            version={order.sheetVersion}
-            rows={personalization}
-            editable={open && canWork(viewer, 'atendimento')}
-            readOnlyReason={closedReason}
-          />
-          <Attachments orderId={order.id} attachments={attachments} editable={open} />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0">
+          {/* As abas: cada uma é um assunto, e todas ficam montadas — trocar de aba
+              não perde o que foi digitado, e o "Gravar tudo" enxerga as três. */}
+          <div role="tablist" aria-label="Partes do pedido" className="scroll-thin mb-5 flex gap-1 overflow-x-auto rounded-2xl bg-black/[0.05] p-1">
+            {TABS.map((t) => {
+              const Icon = t.icon
+              const pending = t.blocks.some((b) => registry.dirtyIds.includes(b))
+              const counter = t.key === 'grade' ? pieces : t.key === 'arte' ? attachments.length : null
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  onClick={() => chooseTab(t.key)}
+                  className={clsx(
+                    'relative flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold whitespace-nowrap transition',
+                    tab === t.key ? 'bg-white text-ink shadow' : 'text-muted hover:text-ink'
+                  )}
+                >
+                  <Icon className="h-4 w-4" /> {t.label}
+                  {counter !== null && counter > 0 && (
+                    <span className={clsx('rounded-full px-1.5 text-[10px]', tab === t.key ? 'bg-lime' : 'bg-black/10')}>{counter}</span>
+                  )}
+                  {pending && <span className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-amber-500" title="Alteração não gravada" />}
+                </button>
+              )
+            })}
+          </div>
+
+          <div role="tabpanel" hidden={tab !== 'atendimento'} className={clsx('grid items-start gap-6', access.seeMoney && 'lg:grid-cols-2')}>
+            <SheetForm order={order} editable={open && canWork(viewer, 'atendimento')} readOnlyReason={closedReason} />
+            {access.seeMoney && <OrderActions orderId={order.id} />}
+          </div>
+
+          <div role="tabpanel" hidden={tab !== 'grade'} className="space-y-6">
+            <GradeEditor
+              orderId={order.id}
+              version={order.sheetVersion}
+              grade={grade}
+              editable={open && canWork(viewer, 'atendimento')}
+              readOnlyReason={closedReason}
+            />
+            <PersonalizationEditor
+              orderId={order.id}
+              version={order.sheetVersion}
+              rows={personalization}
+              editable={open && canWork(viewer, 'atendimento')}
+              readOnlyReason={closedReason}
+            />
+          </div>
+
+          <div role="tabpanel" hidden={tab !== 'arte'} className="grid items-start gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              <ArtForm order={order} editable={open && canWork(viewer, 'arte')} readOnlyReason={closedReason} />
+              <PrintersForm order={order} editable={open && canWork(viewer, 'producao')} readOnlyReason={closedReason} />
+            </div>
+            <Attachments orderId={order.id} attachments={attachments} editable={open} />
+          </div>
+        </div>
+
+        {/* A conversa da equipe acompanha a pessoa em qualquer aba. */}
+        <aside className="xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:scroll-thin xl:rounded-[1.25rem]">
           <Timeline orderId={order.id} timeline={timeline} />
-        </div>
-        <div className="space-y-6">
-          <OrderActions orderId={order.id} />
-          <SheetForm order={order} editable={open && canWork(viewer, 'atendimento')} readOnlyReason={closedReason} />
-          <ArtForm order={order} editable={open && canWork(viewer, 'arte')} readOnlyReason={closedReason} />
-          <PrintersForm order={order} editable={open && canWork(viewer, 'producao')} readOnlyReason={closedReason} />
-        </div>
+        </aside>
       </div>
 
       {mover.dialog}
@@ -300,3 +352,15 @@ const Stat = ({
     <p className={clsx('font-extrabold', small ? 'text-sm' : 'text-lg sm:text-xl')}>{value}</p>
   </div>
 )
+
+type TabKey = 'atendimento' | 'grade' | 'arte'
+
+const TABS: { key: TabKey; label: string; icon: typeof Headset; blocks: string[] }[] = [
+  { key: 'atendimento', label: 'Atendimento', icon: Headset, blocks: ['sheet'] },
+  { key: 'grade', label: 'Grade e nomes', icon: Grid3x3, blocks: ['grade', 'personalization'] },
+  { key: 'arte', label: 'Arte e impressão', icon: Palette, blocks: ['art', 'printers'] },
+]
+
+/** O operador precisa dos tamanhos para cortar e costurar: abre na grade. */
+const defaultTab = (home: 'atendimento' | 'grade' | 'arte' | 'producao'): TabKey =>
+  home === 'producao' ? 'grade' : home

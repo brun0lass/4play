@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { HistoryDialog, MovementDialog, type MovementKind } from '@/components/inventory/MovementDialog'
 import { StarterStockDialog } from '@/components/inventory/StarterStockDialog'
 import { Badge, Button, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui'
+import { useAccess } from '@/lib/access'
 import { UNIT_SHORT, int, money, qty } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 
@@ -24,6 +25,7 @@ export const EstoquePage = () => {
   const { can } = useAuth()
   const navigate = useNavigate()
   const canMove = can('inventory.write')
+  const { seeMoney } = useAccess()
   const canCount = can('inventory.adjust')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -72,8 +74,8 @@ export const EstoquePage = () => {
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile label="Valor em estoque (custo)" value={totals ? money(totals.costValue) : '…'} dark />
-        <Tile label="Valor de venda" value={totals ? money(totals.saleValue) : '…'} />
+        {seeMoney && <Tile label="Valor em estoque (custo)" value={totals ? money(totals.costValue) : '…'} dark />}
+        {seeMoney && <Tile label="Valor de venda" value={totals ? money(totals.saleValue) : '…'} />}
         <Tile label="Itens no filtro" value={balances.data ? int(balances.data.total) : '…'} />
         <button type="button" onClick={() => { setFilter('low'); setPage(1) }} className="text-left">
           <Tile
@@ -132,7 +134,7 @@ export const EstoquePage = () => {
                   <th className="px-3 py-3 text-right font-bold">Tem</th>
                   <th className="px-3 py-3 text-right font-bold">Reservado</th>
                   <th className="px-3 py-3 text-right font-bold">Mínimo</th>
-                  <th className="px-3 py-3 text-right font-bold">Custo médio</th>
+                  {seeMoney && <th className="px-3 py-3 text-right font-bold">Custo médio</th>}
                   <th className="px-4 py-3 text-right font-bold">Movimentar</th>
                 </tr>
               </thead>
@@ -154,7 +156,7 @@ export const EstoquePage = () => {
                       </td>
                       <td className="px-3 py-2.5 text-right text-muted">{Number(b.reserved) > 0 ? qty(b.reserved) : '—'}</td>
                       <td className="px-3 py-2.5 text-right">{b.minimumStock ? qty(b.minimumStock) : '—'}</td>
-                      <td className="px-3 py-2.5 text-right">{money(b.averageCost)}</td>
+                      {seeMoney && <td className="px-3 py-2.5 text-right">{money(b.averageCost)}</td>}
                       <td className="px-4 py-2.5">
                         <div className="flex justify-end gap-1">
                           {canMove && (

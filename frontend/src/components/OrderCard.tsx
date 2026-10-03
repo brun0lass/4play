@@ -3,6 +3,7 @@ import { CalendarClock, ChevronRight, Printer, Shirt } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { Avatar, Badge } from '@/components/ui'
+import { useAccess } from '@/lib/access'
 import { day, daysSince, daysUntil, int, money } from '@/lib/format'
 import {
   ART_STATUS_META,
@@ -60,6 +61,7 @@ export const OrderCard = ({
 }) => {
   const next = STAGES[STAGES.indexOf(order.stage) + 1]
   const stuck = daysSince(order.stageChangedAt)
+  const { seeMoney } = useAccess()
 
   return (
     <article
@@ -79,7 +81,7 @@ export const OrderCard = ({
       <Link to={`/pedidos/${order.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
           <span className="display text-lg">{orderRef(order)}</span>
-          <span className="text-xs font-bold text-muted">{money(order.totalAmount)}</span>
+          {seeMoney && <span className="text-xs font-bold text-muted">{money(order.totalAmount)}</span>}
         </div>
         <p className="mt-0.5 line-clamp-2 text-sm leading-snug font-bold">{order.customerName}</p>
         {order.customerCity && <p className="text-[11px] text-muted">{order.customerCity}</p>}
@@ -99,7 +101,7 @@ export const OrderCard = ({
             </Badge>
           )}
           {order.fabric && <Badge tone="neutral">{FABRIC_LABELS[order.fabric]}</Badge>}
-          {order.paymentMark !== 'total' && (
+          {seeMoney && order.paymentMark !== 'total' && (
             <Badge tone={PAYMENT_MARK_META[order.paymentMark].tone}>
               {PAYMENT_MARK_META[order.paymentMark].label}
             </Badge>

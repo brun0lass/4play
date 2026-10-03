@@ -6,6 +6,7 @@ import { Headset } from 'lucide-react'
 import { saveSheet } from '@/api/uniforms'
 import { SaveBar, Section, useDraft, useFichaSection } from '@/components/ficha/Section'
 import { useToast } from '@/components/Toast'
+import { useAccess } from '@/lib/access'
 import { keys } from '@/lib/queries'
 import {
   FABRIC_LABELS,
@@ -54,6 +55,7 @@ export const SheetForm = ({
 }) => {
   const queryClient = useQueryClient()
   const { draft, setDraft, dirty, reset } = useDraft<Draft>(fromOrder(order))
+  const { seeMoney } = useAccess()
 
   const toast = useToast()
   const doSave = (version: number) =>
@@ -128,6 +130,7 @@ export const SheetForm = ({
         </div>
       </div>
 
+      {seeMoney && (
       <div className="mt-3">
         <span className="label">Pagamento (anotação)</span>
         <div className="grid grid-cols-4 gap-1 rounded-xl bg-paper p-1">
@@ -147,6 +150,7 @@ export const SheetForm = ({
           ))}
         </div>
       </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>

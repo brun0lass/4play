@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router'
 
 import { useStageMover } from '@/components/StageMover'
 import { Button, ErrorBox, Modal, Spinner } from '@/components/ui'
+import { useAccess } from '@/lib/access'
 import { money } from '@/lib/format'
 import { linesText, useSalesDocuments } from '@/lib/order-lines'
 import { useQueue } from '@/lib/queries'
@@ -29,6 +30,8 @@ type Col = {
   key: string
   label: ReactNode
   print: boolean
+  /** Coluna de dinheiro: só para quem vê valores. */
+  money?: boolean
   className?: string
   cell: (o: Order, dados: string) => ReactNode
 }
@@ -79,11 +82,12 @@ const COLUMNS: Col[] = [
   { key: 'personalizacao', label: <>PERSONA<br />LIZAÇÃO</>, print: true, cell: (o) => (o.personalized ? SIM : NAO) },
   { key: 'qtde', label: 'QTDE.', print: true, cell: (o) => <span className="font-bold">{o.pieces}</span> },
   { key: 'dados', label: 'DADOS DO PEDIDO', print: true, className: 'min-w-72 max-w-md', cell: (_, dados) => <span className="text-[11px] uppercase">{dados || <span className="text-ink/30">carregando…</span>}</span> },
-  { key: 'valor', label: <>VALOR<br />FECHADO</>, print: false, cell: (o) => <span className="whitespace-nowrap">{money(o.totalAmount)}</span> },
+  { key: 'valor', label: <>VALOR<br />FECHADO</>, print: false, money: true, cell: (o) => <span className="whitespace-nowrap">{money(o.totalAmount)}</span> },
   {
     key: 'sinal',
     label: <>SINAL<br />PAGO?</>,
     print: false,
+    money: true,
     cell: (o) => {
       const paid = Number(o.paidAmount)
       if (o.paymentMark === 'cortesia') return <span className="rounded bg-violet-200 px-1.5 text-[10px] font-extrabold text-violet-900">MKT</span>
@@ -92,7 +96,7 @@ const COLUMNS: Col[] = [
       return <span className="rounded bg-orange-400 px-1.5 text-[10px] font-extrabold text-white">NÃO</span>
     },
   },
-  { key: 'tkt', label: <>TKT MÉDIO/<br />PEÇA</>, print: false, cell: (o) => <span className="whitespace-nowrap">{money(o.ticketPerPiece)}</span> },
+  { key: 'tkt', label: <>TKT MÉDIO/<br />PEÇA</>, print: false, money: true, cell: (o) => <span className="whitespace-nowrap">{money(o.ticketPerPiece)}</span> },
   { key: 'resp', label: 'RESP.', print: false, cell: (o) => <span className="uppercase">{o.salespersonName?.split(' ')[0] ?? '—'}</span> },
   { key: 'impres', label: 'IMPRES.', print: false, cell: (o) => (o.printers.length ? <span className="uppercase">{o.printers.map((p) => p.name).join(', ')}</span> : VAZIO) },
   { key: 'arte', label: <>ARTE<br />DRIVE</>, print: false, cell: (o) => (o.artReady ? OK : VAZIO) },
@@ -137,6 +141,8 @@ export const Planilha = () => {
   const [printCols, setPrintCols] = useState<string[]>(readPrint)
   const [choosing, setChoosing] = useState(false)
   const mover = useStageMover()
+  const { seeMoney } = useAccess()
+  const columns = COLUMNS.filter((c) => seeMoney || !c.money)
   const range = months.find((m) => m.value === month)
 
   const queue = useQueue({
@@ -196,7 +202,7 @@ export const Planilha = () => {
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-paper text-[10px] font-extrabold tracking-wide print:bg-transparent">
-                  {COLUMNS.map((c) => (
+                  {columns.map((c) => (
                     <th key={c.key} className={clsx('border border-line px-2 py-1.5 text-center align-middle', hidePrint(c.key))}>{c.label}</th>
                   ))}
                   <th className={clsx('border border-line px-2 py-1.5 text-center', hidePrint('status'))}>STATUS</th>
@@ -205,9 +211,9 @@ export const Planilha = () => {
               <tbody>
                 {items.map((o) => (
                   <tr key={o.id} onClick={() => void navigate(`/pedidos/${o.id}`)} className={clsx('cursor-pointer hover:bg-lime-50 print:break-inside-avoid', o.late && 'bg-red-50/50')}>
-                    {COLUMNS.map((c) => (
+                    {columns.map((c) => (
                       <td key={c.key} className={clsx('border border-line px-2 py-1 text-center align-middle', c.className, hidePrint(c.key))}>
-                        {c.cell(o, linesText(docs.byId.get(o.id)))}
+                        {c.cell(o, linesText(docs.byId.get(o.id), seeMoney))}
                       </td>
                     ))}
                     <td className={clsx('border border-line px-1 py-1 text-center', hidePrint('status'))} onClick={(e) => e.stopPropagation()}>
@@ -223,7 +229,7 @@ export const Planilha = () => {
                   </tr>
                 ))}
                 {items.length === 0 && (
-                  <tr><td colSpan={COLUMNS.length + 1} className="p-8 text-center text-sm text-muted">Nenhum pedido neste filtro.</td></tr>
+                  <tr><td colSpan={columns.length + 1} className="p-8 text-center text-sm text-muted">Nenhum pedido neste filtro.</td></tr>
                 )}
               </tbody>
             </table>
@@ -236,7 +242,7 @@ export const Planilha = () => {
       <Modal open={choosing} title="Colunas da impressão" onClose={() => setChoosing(false)} footer={<Button variant="ink" onClick={() => setChoosing(false)}>Fechar</Button>}>
         <p className="mb-3 text-sm text-muted">Na tela aparecem todas. Marque as que vão para o papel — fica lembrado neste navegador.</p>
         <div className="grid grid-cols-2 gap-1.5">
-          {[...COLUMNS.map((c) => ({ key: c.key, label: c.label })), { key: 'status', label: 'STATUS' }].map((c) => (
+          {[...columns.map((c) => ({ key: c.key, label: c.label })), { key: 'status', label: 'STATUS' }].map((c) => (
             <label key={c.key} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-bold hover:bg-paper">
               <input type="checkbox" className="h-4 w-4 accent-ink" checked={printCols.includes(c.key)} onChange={() => togglePrint(c.key)} />
               <span className="[&_br]:hidden">{c.label}</span>

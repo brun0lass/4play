@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { Guard } from '@/components/Guard'
 import { Logo } from '@/components/Logo'
 import { Shell } from '@/components/Shell'
 import { ToastProvider } from '@/components/Toast'
@@ -97,11 +98,11 @@ const App = () => (
       <Route path="producao" element={<ProducaoPage />} />
       <Route path="pedidos" element={<Navigate to="/producao?vista=lista" replace />} />
       <Route path="pedidos/:id" element={<PedidoPage />} />
-      <Route path="financeiro" element={<FinanceiroPage />} />
-      <Route path="clientes" element={<ClientesPage />} />
-      <Route path="produtos" element={<ProdutosPage />} />
-      <Route path="estoque" element={<EstoquePage />} />
-      <Route path="equipe" element={<EquipePage />} />
+      <Route path="financeiro" element={<Guard allow={(a) => a.finance}><FinanceiroPage /></Guard>} />
+      <Route path="clientes" element={<Guard allow={(a) => a.customers}><ClientesPage /></Guard>} />
+      <Route path="produtos" element={<Guard allow={(a) => a.products}><ProdutosPage /></Guard>} />
+      <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
+      <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   </Routes>

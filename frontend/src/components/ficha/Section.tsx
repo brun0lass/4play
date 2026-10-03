@@ -161,5 +161,7 @@ export const useFichaRegistry = () => {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty.length])
 
-  return { report, dirty }
+  /** Quais blocos (`sheet`, `grade`, `art`…) têm alteração — para marcar a aba. */
+  const dirtyIds = Object.keys(entries)
+  return { report, dirty, dirtyIds }
 }
