@@ -29,7 +29,7 @@ import {
  * cliente: quem é → o que vai levar → para quando.
  *
  * Por baixo: cria o pedido de venda no Aeris, confirma (é aí que ele ganha
- * número e entra na fila, na etapa Arte) e grava a ficha de produção.
+ * número e entra na fila, na etapa Atendimento) e grava a ficha de produção.
  */
 
 type Customer = { id: string; name: string; city: string | null }

@@ -1,10 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Mail, MapPin, Phone, Search, UserPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, History, Mail, MapPin, Phone, Search, UserPlus } from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
 
 import { fetchCustomers } from '@/api/store'
+import { CustomerHistory } from '@/components/CustomerHistory'
 import { NewCustomerDialog } from '@/components/NewCustomerDialog'
-import { Badge, Button, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui'
+import { Badge, Button, Empty, ErrorBox, Modal, PageHeader, Spinner } from '@/components/ui'
+import { useAuth } from '@/auth/AuthProvider'
 import { day, int } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 
@@ -16,6 +18,8 @@ export const ClientesPage = () => {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
+  const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null)
+  const { can } = useAuth()
   const deferred = useDeferredValue(search.trim())
 
   const customers = useQuery({
@@ -67,6 +71,18 @@ export const ClientesPage = () => {
         </Empty>
       )}
       <NewCustomerDialog open={creating} initialName={deferred} onClose={() => setCreating(false)} />
+      <Modal
+        open={viewing !== null}
+        wide
+        title={viewing ? `Pedidos de ${viewing.name}` : ''}
+        onClose={() => setViewing(null)}
+        footer={<Button variant="ink" onClick={() => setViewing(null)}>Fechar</Button>}
+      >
+        <p className="mb-4 text-sm text-muted">
+          Do mais novo para o mais velho, com as impressoras em que cada pedido saiu. Abra um pedido para repetir.
+        </p>
+        {viewing && <CustomerHistory partyId={viewing.id} />}
+      </Modal>
 
       {customers.data && customers.data.items.length > 0 && (
         <>
@@ -106,6 +122,15 @@ export const ClientesPage = () => {
                     <span className="text-[11px] text-muted">Última compra {day(party.lastPurchaseAt)}</span>
                   )}
                 </div>
+                {can('uniforms.read') && (
+                  <button
+                    type="button"
+                    onClick={() => setViewing({ id: party.id, name: party.tradeName ?? party.legalName })}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:border-ink/30"
+                  >
+                    <History className="h-3.5 w-3.5" /> Pedidos e máquinas
+                  </button>
+                )}
               </article>
             ))}
           </div>

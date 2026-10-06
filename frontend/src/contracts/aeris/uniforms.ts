@@ -15,6 +15,7 @@ import { z } from 'zod'
  */
 
 export const UNIFORM_STAGE_VALUES = [
+  'atendimento',
   'arte',
   'iniciar-impressao',
   'imprimindo',
@@ -262,6 +263,34 @@ export const ProductionOrderLine = z.object({
 
 export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
 
+/** Uma quantidade de uma peça — "100 Camisa" (F230). */
+export const ProductionPieceCount = z.object({
+  piece: z.string(),
+  quantity: z.number().int(),
+})
+
+export type ProductionPieceCountType = z.infer<typeof ProductionPieceCount>
+
+/**
+ * Uma leva separada do pedido — a 2, a 3, … (F230).
+ *
+ * A leva 1 é o restante: não vem aqui, é a etapa do próprio pedido com as
+ * peças de `remainingPieces`.
+ */
+export const ProductionBatchSchema = z.object({
+  id: z.string(),
+  number: z.number().int(),
+  stage: UniformStageSchema,
+  stageChangedAt: z.string(),
+  version: z.number().int(),
+  pieces: z.array(ProductionPieceCount),
+  total: z.number().int(),
+  /** As impressoras em que ESTA leva imprimiu. */
+  printers: z.array(ProductionPrinterRef),
+})
+
+export type ProductionBatchType = z.infer<typeof ProductionBatchSchema>
+
 export const ProductionOrderSummary = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
@@ -313,6 +342,16 @@ export const ProductionOrderSummary = z.object({
   printers: z.array(ProductionPrinterRef),
   /** A data de despacho passou e o pedido ainda não saiu. */
   late: z.boolean(),
+  /**
+   * As levas separadas (F230). Vazio no pedido que nunca foi dividido. O
+   * `default` deixa a tela nova ler a API de antes.
+   */
+  batches: z.array(ProductionBatchSchema).default([]),
+  /**
+   * A leva 1, o restante: o que ainda não foi separado, por peça — está na
+   * `stage` do pedido. Sem levas, é a grade inteira por peça.
+   */
+  remainingPieces: z.array(ProductionPieceCount).default([]),
 })
 
 export type ProductionOrderSummaryType = z.infer<typeof ProductionOrderSummary>
@@ -399,8 +438,21 @@ export const ProductionTimelineEntrySchema = z.discriminatedUnion('type', [
     from: UniformStageSchema.nullable(),
     to: UniformStageSchema,
     printers: z.array(ProductionPrinterRef),
-    /** Saiu da arte sem a arte aprovada, por quem gerencia. */
+    /** Foi para a fábrica sem a arte aprovada, por quem gerencia. */
     forced: z.boolean(),
+    /** A leva que trocou de etapa; nulo é a leva 1, o restante (F230). */
+    batch: z
+      .object({ id: z.string(), number: z.number().int() })
+      .nullable()
+      .default(null),
+    /** Quando a troca criou a leva: de qual saiu (1 = o restante) e o que levou. */
+    split: z
+      .object({
+        from: z.number().int(),
+        pieces: z.array(ProductionPieceCount),
+      })
+      .nullable()
+      .default(null),
     actorName: z.string().nullable(),
     occurredAt: z.string(),
   }),
@@ -527,8 +579,8 @@ export const MoveStageRequest = z.object({
   /** Obrigatório para ir a "imprimindo": em qual máquina. */
   printerIds: z.array(z.uuid()).max(20).default([]),
   /**
-   * Tirar da arte sem a arte aprovada (F171). Só quem gerencia a produção, e
-   * fica escrito na linha do tempo.
+   * Mandar para a fábrica sem a arte aprovada (F171, F228). Só quem gerencia
+   * a produção, e fica escrito na linha do tempo.
    */
   force: z.boolean().default(false),
 })
@@ -542,6 +594,52 @@ export const MoveStageResponse = z.object({
 })
 
 export type MoveStageResponseType = z.infer<typeof MoveStageResponse>
+
+/**
+ * Separar uma leva (F230): estas quantidades saem da leva de origem e vão,
+ * como uma leva nova, para `to` — que pode ser a mesma etapa (duas
+ * costureiras no mesmo pedido).
+ *
+ * Separar TUDO é recusado (`takes_everything`): isso é mover a leva.
+ */
+export const SplitBatchRequest = z.object({
+  /** A leva de origem; nulo é a leva 1, o restante. */
+  sourceBatchId: z.uuid().nullable(),
+  /** A etapa que a tela mostrava para a origem. */
+  from: UniformStageSchema,
+  to: UniformStageSchema,
+  pieces: z
+    .array(
+      z.object({
+        piece: z.string().trim().max(40),
+        quantity: z.number().int().min(1).max(100_000),
+      })
+    )
+    .min(1, 'Escolha quantas peças vão para a leva nova.')
+    .max(50),
+  printerIds: z.array(z.uuid()).max(20).default([]),
+  force: z.boolean().default(false),
+})
+
+export type SplitBatchBody = z.input<typeof SplitBatchRequest>
+
+export const BatchResponse = z.object({ batch: ProductionBatchSchema })
+
+export type BatchResponseType = z.infer<typeof BatchResponse>
+
+/**
+ * Os pedidos de um cliente — os abertos e os que já saíram (F229).
+ *
+ * É o que se procura quando o cliente volta um ano depois: em qual máquina
+ * saiu, quais levas, e o botão de repetir. Do mais novo para o mais velho.
+ */
+export const CustomerProductionHistoryResponse = z.object({
+  orders: z.array(ProductionOrderSummary),
+})
+
+export type CustomerProductionHistoryResponseType = z.infer<
+  typeof CustomerProductionHistoryResponse
+>
 
 export const RepeatProductionOrderRequest = z.object({
   /** Gerado na tela: o duplo clique cai no mesmo pedido em vez de criar dois. */

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, ArrowRight, CalendarClock, KanbanSquare, Palette, Plus, Shirt, Timer } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CalendarClock, KanbanSquare, MessagesSquare, Palette, Plus, Shirt, Timer } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 
@@ -40,7 +40,11 @@ export const PainelPage = () => {
   const thisWeek = items.filter((o) => o.dispatchDate && !o.late && daysUntil(o.dispatchDate) <= 7)
   const waitingClient = items.filter((o) => o.stage === 'arte' && (o.artStatus === 'enviada' || o.artStatus === 'ajuste'))
   const upcoming = items.filter((o) => o.dispatchDate).slice(0, 8)
+  const inService = items.filter((o) => o.stage === 'atendimento')
+  const byAttendant = attendantsOf(inService)
   const total = queue.data?.total ?? 0
+  // A barra conta levas (F230): um pedido dividido está em mais de uma etapa.
+  const parts = Object.values(queue.data?.byStage ?? {}).reduce((sum, count) => sum + count, 0)
 
   return (
     <div>
@@ -84,18 +88,18 @@ export const PainelPage = () => {
             <div className="flex h-4 overflow-hidden rounded-full bg-paper">
               {STAGES.map((stage) => {
                 const count = queue.data.byStage[stage] ?? 0
-                if (count === 0 || total === 0) return null
+                if (count === 0 || parts === 0) return null
                 return (
                   <div
                     key={stage}
                     className={clsx(STAGE_META[stage].dot, 'h-full')}
-                    style={{ width: `${String((count / total) * 100)}%` }}
+                    style={{ width: `${String((count / parts) * 100)}%` }}
                     title={`${STAGE_META[stage].label}: ${String(count)}`}
                   />
                 )
               })}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
               {STAGES.map((stage) => {
                 const Icon = STAGE_META[stage].icon
                 return (
@@ -109,6 +113,32 @@ export const PainelPage = () => {
                 )
               })}
             </div>
+          </section>
+
+          <section className="card mt-6 p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-sm font-extrabold tracking-wider uppercase">
+                <MessagesSquare className="h-3.5 w-3.5" /> Em atendimento
+              </h2>
+              <span className="display text-2xl">{int(inService.length)}</span>
+            </div>
+            {byAttendant.length === 0 ? (
+              <p className="text-sm text-muted">Nenhum pedido em conversa com o cliente agora.</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {byAttendant.map((person) => (
+                  <div key={person.key} className="flex items-center justify-between rounded-2xl bg-paper px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{person.name}</p>
+                      <p className="text-[11px] font-semibold text-muted">
+                        {person.oldestDays === 0 ? 'Todos de hoje' : `O mais antigo há ${String(person.oldestDays)} dia${person.oldestDays === 1 ? '' : 's'}`}
+                      </p>
+                    </div>
+                    <p className="display text-2xl">{person.count}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -165,6 +195,21 @@ export const PainelPage = () => {
       )}
     </div>
   )
+}
+
+/** Quantos pedidos cada atendente tem no atendimento, de quem tem mais para quem tem menos. */
+const attendantsOf = (orders: readonly Order[]) => {
+  const now = Date.now()
+  const byKey = new Map<string, { key: string; name: string; count: number; oldestDays: number }>()
+  for (const order of orders) {
+    const key = order.salespersonUserId ?? 'sem-atendente'
+    const days = Math.max(0, Math.floor((now - new Date(order.stageChangedAt).getTime()) / 86_400_000))
+    const entry = byKey.get(key) ?? { key, name: order.salespersonName ?? 'Sem atendente', count: 0, oldestDays: 0 }
+    entry.count += 1
+    entry.oldestDays = Math.max(entry.oldestDays, days)
+    byKey.set(key, entry)
+  }
+  return [...byKey.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
 const Kpi = ({

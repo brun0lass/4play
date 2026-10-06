@@ -14,7 +14,7 @@ import { int } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { useBoardPrefs } from '@/lib/board-prefs'
 import { useQueue, useViewer } from '@/lib/queries'
-import { STAGES, STAGE_META, type Order, type Stage } from '@/lib/uniforms'
+import { STAGES, STAGE_META, partsOf, type Part, type Stage } from '@/lib/uniforms'
 
 /**
  * O quadro da fábrica: uma coluna por etapa, o pedido anda arrastando.
@@ -40,16 +40,29 @@ const Board = () => {
   const { prefs, update } = useBoardPrefs()
   const [customizing, setCustomizing] = useState(false)
 
+  // Um card por leva (F230): o pedido dividido aparece em cada etapa em que tem peça.
   const columns = useMemo(() => {
-    const map = new Map<Stage, Order[]>(STAGES.map((stage) => [stage, []]))
-    for (const order of queue.data?.items ?? []) map.get(order.stage)?.push(order)
+    const map = new Map<Stage, Part[]>(STAGES.map((stage) => [stage, []]))
+    for (const order of queue.data?.items ?? []) {
+      for (const part of partsOf(order)) map.get(part.stage)?.push(part)
+    }
     return map
   }, [queue.data])
 
   const openNewOrder = useNewOrder()
   const late = queue.data?.items.filter((order) => order.late).length ?? 0
   const filtered = deferred !== '' || mine || lateOnly
-  const byId = (id: string) => queue.data?.items.find((order) => order.id === id)
+  const byKey = (key: string) => {
+    for (const order of queue.data?.items ?? []) {
+      const found = partsOf(order).find((part) => part.key === key)
+      if (found) return found
+    }
+    return undefined
+  }
+  const drop = (key: string, stage: Stage) => {
+    const part = byKey(key)
+    if (part) mover.requestMove(part.order, stage, part.batch)
+  }
 
   return (
     <div>
@@ -116,7 +129,7 @@ const Board = () => {
 
       {queue.data?.total === 0 && !filtered && (
         <Empty title="A fila está vazia">
-          <p>Todo pedido novo entra aqui na etapa Arte e vai andando até Pronto.</p>
+          <p>Todo pedido novo entra aqui na etapa Atendimento e vai andando até Pronto.</p>
 {openNewOrder && (
           <Button variant="lime" className="mt-4" icon={<Plus className="h-4 w-4" />} onClick={openNewOrder}>
             Criar o primeiro pedido
@@ -149,9 +162,9 @@ const Board = () => {
             {STAGES.filter((stage) => !prefs.hidden.includes(stage)).map((stage) => {
               const meta = STAGE_META[stage]
               const Icon = meta.icon
-              const orders = columns.get(stage) ?? []
-              const pieces = orders.reduce((sum, order) => sum + order.pieces, 0)
-              if (prefs.collapseEmpty && orders.length === 0) {
+              const parts = columns.get(stage) ?? []
+              const pieces = parts.reduce((sum, part) => sum + part.total, 0)
+              if (prefs.collapseEmpty && parts.length === 0) {
                 // Recolhida, mas ainda recebe um card arrastado.
                 return (
                   <section
@@ -165,8 +178,7 @@ const Board = () => {
                     onDrop={(event) => {
                       event.preventDefault()
                       setDragOver(null)
-                      const order = byId(event.dataTransfer.getData('text/order-id'))
-                      if (order) mover.requestMove(order, stage)
+                      drop(event.dataTransfer.getData('text/part-key'), stage)
                     }}
                     className={clsx(
                       'flex w-12 shrink-0 flex-col items-center gap-3 rounded-3xl py-3 transition',
@@ -189,8 +201,7 @@ const Board = () => {
                   onDrop={(event) => {
                     event.preventDefault()
                     setDragOver(null)
-                    const order = byId(event.dataTransfer.getData('text/order-id'))
-                    if (order) mover.requestMove(order, stage)
+                    drop(event.dataTransfer.getData('text/part-key'), stage)
                   }}
                   className={clsx(
                     'flex w-72 shrink-0 flex-col rounded-3xl p-2 transition',
@@ -211,22 +222,23 @@ const Board = () => {
                       <h2 className="text-sm font-extrabold tracking-wide uppercase">{meta.label}</h2>
                     </div>
                     <div className="text-right leading-tight">
-                      <span className="block text-sm font-extrabold">{orders.length}</span>
+                      <span className="block text-sm font-extrabold">{parts.length}</span>
                       <span className="block text-[10px] font-semibold text-muted">{int(pieces)} pç</span>
                     </div>
                   </header>
                   <div className="scroll-thin flex max-h-[calc(100vh-17rem)] min-h-24 flex-col gap-2 overflow-y-auto px-0.5 pb-1">
-                    {orders.map((order) => (
+                    {parts.map((part) => (
                       <OrderCard
-                        key={order.id}
-                        order={order}
+                        key={part.key}
+                        order={part.order}
+                        part={part}
                         compact={prefs.compact}
                         draggable
-                        moving={mover.isMoving(order.id)}
-                        onAdvance={(to) => mover.requestMove(order, to)}
+                        moving={mover.isMoving(part.order.id)}
+                        onAdvance={(to) => mover.requestMove(part.order, to, part.batch)}
                       />
                     ))}
-                    {orders.length === 0 && (
+                    {parts.length === 0 && (
                       <p className="px-2 py-6 text-center text-xs font-semibold text-muted">Nada aqui</p>
                     )}
                   </div>

@@ -164,6 +164,11 @@ export const OrderList = () => {
                         <span className="inline-flex items-center gap-1.5 font-semibold">
                           <Icon className="h-4 w-4" /> {STAGE_META[order.stage].label}
                         </span>
+                        {order.batches.length > 0 && (
+                          <span className="block text-[11px] font-semibold text-muted">
+                            + {order.batches.map((batch) => `leva ${String(batch.number)} em ${STAGE_META[batch.stage].label}`).join(', ')}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-3">
                         <Badge tone={ART_STATUS_META[order.artStatus].tone}>

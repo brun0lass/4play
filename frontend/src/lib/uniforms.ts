@@ -10,6 +10,7 @@ import type {
 } from '@/contracts/aeris/uniforms.ts'
 import {
   CheckCheck,
+  MessagesSquare,
   Package,
   PackageCheck,
   Palette,
@@ -35,6 +36,7 @@ export type Size = (typeof UNIFORM_SIZE_VALUES)[number]
 export type Order = ProductionOrderSummaryType
 
 export const STAGES: readonly Stage[] = [
+  'atendimento',
   'arte',
   'iniciar-impressao',
   'imprimindo',
@@ -57,6 +59,12 @@ export const ADULT_SIZES: readonly Size[] = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'E
 type StageMeta = { label: string; icon: LucideIcon; what: string; dot: string }
 
 export const STAGE_META: Record<Stage, StageMeta> = {
+  atendimento: {
+    label: 'Atendimento',
+    icon: MessagesSquare,
+    what: 'A atendente conversando com o cliente. Ela diz quando vai para a arte.',
+    dot: 'bg-slate-500',
+  },
   arte: {
     label: 'Arte',
     icon: Palette,
@@ -145,8 +153,17 @@ export const logisticsText = (list: readonly Logistics[]): string =>
 export const orderRef = (order: Pick<Order, 'number'>): string =>
   order.number === null ? 'Rascunho' : `#${String(order.number)}`
 
+/** Etapas antes da fábrica: sair delas para a fábrica pede a arte aprovada (F228). */
+export const PRE_FACTORY: readonly Stage[] = ['atendimento', 'arte']
+
+export const entersFactory = (from: Stage, to: Stage): boolean =>
+  PRE_FACTORY.includes(from) && !PRE_FACTORY.includes(to)
+
 /** Quem pode mover de uma etapa para outra (a regra é do Aeris; a tela só antecipa). */
 export const stageMoveFunctions = (from: Stage, to: Stage): UniformFunction[] => {
+  // Do atendimento só a atendente tira, e só para a arte; pular a arte é de quem gerencia (F228).
+  if (from === 'atendimento') return to === 'arte' ? ['atendimento'] : []
+  if (to === 'atendimento') return ['atendimento', 'arte']
   if (from === 'arte') return ['arte']
   if (to === 'arte') return ['arte', 'producao']
   return ['producao']
@@ -167,4 +184,81 @@ export const STAGE_REFUSALS: Record<string, string> = {
   printer_required: 'Para ir a "Imprimindo", escolha em qual impressora.',
   art_not_approved: 'A arte ainda não foi aprovada pelo cliente.',
   same_stage: 'O pedido já está nesta etapa.',
+}
+
+// ---------------------------------------------------------------------------
+// As levas (F230 do Aeris)
+// ---------------------------------------------------------------------------
+
+export type Batch = Order['batches'][number]
+export type PieceCount = Order['remainingPieces'][number]
+
+/**
+ * Uma parte do pedido no quadro: a leva 1 (o restante, `batch` nulo) ou uma
+ * leva separada. O pedido que nunca foi dividido é uma parte só — ele inteiro.
+ */
+export type Part = {
+  key: string
+  order: Order
+  batch: Batch | null
+  number: number
+  stage: Stage
+  stageChangedAt: string
+  pieces: PieceCount[]
+  total: number
+  printers: Order['printers']
+}
+
+export const piecesTotal = (pieces: readonly PieceCount[]): number =>
+  pieces.reduce((sum, count) => sum + count.quantity, 0)
+
+/** "10 Camisa · 5 Shorts". */
+export const piecesText = (pieces: readonly PieceCount[]): string =>
+  pieces.length === 0 ? 'Sem grade' : pieces.map((count) => `${String(count.quantity)} ${count.piece}`).join(' · ')
+
+export const isSplit = (order: Pick<Order, 'batches'>): boolean => order.batches.length > 0
+
+/** As partes do pedido: o restante (se ainda tem peça) e as levas separadas. */
+export const partsOf = (order: Order): Part[] => {
+  const rest: Part = {
+    key: order.id,
+    order,
+    batch: null,
+    number: 1,
+    stage: order.stage,
+    stageChangedAt: order.stageChangedAt,
+    pieces: order.remainingPieces,
+    total: isSplit(order) ? piecesTotal(order.remainingPieces) : order.pieces,
+    // Sem divisão, as máquinas do pedido são as dele; dividido, cada leva diz as suas.
+    printers: isSplit(order) ? [] : order.printers,
+  }
+  const batches: Part[] = order.batches.map((batch) => ({
+    key: `${order.id}:${batch.id}`,
+    order,
+    batch,
+    number: batch.number,
+    stage: batch.stage,
+    stageChangedAt: batch.stageChangedAt,
+    pieces: batch.pieces,
+    total: batch.total,
+    printers: batch.printers,
+  }))
+  return !isSplit(order) || rest.total > 0 ? [rest, ...batches] : batches
+}
+
+/** O pedido só sai com tudo pronto: as levas que ainda não chegaram em Pronto. */
+export const partsNotReady = (order: Order): Part[] => partsOf(order).filter((part) => part.stage !== 'pronto')
+
+export const partLabel = (part: Pick<Part, 'number' | 'batch'>): string =>
+  part.batch === null ? 'Leva 1 (restante)' : `Leva ${String(part.number)}`
+
+/** As peças do pedido inteiro, por peça: o restante mais as levas. */
+export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): PieceCount[] => {
+  const merged: PieceCount[] = []
+  for (const count of [...order.remainingPieces, ...order.batches.flatMap((batch) => batch.pieces)]) {
+    const found = merged.find((item) => item.piece.toLocaleLowerCase('pt-BR') === count.piece.toLocaleLowerCase('pt-BR'))
+    if (found) found.quantity += count.quantity
+    else merged.push({ ...count })
+  }
+  return merged
 }

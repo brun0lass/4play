@@ -45,6 +45,7 @@ const DESIGNER_TONES = ['bg-pink-100 text-pink-800', 'bg-violet-100 text-violet-
 const tone = (name: string) => DESIGNER_TONES[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % DESIGNER_TONES.length]
 
 const STAGE_TONE: Record<Stage, string> = {
+  atendimento: 'bg-slate-100 text-slate-700',
   arte: 'bg-zinc-200 text-zinc-800',
   'iniciar-impressao': 'bg-red-100 text-red-800',
   imprimindo: 'bg-[#3b2f1e] text-amber-200',
@@ -225,6 +226,11 @@ export const Planilha = () => {
                       >
                         {STAGES.map((s) => <option key={s} value={s}>{STAGE_META[s].label}</option>)}
                       </select>
+                      {o.batches.length > 0 && (
+                        <span className="mt-0.5 block text-[9px] font-bold text-muted" title={o.batches.map((b) => `Leva ${String(b.number)}: ${STAGE_META[b.stage].label}`).join(', ')}>
+                          +{o.batches.length} {o.batches.length === 1 ? 'leva' : 'levas'}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -1,16 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { ArrowLeft, ArrowRight, Grid3x3, Headset, Palette, Printer, Repeat2, Save } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Grid3x3, Headset, History, Layers, Palette, Printer, Repeat2, Save } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { repeatOrder } from '@/api/uniforms'
+import { CustomerHistory } from '@/components/CustomerHistory'
 import { ArtForm, PrintersForm } from '@/components/ficha/ArtAndPrinters'
-import { FichaContext, useFichaRegistry } from '@/components/ficha/Section'
+import { FichaContext, Section, useFichaRegistry } from '@/components/ficha/Section'
 import { Attachments } from '@/components/ficha/Attachments'
 import { GradeEditor } from '@/components/ficha/GradeEditor'
 import { PersonalizationEditor } from '@/components/ficha/PersonalizationEditor'
 import { SheetForm } from '@/components/ficha/SheetForm'
+import { LevasPanel } from '@/components/order/Levas'
 import { OrderActions } from '@/components/order/OrderActions'
 import { Timeline } from '@/components/ficha/Timeline'
 import { DispatchChip } from '@/components/OrderCard'
@@ -21,7 +23,18 @@ import { day, int, money } from '@/lib/format'
 import { useAccess } from '@/lib/access'
 import { errorMessage } from '@/lib/http'
 import { keys, useOrder, useViewer } from '@/lib/queries'
-import { ART_STATUS_META, STAGES, STAGE_META, canWork, orderRef, type Stage } from '@/lib/uniforms'
+import {
+  ART_STATUS_META,
+  STAGES,
+  STAGE_META,
+  canWork,
+  isSplit,
+  orderRef,
+  partLabel,
+  partsNotReady,
+  partsOf,
+  type Stage,
+} from '@/lib/uniforms'
 
 export const PedidoPage = () => {
   const { id = '' } = useParams()
@@ -83,6 +96,17 @@ export const PedidoPage = () => {
   const current = STAGES.indexOf(order.stage)
   const next = STAGES[current + 1]
   const pieces = order.pieces
+  // As levas (F230): o cabeçalho é a leva 1, o restante; o pedido só sai com todas prontas.
+  const split = isSplit(order)
+  const parts = partsOf(order)
+  const restVisible = parts.some((part) => part.batch === null)
+  const notReady = partsNotReady(order)
+  const blockedReason =
+    split && notReady.length > 0
+      ? `O pedido só sai com todas as levas prontas. Faltam: ${notReady
+          .map((part) => `${partLabel(part)} em ${STAGE_META[part.stage].label}`)
+          .join('; ')}.`
+      : null
 
   return (
     <FichaContext.Provider value={{ report: registry.report }}>
@@ -137,7 +161,7 @@ export const PedidoPage = () => {
         </div>
 
         {/* Etapas */}
-        <ol className="mt-8 grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+        <ol className="mt-8 grid grid-cols-3 gap-1.5 sm:grid-cols-9">
           {STAGES.map((stage, index) => {
             const meta = STAGE_META[stage]
             const Icon = meta.icon
@@ -164,6 +188,16 @@ export const PedidoPage = () => {
             )
           })}
         </ol>
+        {split && (
+          <button
+            type="button"
+            onClick={() => chooseTab('levas')}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-lime hover:bg-white/20"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Dividido em {parts.length} levas — as etapas acima são do restante. Ver as levas
+          </button>
+        )}
         {mover.lastError && (
           <p className="mt-3 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold">{mover.lastError}</p>
         )}
@@ -187,14 +221,14 @@ export const PedidoPage = () => {
             <Printer className="h-4 w-4" /> Imprimir ficha
           </Link>
           </div>
-          {open && next && (
+          {open && next && restVisible && (
             <Button
               variant="lime"
               size="lg"
               busy={mover.isMoving(order.id)}
               onClick={() => mover.requestMove(order, next)}
             >
-              Avançar para {STAGE_META[next].label} <ArrowRight className="h-5 w-5" />
+              {split ? 'Avançar o restante para' : 'Avançar para'} {STAGE_META[next].label} <ArrowRight className="h-5 w-5" />
             </Button>
           )}
         </div>
@@ -208,7 +242,8 @@ export const PedidoPage = () => {
             {TABS.map((t) => {
               const Icon = t.icon
               const pending = t.blocks.some((b) => registry.dirtyIds.includes(b))
-              const counter = t.key === 'grade' ? pieces : t.key === 'arte' ? attachments.length : null
+              const counter =
+                t.key === 'grade' ? pieces : t.key === 'arte' ? attachments.length : t.key === 'levas' && split ? parts.length : null
               return (
                 <button
                   key={t.key}
@@ -233,7 +268,7 @@ export const PedidoPage = () => {
 
           <div role="tabpanel" hidden={tab !== 'atendimento'} className={clsx('grid items-start gap-6', access.seeMoney && 'lg:grid-cols-2')}>
             <SheetForm order={order} editable={open && canWork(viewer, 'atendimento')} readOnlyReason={closedReason} />
-            {access.seeMoney && <OrderActions orderId={order.id} />}
+            {access.seeMoney && <OrderActions orderId={order.id} blockedReason={blockedReason} />}
           </div>
 
           <div role="tabpanel" hidden={tab !== 'grade'} className="space-y-6">
@@ -260,10 +295,18 @@ export const PedidoPage = () => {
             </div>
             <Attachments orderId={order.id} attachments={attachments} editable={open} />
           </div>
+
+          <div role="tabpanel" hidden={tab !== 'levas'}>
+            <LevasPanel order={order} editable={open} />
+          </div>
         </div>
 
         {/* A conversa da equipe acompanha a pessoa em qualquer aba. */}
-        <aside className="xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:scroll-thin xl:rounded-[1.25rem]">
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:scroll-thin xl:rounded-[1.25rem]">
+          {/* Em qual máquina saiu da outra vez (F229): o que se procura quando o cliente repete. */}
+          <Section title="Pedidos anteriores do cliente" icon={<History className="h-3.5 w-3.5" />}>
+            <CustomerHistory partyId={order.customerPartyId} exceptOrderId={order.id} limit={3} />
+          </Section>
           <Timeline orderId={order.id} timeline={timeline} />
         </aside>
       </div>
@@ -356,12 +399,13 @@ const Stat = ({
   </div>
 )
 
-type TabKey = 'atendimento' | 'grade' | 'arte'
+type TabKey = 'atendimento' | 'grade' | 'arte' | 'levas'
 
 const TABS: { key: TabKey; label: string; icon: typeof Headset; blocks: string[] }[] = [
   { key: 'atendimento', label: 'Atendimento', icon: Headset, blocks: ['sheet'] },
   { key: 'grade', label: 'Grade e nomes', icon: Grid3x3, blocks: ['grade', 'personalization'] },
   { key: 'arte', label: 'Arte e impressão', icon: Palette, blocks: ['art', 'printers'] },
+  { key: 'levas', label: 'Levas', icon: Layers, blocks: [] },
 ]
 
 /** O operador precisa dos tamanhos para cortar e costurar: abre na grade. */

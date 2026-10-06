@@ -1,5 +1,7 @@
 import {
   AddCommentRequest,
+  BatchResponse,
+  CustomerProductionHistoryResponse,
   MoveStageRequest,
   MoveStageResponse,
   ProductionAttachmentSummary,
@@ -14,11 +16,15 @@ import {
   ReplacePrintersRequest,
   SaveArtRequest,
   SaveArtResponse,
+  SplitBatchRequest,
   UniformMemberListResponse,
   UniformPrinterListResponse,
   UniformPrinterSummary,
   UniformViewerResponse,
   type AddCommentBody,
+  type ProductionBatchType,
+  type ProductionOrderSummaryType,
+  type SplitBatchBody,
   type MoveStageBody,
   type MoveStageResponseType,
   type ProductionAttachmentSummaryType,
@@ -101,6 +107,36 @@ export const moveStage = async (id: string, input: MoveStageBody): Promise<MoveS
       body: MoveStageRequest.parse(input),
     })
   )
+
+/** Separa uma leva: estas peças vão, como leva nova, para outra etapa (F230 do Aeris). */
+export const splitBatch = async (id: string, input: SplitBatchBody): Promise<ProductionBatchType> =>
+  BatchResponse.parse(
+    await request(`${BASE}/orders/${id}/batches`, {
+      method: 'POST',
+      body: SplitBatchRequest.parse(input),
+    })
+  ).batch
+
+/** Troca a etapa de uma leva separada inteira (F230). */
+export const moveBatch = async (
+  id: string,
+  batchId: string,
+  input: MoveStageBody
+): Promise<ProductionBatchType> =>
+  BatchResponse.parse(
+    await request(`${BASE}/orders/${id}/batches/${batchId}/stage`, {
+      method: 'POST',
+      body: MoveStageRequest.parse(input),
+    })
+  ).batch
+
+/** Os pedidos do cliente, abertos e entregues, do mais novo para o mais velho (F229). */
+export const fetchCustomerHistory = async (
+  partyId: string,
+  signal?: AbortSignal
+): Promise<ProductionOrderSummaryType[]> =>
+  CustomerProductionHistoryResponse.parse(await request(`${BASE}/customers/${partyId}/orders`, { signal }))
+    .orders
 
 export const saveArt = async (id: string, input: SaveArtBody): Promise<SaveArtResponseType> =>
   SaveArtResponse.parse(

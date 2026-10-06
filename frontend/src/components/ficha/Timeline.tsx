@@ -10,7 +10,7 @@ import { Avatar, Button, ErrorBox } from '@/components/ui'
 import { ago, dateTime } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { keys } from '@/lib/queries'
-import { STAGE_META } from '@/lib/uniforms'
+import { STAGE_META, piecesText } from '@/lib/uniforms'
 
 const EVENT_TEXT: Record<string, string> = {
   ficha: 'mexeu no atendimento',
@@ -27,9 +27,17 @@ const describe = (entry: ProductionTimelineEntryType): string => {
   if (entry.type === 'stage') {
     const to = STAGE_META[entry.to].label
     const printers = entry.printers.length > 0 ? ` (${entry.printers.map((p) => p.name).join(', ')})` : ''
+    const forced = entry.forced ? ' — sem a arte aprovada' : ''
+    // A leva (F230): separada de outra, ou movida inteira.
+    if (entry.split && entry.batch) {
+      const source = entry.split.from === 1 ? 'do restante' : `da leva ${String(entry.split.from)}`
+      const where = entry.from === entry.to ? `em ${to}` : `para ${to}`
+      return `separou a leva ${String(entry.batch.number)} ${source} (${piecesText(entry.split.pieces)}) ${where}${printers}${forced}`
+    }
+    const who = entry.batch ? `a leva ${String(entry.batch.number)} ` : ''
     return entry.from === null
-      ? `pôs em ${to}${printers}`
-      : `moveu de ${STAGE_META[entry.from].label} para ${to}${printers}${entry.forced ? ' — sem a arte aprovada' : ''}`
+      ? `pôs ${who}em ${to}${printers}`
+      : `moveu ${who}de ${STAGE_META[entry.from].label} para ${to}${printers}${forced}`
   }
   if (entry.type === 'event') return EVENT_TEXT[entry.kind] ?? entry.kind
   return ''

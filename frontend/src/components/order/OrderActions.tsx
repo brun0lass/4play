@@ -39,7 +39,14 @@ type Action = 'deposit' | 'dispatch' | 'pickup' | 'edit' | 'cancel' | null
  *    loja sem caixa, também quem recebe o sinal (F220 do Aeris);
  *  - cancelar: `sales.cancel`.
  */
-export const OrderActions = ({ orderId }: { orderId: string }) => {
+export const OrderActions = ({
+  orderId,
+  blockedReason = null,
+}: {
+  orderId: string
+  /** Por que o pedido ainda não pode sair — as levas que faltam (F230). */
+  blockedReason?: string | null
+}) => {
   const { can } = useAuth()
   const doc = useSalesDocument(orderId)
   const options = useQuery({
@@ -61,8 +68,9 @@ export const OrderActions = ({ orderId }: { orderId: string }) => {
   const usesTill = options.data?.usesTill ?? true
   const openTill = options.data?.tills[0]?.id ?? null
   const canDeposit = can('sales.deposit')
-  const canPickup = (can('pos.operate') && can('payment.write')) || (!usesTill && canDeposit)
-  const canDispatch = can('pos.operate') || (!usesTill && canDeposit)
+  const blocked = blockedReason !== null
+  const canPickup = !blocked && ((can('pos.operate') && can('payment.write')) || (!usesTill && canDeposit))
+  const canDispatch = !blocked && (can('pos.operate') || (!usesTill && canDeposit))
   const confirmed = d.status === 'confirmed'
 
   return (
@@ -87,7 +95,10 @@ export const OrderActions = ({ orderId }: { orderId: string }) => {
           {confirmed && canDispatch && (
             <Button variant="ink" icon={<Send className="h-4 w-4" />} onClick={() => setAction('dispatch')}>Despachar (Correios, Uber, van)</Button>
           )}
-          {confirmed && !canPickup && !canDispatch && (
+          {confirmed && blocked && (
+            <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">{blockedReason}</p>
+          )}
+          {confirmed && !blocked && !canPickup && !canDispatch && (
             <p className="text-xs font-semibold text-muted">Despachar e dar a retirada é com o financeiro/caixa ou o gerente.</p>
           )}
           <div className="flex gap-2">
