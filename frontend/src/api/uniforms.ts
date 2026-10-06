@@ -1,6 +1,23 @@
 import {
   AddCommentRequest,
   BatchResponse,
+  CancelSewingJobRequest,
+  CreateSeamstressRequest,
+  CreateSewingJobRequest,
+  DeliverSewingJobRequest,
+  SeamstressListResponse,
+  SeamstressResponse,
+  SewingJobListResponse,
+  SewingJobResponse,
+  UpdateSeamstressRequest,
+  UpdateSewingJobRequest,
+  type CreateSeamstressBody,
+  type CreateSewingJobBody,
+  type DeliverSewingJobBody,
+  type SeamstressSummaryType,
+  type SewingJobSummaryType,
+  type UpdateSeamstressBody,
+  type UpdateSewingJobBody,
   CustomerProductionHistoryResponse,
   MoveStageRequest,
   MoveStageResponse,
@@ -129,6 +146,57 @@ export const moveBatch = async (
       body: MoveStageRequest.parse(input),
     })
   ).batch
+
+// ---------------------------------------------------------------------------
+// As costureiras (F231 do Aeris)
+// ---------------------------------------------------------------------------
+
+export const fetchSeamstresses = async (
+  status: 'active' | 'archived' | undefined,
+  signal?: AbortSignal
+): Promise<SeamstressSummaryType[]> =>
+  SeamstressListResponse.parse(await request(`${BASE}/seamstresses${qs({ status })}`, { signal })).seamstresses
+
+export const createSeamstress = async (input: CreateSeamstressBody): Promise<SeamstressSummaryType> =>
+  SeamstressResponse.parse(
+    await request(`${BASE}/seamstresses`, { method: 'POST', body: CreateSeamstressRequest.parse(input) })
+  ).seamstress
+
+export const updateSeamstress = async (id: string, input: UpdateSeamstressBody): Promise<SeamstressSummaryType> =>
+  SeamstressResponse.parse(
+    await request(`${BASE}/seamstresses/${id}`, { method: 'PUT', body: UpdateSeamstressRequest.parse(input) })
+  ).seamstress
+
+export const fetchSeamstressJobs = async (
+  id: string,
+  statuses: string | undefined,
+  signal?: AbortSignal
+): Promise<SewingJobSummaryType[]> =>
+  SewingJobListResponse.parse(await request(`${BASE}/seamstresses/${id}/jobs${qs({ statuses })}`, { signal })).jobs
+
+export const fetchOrderSewing = async (orderId: string, signal?: AbortSignal): Promise<SewingJobSummaryType[]> =>
+  SewingJobListResponse.parse(await request(`${BASE}/orders/${orderId}/sewing`, { signal })).jobs
+
+export const createSewingJob = async (orderId: string, input: CreateSewingJobBody): Promise<SewingJobSummaryType> =>
+  SewingJobResponse.parse(
+    await request(`${BASE}/orders/${orderId}/sewing`, { method: 'POST', body: CreateSewingJobRequest.parse(input) })
+  ).job
+
+export const updateSewingJob = async (id: string, input: UpdateSewingJobBody): Promise<SewingJobSummaryType> =>
+  SewingJobResponse.parse(
+    await request(`${BASE}/sewing/${id}`, { method: 'PATCH', body: UpdateSewingJobRequest.parse(input) })
+  ).job
+
+/** Costura entregue: da terceirizada nasce a conta a pagar no prazo dela. */
+export const deliverSewingJob = async (id: string, input: DeliverSewingJobBody): Promise<SewingJobSummaryType> =>
+  SewingJobResponse.parse(
+    await request(`${BASE}/sewing/${id}/deliver`, { method: 'POST', body: DeliverSewingJobRequest.parse(input) })
+  ).job
+
+export const cancelSewingJob = async (id: string, version: number): Promise<SewingJobSummaryType> =>
+  SewingJobResponse.parse(
+    await request(`${BASE}/sewing/${id}/cancel`, { method: 'POST', body: CancelSewingJobRequest.parse({ version }) })
+  ).job
 
 /** Os pedidos do cliente, abertos e entregues, do mais novo para o mais velho (F229). */
 export const fetchCustomerHistory = async (

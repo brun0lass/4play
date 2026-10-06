@@ -35,6 +35,10 @@ export type Access = {
   stock: boolean
   finance: boolean
   team: boolean
+  /** A tela das costureiras (F231): quem gerencia e a produção. */
+  seamstresses: boolean
+  /** Cadastrar costureira, mudar tabela e prazo, marcar a costura entregue. */
+  manageSeamstresses: boolean
   /** A aba que abre primeiro na ficha do pedido. */
   homeTab: 'atendimento' | 'grade' | 'arte' | 'producao'
 }
@@ -63,6 +67,8 @@ export const useAccess = (): Access => {
     stock: can('inventory.read') && (isManager || has('producao')),
     finance: can('finance.read'),
     team: can('identity.user.read') || viewer.data?.manages === true,
+    seamstresses: can('uniforms.read') && (isManager || viewer.data?.manages === true || has('producao')),
+    manageSeamstresses: viewer.data?.manages === true || (isManager && can('uniforms.manage')),
     homeTab: isManager || has('atendimento') ? 'atendimento' : functions.includes('arte') ? 'arte' : functions.includes('producao') ? 'producao' : 'atendimento',
   }
 }

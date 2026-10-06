@@ -10,6 +10,7 @@ import {
   Wallet,
   Shirt,
   Boxes,
+  Scissors,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { to: '/clientes', label: 'Clientes', icon: Users, show: (a) => a.customers },
   { to: '/produtos', label: 'Produtos', icon: Shirt, show: (a) => a.products },
   { to: '/estoque', label: 'Estoque', icon: Boxes, show: (a) => a.stock },
+  { to: '/costureiras', label: 'Costureiras', icon: Scissors, show: (a) => a.seamstresses },
   { to: '/equipe', label: 'Equipe e máquinas', icon: Settings2, show: (a) => a.team },
 ]
 

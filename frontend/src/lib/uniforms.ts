@@ -262,3 +262,6 @@ export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): 
   }
   return merged
 }
+
+/** A peça como chave — a mesma regra do Aeris (`pieceKey`): "Camisa" = " camisa". */
+export const pieceKey = (piece: string): string => piece.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')

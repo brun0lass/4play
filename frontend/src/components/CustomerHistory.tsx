@@ -78,6 +78,11 @@ export const CustomerHistory = ({
                       </Badge>
                     ))
                   )}
+                  {order.sewing.length > 0 && (
+                    <span className="text-[11px] font-semibold text-muted">
+                      Costura: {[...new Set(order.sewing.map((ref) => ref.seamstressName))].join(', ')}
+                    </span>
+                  )}
                   {order.batches.length > 0 && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted">
                       <Layers className="h-3 w-3" /> {order.batches.length + 1} levas

@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { CalendarClock, ChevronRight, Layers, Printer, Shirt } from 'lucide-react'
+import { CalendarClock, ChevronRight, Layers, Printer, Scissors, Shirt } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { Avatar, Badge } from '@/components/ui'
@@ -70,6 +70,10 @@ export const OrderCard = ({
   const next = STAGES[STAGES.indexOf(stage) + 1]
   const stuck = daysSince(part?.stageChangedAt ?? order.stageChangedAt)
   const printers = part?.printers ?? order.printers
+  // Quem está costurando esta leva (F231).
+  const sewers = order.sewing.filter(
+    (ref) => ref.status === 'em-andamento' && ref.batchNumber === (part?.number ?? 1)
+  )
   const { seeMoney } = useAccess()
 
   return (
@@ -123,6 +127,11 @@ export const OrderCard = ({
               {PAYMENT_MARK_META[order.paymentMark].label}
             </Badge>
           )}
+          {sewers.map((ref) => (
+            <Badge key={ref.jobId} tone="warning">
+              <Scissors className="h-3 w-3" aria-hidden /> {ref.seamstressName}
+            </Badge>
+          ))}
           {printers.map((printer) => (
             <Badge key={printer.id} tone="info">
               <Printer className="h-3 w-3" aria-hidden /> {printer.name}

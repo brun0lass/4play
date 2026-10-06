@@ -1,12 +1,16 @@
 import { clsx } from 'clsx'
-import { Layers, Printer, Scissors } from 'lucide-react'
+import { Layers, Printer, Scissors, Shirt } from 'lucide-react'
 import { useState } from 'react'
 
 import { Section } from '@/components/ficha/Section'
 import { SplitBatchDialog } from '@/components/order/SplitBatch'
+import { DeliverDialog, SewingDialog, SewingJobRow } from '@/components/sewing/Sewing'
 import { useStageMover } from '@/components/StageMover'
 import { Badge, Button, ErrorBox } from '@/components/ui'
+import type { SewingJobSummaryType } from '@/contracts/aeris/uniforms.ts'
+import { useAccess } from '@/lib/access'
 import { daysSince, int } from '@/lib/format'
+import { useOrderSewing } from '@/lib/queries'
 import {
   STAGES,
   STAGE_META,
@@ -25,6 +29,11 @@ import {
 export const LevasPanel = ({ order, editable }: { order: Order; editable: boolean }) => {
   const mover = useStageMover()
   const [splitting, setSplitting] = useState<Part | null>(null)
+  const [sewingPart, setSewingPart] = useState<Part | null>(null)
+  const [delivering, setDelivering] = useState<SewingJobSummaryType | null>(null)
+  const sewing = useOrderSewing(order.id)
+  const access = useAccess()
+  const sendsToSewing = access.isManager || access.functions.includes('producao')
   const parts = partsOf(order)
   const split = isSplit(order)
 
@@ -73,8 +82,26 @@ export const LevasPanel = ({ order, editable }: { order: Order; editable: boolea
                 </div>
               )}
 
+              {(() => {
+                const jobs = (sewing.data ?? []).filter(
+                  (job) => job.status !== 'cancelada' && (job.batchId ?? null) === (part.batch?.id ?? null)
+                )
+                return jobs.length === 0 ? null : (
+                  <div className="mt-3 space-y-2">
+                    {jobs.map((job) => (
+                      <SewingJobRow key={job.id} job={job} onDeliver={setDelivering} />
+                    ))}
+                  </div>
+                )
+              })()}
+
               {editable && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                  {sendsToSewing && (
+                    <Button size="sm" variant="ink" icon={<Shirt className="h-3.5 w-3.5" />} disabled={part.total < 1} onClick={() => setSewingPart(part)}>
+                      Mandar para costureira
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -114,6 +141,8 @@ export const LevasPanel = ({ order, editable }: { order: Order; editable: boolea
 
       {mover.dialog}
       <SplitBatchDialog part={splitting} onClose={() => setSplitting(null)} />
+      <SewingDialog part={sewingPart} onClose={() => setSewingPart(null)} />
+      <DeliverDialog job={delivering} onClose={() => setDelivering(null)} />
     </Section>
   )
 }

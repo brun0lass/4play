@@ -14,7 +14,9 @@ export const int = (value: number): string => INT.format(value)
 /** `AAAA-MM-DD` → `dd/mm` (ou `dd/mm/aa` fora do ano corrente). É um dia, não um instante. */
 export const day = (value: string | null | undefined): string => {
   if (!value) return '—'
-  const [y, m, d] = value.slice(0, 10).split('-')
+  // Um instante (com hora) vira o dia DAQUI: às 21h de São Paulo já é amanhã em UTC.
+  const local = value.length > 10 && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleDateString('en-CA') : value
+  const [y, m, d] = local.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return y === String(new Date().getFullYear()) ? `${d}/${m}` : `${d}/${m}/${y.slice(2)}`
 }

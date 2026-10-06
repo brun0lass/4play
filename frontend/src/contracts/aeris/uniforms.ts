@@ -352,6 +352,20 @@ export const ProductionOrderSummary = z.object({
    * `stage` do pedido. Sem levas, é a grade inteira por peça.
    */
   remainingPieces: z.array(ProductionPieceCount).default([]),
+  /** Quem costura (ou costurou) cada leva, sem as canceladas (F231). */
+  sewing: z
+    .array(
+      z.object({
+        jobId: z.string(),
+        seamstressId: z.string(),
+        seamstressName: z.string(),
+        /** 1 é o restante. */
+        batchNumber: z.number().int(),
+        status: z.enum(['em-andamento', 'entregue']),
+        pieces: z.number().int(),
+      })
+    )
+    .default([]),
 })
 
 export type ProductionOrderSummaryType = z.infer<typeof ProductionOrderSummary>
@@ -749,3 +763,231 @@ export const UniformViewerResponse = z.object({
 })
 
 export type UniformViewerResponseType = z.infer<typeof UniformViewerResponse>
+
+// ---------------------------------------------------------------------------
+// As costureiras (F231)
+// ---------------------------------------------------------------------------
+
+/** Terceirizada trabalha por peça e gera conta a pagar; CLT é da folha. */
+export const SEAMSTRESS_KIND_VALUES = ['terceirizada', 'clt'] as const
+
+/** A costura: entregue gera a conta a pagar da terceirizada. */
+export const SEWING_STATUS_VALUES = [
+  'em-andamento',
+  'entregue',
+  'cancelada',
+] as const
+
+export const SeamstressKindSchema = z.enum(SEAMSTRESS_KIND_VALUES)
+export const SewingStatusSchema = z.enum(SEWING_STATUS_VALUES)
+
+/** Até 10 dígitos e 2 casas — `numeric(18, 2)`, sem sinal. */
+const PRICE_PATTERN = /^\d{1,10}(\.\d{1,2})?$/
+const PriceString = z
+  .string()
+  .trim()
+  .regex(
+    PRICE_PATTERN,
+    'O preço deve ser um número com ponto, por exemplo 4.50'
+  )
+
+const PieceName = z.string().trim().min(1, 'Diga qual é a peça.').max(40)
+
+export const SeamstressPriceSchema = z.object({
+  piece: z.string(),
+  /** Nulo para quem não vê dinheiro (F220). */
+  unitPrice: z.string().nullable(),
+})
+
+export const SeamstressSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  kind: SeamstressKindSchema,
+  /** Dias depois da entrega para pagar. Nulo para CLT e para quem não vê dinheiro. */
+  paymentTermDays: z.number().int().nullable(),
+  notes: z.string().nullable(),
+  status: z.enum(['active', 'archived']),
+  version: z.number().int(),
+  /** A tabela dela. Os preços vêm nulos para quem não vê dinheiro. */
+  prices: z.array(SeamstressPriceSchema),
+  openJobs: z.number().int(),
+  openPieces: z.number().int(),
+})
+
+export type SeamstressSummaryType = z.infer<typeof SeamstressSummary>
+
+export const SeamstressListQuery = z.object({
+  status: z.enum(['active', 'archived']).optional(),
+})
+
+export const SeamstressListResponse = z.object({
+  seamstresses: z.array(SeamstressSummary),
+})
+
+export type SeamstressListResponseType = z.infer<typeof SeamstressListResponse>
+
+const seamstressFields = {
+  name: z.string().trim().min(1, 'Diga o nome da costureira.').max(80),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  kind: SeamstressKindSchema,
+  /** Obrigatório para a terceirizada; ignorado para a CLT. */
+  paymentTermDays: z.number().int().min(0).max(180).nullable().default(null),
+  notes: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  prices: z
+    .array(z.object({ piece: PieceName, unitPrice: PriceString }))
+    .max(60)
+    .default([]),
+}
+
+const termRequired = (value: {
+  kind: 'terceirizada' | 'clt'
+  paymentTermDays: number | null
+}) => value.kind === 'clt' || value.paymentTermDays !== null
+
+const TERM_MESSAGE = {
+  message: 'Diga em quantos dias a terceirizada recebe depois da entrega.',
+  path: ['paymentTermDays'],
+}
+
+export const CreateSeamstressRequest = z
+  .object(seamstressFields)
+  .refine(termRequired, TERM_MESSAGE)
+
+export type CreateSeamstressBody = z.input<typeof CreateSeamstressRequest>
+
+export const UpdateSeamstressRequest = z
+  .object({
+    ...seamstressFields,
+    version: z.number().int().positive(),
+    status: z.enum(['active', 'archived']).default('active'),
+  })
+  .refine(termRequired, TERM_MESSAGE)
+
+export type UpdateSeamstressBody = z.input<typeof UpdateSeamstressRequest>
+
+export const SeamstressResponse = z.object({ seamstress: SeamstressSummary })
+
+export const SewingPieceSchema = z.object({
+  piece: z.string(),
+  quantity: z.number().int(),
+  /** Nulo para quem não vê dinheiro (F220). */
+  unitPrice: z.string().nullable(),
+})
+
+export const SewingJobSummary = z.object({
+  id: z.string(),
+  salesDocumentId: z.string(),
+  orderNumber: z.number().int().nullable(),
+  customerName: z.string(),
+  batchId: z.string().nullable(),
+  /** 1 é o restante. */
+  batchNumber: z.number().int(),
+  seamstressId: z.string(),
+  seamstressName: z.string(),
+  seamstressKind: SeamstressKindSchema,
+  status: SewingStatusSchema,
+  notes: z.string().nullable(),
+  assignedAt: z.string(),
+  deliveredAt: z.string().nullable(),
+  pieces: z.array(SewingPieceSchema),
+  quantity: z.number().int(),
+  /** Nulo para quem não vê dinheiro. */
+  total: z.string().nullable(),
+  /** O título a pagar da entrega, quando houve. */
+  payable: z
+    .object({
+      id: z.string(),
+      status: z.enum(['open', 'settled', 'cancelled']),
+      dueAt: z.string(),
+    })
+    .nullable(),
+  version: z.number().int(),
+})
+
+export type SewingJobSummaryType = z.infer<typeof SewingJobSummary>
+
+export const SewingJobListQuery = z.object({
+  statuses: csv(SewingStatusSchema),
+})
+
+export const SewingJobListResponse = z.object({
+  jobs: z.array(SewingJobSummary),
+})
+
+export type SewingJobListResponseType = z.infer<typeof SewingJobListResponse>
+
+const sewingPieces = z
+  .array(
+    z.object({
+      piece: PieceName,
+      quantity: z.number().int().min(1).max(100_000),
+      /**
+       * O preço combinado na hora. Ausente, vale a tabela dela (ou zero).
+       * Ignorado para quem não vê dinheiro: vale a tabela.
+       */
+      unitPrice: PriceString.optional(),
+    })
+  )
+  .min(1, 'Escolha quantas peças vão para a costureira.')
+  .max(50)
+
+/** Mandar uma leva (ou parte dela) para a costureira. */
+export const CreateSewingJobRequest = z.object({
+  seamstressId: z.uuid(),
+  /** A leva; nulo é a leva 1, o restante. */
+  batchId: z.uuid().nullable(),
+  pieces: sewingPieces,
+  notes: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+})
+
+export type CreateSewingJobBody = z.input<typeof CreateSewingJobRequest>
+
+export const UpdateSewingJobRequest = z.object({
+  version: z.number().int().positive(),
+  pieces: sewingPieces.optional(),
+  notes: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullable()
+    .optional()
+    .transform((value) => (value === '' ? null : value)),
+})
+
+export type UpdateSewingJobBody = z.input<typeof UpdateSewingJobRequest>
+
+/** Costura entregue: quem gerencia marca, e nasce a conta a pagar. */
+export const DeliverSewingJobRequest = z.object({
+  version: z.number().int().positive(),
+  /** O dia da entrega, `AAAA-MM-DD`. Ausente, hoje. */
+  deliveredOn: Day.optional(),
+})
+
+export type DeliverSewingJobBody = z.input<typeof DeliverSewingJobRequest>
+
+export const CancelSewingJobRequest = z.object({
+  version: z.number().int().positive(),
+})
+
+export const SewingJobResponse = z.object({ job: SewingJobSummary })
+
+export type SewingJobResponseType = z.infer<typeof SewingJobResponse>

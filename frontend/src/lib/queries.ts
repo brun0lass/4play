@@ -3,6 +3,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import {
   fetchCustomerHistory,
+  fetchOrderSewing,
+  fetchSeamstressJobs,
+  fetchSeamstresses,
   fetchMembers,
   fetchOrder,
   fetchPrinters,
@@ -20,6 +23,11 @@ export const keys = {
   members: ['uniforms', 'members'] as const,
   printers: (status?: string) => ['uniforms', 'printers', status ?? 'all'] as const,
   history: (partyId: string) => ['uniforms', 'history', partyId] as const,
+  seamstresses: (status?: string) => ['uniforms', 'seamstresses', status ?? 'all'] as const,
+  seamstressesAll: ['uniforms', 'seamstresses'] as const,
+  seamstressJobs: (id: string, statuses?: string) => ['uniforms', 'seamstress-jobs', id, statuses ?? 'all'] as const,
+  sewingAll: ['uniforms', 'seamstress-jobs'] as const,
+  orderSewing: (orderId: string) => ['uniforms', 'order-sewing', orderId] as const,
 }
 
 export const useQueue = (query: ProductionQueueQueryInput, refetchInterval = 30_000) =>
@@ -65,4 +73,26 @@ export const useCustomerHistory = (partyId: string | null | undefined) =>
     queryFn: ({ signal }) => fetchCustomerHistory(partyId ?? '', signal),
     enabled: Boolean(partyId),
     staleTime: 60_000,
+  })
+
+/** As costureiras (F231). Quem não vê dinheiro recebe a tabela sem preço. */
+export const useSeamstresses = (status?: 'active' | 'archived') =>
+  useQuery({
+    queryKey: keys.seamstresses(status),
+    queryFn: ({ signal }) => fetchSeamstresses(status, signal),
+    staleTime: 60_000,
+  })
+
+export const useSeamstressJobs = (id: string | null, statuses?: string) =>
+  useQuery({
+    queryKey: keys.seamstressJobs(id ?? '', statuses),
+    queryFn: ({ signal }) => fetchSeamstressJobs(id ?? '', statuses, signal),
+    enabled: id !== null,
+  })
+
+/** Quem costura cada leva do pedido (F231). */
+export const useOrderSewing = (orderId: string) =>
+  useQuery({
+    queryKey: keys.orderSewing(orderId),
+    queryFn: ({ signal }) => fetchOrderSewing(orderId, signal),
   })

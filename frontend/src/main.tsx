@@ -13,6 +13,7 @@ import { ApiError, UnauthenticatedError, errorMessage } from '@/lib/http'
 import { ClientesPage } from '@/pages/Clientes'
 import { EquipePage } from '@/pages/Equipe'
 import { EstoquePage } from '@/pages/Estoque'
+import { CostureirasPage } from '@/pages/Costureiras'
 import { ProdutosPage } from '@/pages/Produtos'
 import { FichaImpressaoPage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
@@ -102,6 +103,7 @@ const App = () => (
       <Route path="clientes" element={<Guard allow={(a) => a.customers}><ClientesPage /></Guard>} />
       <Route path="produtos" element={<Guard allow={(a) => a.products}><ProdutosPage /></Guard>} />
       <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
+      <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
       <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
