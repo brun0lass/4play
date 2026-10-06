@@ -21,6 +21,7 @@ const EVENT_TEXT: Record<string, string> = {
   'imagem-removida': 'tirou uma imagem',
   impressoras: 'trocou as impressoras',
   repetido: 'repetiu o pedido',
+  link: 'criou o pedido pelo link do cliente',
 }
 
 const describe = (entry: ProductionTimelineEntryType): string => {

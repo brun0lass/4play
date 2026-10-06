@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, ArrowRight, CalendarClock, KanbanSquare, MessagesSquare, Palette, Plus, Shirt, Timer } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CalendarClock, KanbanSquare, Link2, MessagesSquare, Palette, Plus, Shirt, Timer } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 
@@ -11,7 +11,8 @@ import { useNewOrder } from '@/components/NewOrderContext'
 import { Badge, Button, ErrorBox, PageHeader, Spinner } from '@/components/ui'
 import { daysUntil, int, money } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
-import { useQueue } from '@/lib/queries'
+import { useAccess } from '@/lib/access'
+import { useIntakes, useQueue } from '@/lib/queries'
 import { ART_STATUS_META, STAGES, STAGE_META, orderRef, type Order } from '@/lib/uniforms'
 
 const monthRange = () => {
@@ -34,6 +35,9 @@ export const PainelPage = () => {
     retry: false,
   })
 
+  const access = useAccess()
+  // Pedidos que chegaram pelo link e esperam a conferência (F232).
+  const toReview = useIntakes('enviado', access.createOrder).data?.length ?? 0
   const firstName = session?.user.displayName.split(' ')[0] ?? ''
   const items = queue.data?.items ?? []
   const late = items.filter((o) => o.late)
@@ -64,6 +68,16 @@ export const PainelPage = () => {
       >
         <p className="mt-2 text-sm font-semibold text-muted">Como está a fábrica agora.</p>
       </PageHeader>
+
+      {toReview > 0 && (
+        <Link to="/links" className="mb-5 flex items-center justify-between gap-3 rounded-3xl bg-lime px-5 py-4 font-bold text-ink shadow-[0_3px_0_0_rgb(0_0_0/0.8)]">
+          <span className="flex items-center gap-2">
+            <Link2 className="h-5 w-5" />
+            {toReview === 1 ? '1 pedido chegou pelo link do cliente' : `${String(toReview)} pedidos chegaram pelo link do cliente`} — confira
+          </span>
+          <ArrowRight className="h-5 w-5" />
+        </Link>
+      )}
 
       {queue.isPending && <Spinner />}
       {queue.isError && <ErrorBox message={errorMessage(queue.error)} onRetry={() => void queue.refetch()} />}

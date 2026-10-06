@@ -3,6 +3,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import {
   fetchCustomerHistory,
+  fetchIntake,
+  fetchIntakes,
   fetchOrderSewing,
   fetchSeamstressJobs,
   fetchSeamstresses,
@@ -28,6 +30,9 @@ export const keys = {
   seamstressJobs: (id: string, statuses?: string) => ['uniforms', 'seamstress-jobs', id, statuses ?? 'all'] as const,
   sewingAll: ['uniforms', 'seamstress-jobs'] as const,
   orderSewing: (orderId: string) => ['uniforms', 'order-sewing', orderId] as const,
+  intakes: (statuses?: string) => ['uniforms', 'intakes', statuses ?? 'all'] as const,
+  intakesAll: ['uniforms', 'intakes'] as const,
+  intake: (id: string) => ['uniforms', 'intake', id] as const,
 }
 
 export const useQueue = (query: ProductionQueueQueryInput, refetchInterval = 30_000) =>
@@ -95,4 +100,20 @@ export const useOrderSewing = (orderId: string) =>
   useQuery({
     queryKey: keys.orderSewing(orderId),
     queryFn: ({ signal }) => fetchOrderSewing(orderId, signal),
+  })
+
+/** Os links de pedido para o cliente (F232). */
+export const useIntakes = (statuses?: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.intakes(statuses),
+    queryFn: ({ signal }) => fetchIntakes(statuses, signal),
+    enabled,
+    refetchInterval: 60_000,
+  })
+
+export const useIntake = (id: string | null) =>
+  useQuery({
+    queryKey: keys.intake(id ?? ''),
+    queryFn: ({ signal }) => fetchIntake(id ?? '', signal),
+    enabled: id !== null,
   })

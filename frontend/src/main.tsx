@@ -14,10 +14,12 @@ import { ClientesPage } from '@/pages/Clientes'
 import { EquipePage } from '@/pages/Equipe'
 import { EstoquePage } from '@/pages/Estoque'
 import { CostureirasPage } from '@/pages/Costureiras'
+import { LinksPage } from '@/pages/Links'
 import { ProdutosPage } from '@/pages/Produtos'
 import { FichaImpressaoPage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
 import { LoginPage } from '@/pages/Login'
+import { LinkPedidoPage } from '@/pages/LinkPedido'
 import { PainelPage } from '@/pages/Painel'
 import { PedidoPage } from '@/pages/Pedido'
 import { ProducaoPage } from '@/pages/Producao'
@@ -72,6 +74,8 @@ const Home = () => {
 const App = () => (
   <Routes>
     <Route path="/login" element={<LoginPage />} />
+    {/* O link do pedido (F232): o cliente abre sem login. */}
+    <Route path="/pedido/:token" element={<LinkPedidoPage />} />
     <Route
       path="/trocar-senha"
       element={
@@ -104,6 +108,7 @@ const App = () => (
       <Route path="produtos" element={<Guard allow={(a) => a.products}><ProdutosPage /></Guard>} />
       <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
       <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
+      <Route path="links" element={<Guard allow={(a) => a.createOrder}><LinksPage /></Guard>} />
       <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>

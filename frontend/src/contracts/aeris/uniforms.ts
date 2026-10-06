@@ -95,6 +95,7 @@ export const UNIFORM_EVENT_KIND_VALUES = [
   'imagem-removida',
   'impressoras',
   'repetido',
+  'link',
 ] as const
 
 export const UniformStageSchema = z.enum(UNIFORM_STAGE_VALUES)
@@ -991,3 +992,235 @@ export const CancelSewingJobRequest = z.object({
 export const SewingJobResponse = z.object({ job: SewingJobSummary })
 
 export type SewingJobResponseType = z.infer<typeof SewingJobResponse>
+
+// ---------------------------------------------------------------------------
+// O link do cliente (F232)
+// ---------------------------------------------------------------------------
+
+export const INTAKE_STATUS_VALUES = [
+  'aberto',
+  'enviado',
+  'convertido',
+  'cancelado',
+] as const
+
+/** Como a tela vê: o aberto vencido é "expirado". */
+export const IntakeViewSchema = z.enum([...INTAKE_STATUS_VALUES, 'expirado'])
+
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value))
+
+/** Uma linha que o cliente preenche: nome e número opcionais. */
+export const IntakeRowSchema = z.object({
+  size: UniformSizeSchema,
+  quantity: z.number().int().min(1).max(100_000),
+  name: optionalText(80),
+  number: optionalText(10),
+})
+
+/** O cadastro do cliente novo — o mínimo para o pedido nascer com quem é. */
+export const IntakeCustomerSchema = z.object({
+  kind: z.enum(['person', 'company']).default('person'),
+  name: z.string().trim().min(2, 'Diga o seu nome (ou o do time).').max(200),
+  tradeName: optionalText(200),
+  /** CPF ou CNPJ, com ou sem pontuação. Conferido no servidor. */
+  document: optionalText(20),
+  phone: z
+    .string()
+    .trim()
+    .min(8, 'Diga um WhatsApp para falarmos com você.')
+    .max(30),
+  email: optionalText(200),
+  address: z
+    .object({
+      cep: optionalText(9),
+      street: z.string().trim().min(1, 'Diga a rua.').max(200),
+      number: optionalText(20),
+      complement: optionalText(120),
+      district: optionalText(120),
+      city: z.string().trim().min(1, 'Diga a cidade.').max(120),
+      uf: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{2}$/, 'A UF tem duas letras.'),
+    })
+    .nullable()
+    .default(null),
+})
+
+export type IntakeCustomerType = z.infer<typeof IntakeCustomerSchema>
+
+/** O que o cliente envia — e o que fica gravado no link. */
+export const IntakeSubmissionSchema = z.object({
+  /** Obrigatório quando o link é de cliente novo; ignorado quando não. */
+  customer: IntakeCustomerSchema.nullable().default(null),
+  items: z
+    .array(
+      z.object({
+        productId: z.uuid(),
+        rows: z.array(IntakeRowSchema).min(1).max(2_000),
+      })
+    )
+    .min(1, 'Escolha pelo menos uma peça.')
+    .max(30),
+  notes: optionalText(1000),
+})
+
+export type IntakeSubmissionBody = z.input<typeof IntakeSubmissionSchema>
+export type IntakeSubmissionType = z.infer<typeof IntakeSubmissionSchema>
+
+/** A página pública do link: o que o cliente vê. */
+export const PublicIntakeResponse = z.object({
+  status: IntakeViewSchema,
+  /** "Olá, Maria" — só o primeiro nome do cadastro já existente. */
+  customerFirstName: z.string().nullable(),
+  /** Cliente novo: a página pede o cadastro. */
+  needsRegistration: z.boolean(),
+  /** Para já vir preenchido no cadastro do cliente novo. */
+  contactPhone: z.string().nullable(),
+  contactEmail: z.string().nullable(),
+  message: z.string().nullable(),
+  showPrices: z.boolean(),
+  products: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      /** Nulo quando a atendente escolheu não mostrar o preço. */
+      unitPrice: z.string().nullable(),
+    })
+  ),
+  sizes: z.array(UniformSizeSchema),
+  expiresAt: z.string(),
+  submittedAt: z.string().nullable(),
+})
+
+export type PublicIntakeResponseType = z.infer<typeof PublicIntakeResponse>
+
+export const PublicIntakeSubmitResponse = z.object({
+  status: IntakeViewSchema,
+  submittedAt: z.string(),
+})
+
+/** A atendente gera o link: para um cliente já cadastrado, ou pelo telefone/e-mail. */
+export const CreateIntakeRequest = z
+  .object({
+    customerPartyId: z.uuid().nullable().default(null),
+    phone: optionalText(30),
+    email: optionalText(200),
+    showPrices: z.boolean().default(false),
+    /** As peças que o cliente pode escolher. Vazio: todas as ativas. */
+    productIds: z.array(z.uuid()).max(100).default([]),
+    expiresInDays: z.number().int().min(1).max(60).default(7),
+    message: optionalText(500),
+  })
+  .refine(
+    (value) =>
+      value.customerPartyId !== null ||
+      value.phone !== null ||
+      value.email !== null,
+    {
+      message: 'Escolha o cliente, ou diga o telefone ou o e-mail dele.',
+      path: ['phone'],
+    }
+  )
+
+export type CreateIntakeBody = z.input<typeof CreateIntakeRequest>
+
+export const IntakeSummary = z.object({
+  id: z.string(),
+  /** O pedaço do endereço do link: `/pedido/<token>` na tela da loja. */
+  token: z.string(),
+  status: IntakeViewSchema,
+  customer: z.object({ id: z.string(), name: z.string() }).nullable(),
+  contactPhone: z.string().nullable(),
+  contactEmail: z.string().nullable(),
+  showPrices: z.boolean(),
+  products: z.array(z.object({ id: z.string(), name: z.string() })),
+  message: z.string().nullable(),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+  createdByName: z.string().nullable(),
+  submittedAt: z.string().nullable(),
+  /** O nome que o cliente novo escreveu, ou o do cadastro. */
+  submittedName: z.string().nullable(),
+  /** Quantas peças o cliente pediu. */
+  submittedPieces: z.number().int(),
+  order: z
+    .object({ id: z.string(), number: z.number().int().nullable() })
+    .nullable(),
+  version: z.number().int(),
+})
+
+export type IntakeSummaryType = z.infer<typeof IntakeSummary>
+
+export const IntakeListQuery = z.object({
+  statuses: csv(z.enum(INTAKE_STATUS_VALUES)),
+})
+
+export const IntakeListResponse = z.object({ intakes: z.array(IntakeSummary) })
+
+export const IntakeResponse = z.object({ intake: IntakeSummary })
+
+/** O cadastro e a linha como a conferência os lê — sem transformação (resposta). */
+const IntakeRowOut = z.object({
+  size: UniformSizeSchema,
+  quantity: z.number().int(),
+  name: z.string().nullable(),
+  number: z.string().nullable(),
+})
+
+const IntakeCustomerOut = z.object({
+  kind: z.enum(['person', 'company']),
+  name: z.string(),
+  tradeName: z.string().nullable(),
+  document: z.string().nullable(),
+  phone: z.string(),
+  email: z.string().nullable(),
+  address: z
+    .object({
+      cep: z.string().nullable(),
+      street: z.string(),
+      number: z.string().nullable(),
+      complement: z.string().nullable(),
+      district: z.string().nullable(),
+      city: z.string(),
+      uf: z.string(),
+    })
+    .nullable(),
+})
+
+/** A conferência: o link e o que o cliente mandou, com o nome de cada peça. */
+export const IntakeDetailResponse = z.object({
+  intake: IntakeSummary,
+  submission: z
+    .object({
+      customer: IntakeCustomerOut.nullable(),
+      items: z.array(
+        z.object({
+          productId: z.string(),
+          productName: z.string(),
+          rows: z.array(IntakeRowOut),
+        })
+      ),
+      notes: z.string().nullable(),
+    })
+    .nullable(),
+})
+
+export type IntakeDetailResponseType = z.infer<typeof IntakeDetailResponse>
+
+export const IntakeVersionRequest = z.object({
+  version: z.number().int().positive(),
+})
+
+export const ConvertIntakeResponse = z.object({
+  id: z.string(),
+  number: z.number().int().nullable(),
+})

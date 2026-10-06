@@ -1,4 +1,18 @@
 import {
+  ConvertIntakeResponse,
+  CreateIntakeRequest,
+  IntakeDetailResponse,
+  IntakeListResponse,
+  IntakeResponse,
+  IntakeSubmissionSchema,
+  IntakeVersionRequest,
+  PublicIntakeResponse,
+  PublicIntakeSubmitResponse,
+  type CreateIntakeBody,
+  type IntakeDetailResponseType,
+  type IntakeSubmissionBody,
+  type IntakeSummaryType,
+  type PublicIntakeResponseType,
   AddCommentRequest,
   BatchResponse,
   CancelSewingJobRequest,
@@ -197,6 +211,41 @@ export const cancelSewingJob = async (id: string, version: number): Promise<Sewi
   SewingJobResponse.parse(
     await request(`${BASE}/sewing/${id}/cancel`, { method: 'POST', body: CancelSewingJobRequest.parse({ version }) })
   ).job
+
+// ---------------------------------------------------------------------------
+// O link do cliente (F232 do Aeris)
+// ---------------------------------------------------------------------------
+
+/** A página pública: sem login, só o token. */
+export const fetchPublicIntake = async (token: string, signal?: AbortSignal): Promise<PublicIntakeResponseType> =>
+  PublicIntakeResponse.parse(await request(`${BASE}/public/intakes/${token}`, { signal }))
+
+export const submitPublicIntake = async (token: string, input: IntakeSubmissionBody) =>
+  PublicIntakeSubmitResponse.parse(
+    await request(`${BASE}/public/intakes/${token}`, { method: 'POST', body: IntakeSubmissionSchema.parse(input) })
+  )
+
+export const fetchIntakes = async (statuses: string | undefined, signal?: AbortSignal): Promise<IntakeSummaryType[]> =>
+  IntakeListResponse.parse(await request(`${BASE}/intakes${qs({ statuses })}`, { signal })).intakes
+
+export const fetchIntake = async (id: string, signal?: AbortSignal): Promise<IntakeDetailResponseType> =>
+  IntakeDetailResponse.parse(await request(`${BASE}/intakes/${id}`, { signal }))
+
+export const createIntake = async (input: CreateIntakeBody): Promise<IntakeSummaryType> =>
+  IntakeResponse.parse(
+    await request(`${BASE}/intakes`, { method: 'POST', body: CreateIntakeRequest.parse(input) })
+  ).intake
+
+export const cancelIntake = async (id: string, version: number): Promise<IntakeSummaryType> =>
+  IntakeResponse.parse(
+    await request(`${BASE}/intakes/${id}/cancel`, { method: 'POST', body: IntakeVersionRequest.parse({ version }) })
+  ).intake
+
+/** A conferência vira pedido: o cadastro do cliente novo, o pedido e a ficha. */
+export const convertIntake = async (id: string, version: number) =>
+  ConvertIntakeResponse.parse(
+    await request(`${BASE}/intakes/${id}/convert`, { method: 'POST', body: IntakeVersionRequest.parse({ version }) })
+  )
 
 /** Os pedidos do cliente, abertos e entregues, do mais novo para o mais velho (F229). */
 export const fetchCustomerHistory = async (

@@ -2,6 +2,7 @@ import { clsx } from 'clsx'
 import {
   KanbanSquare,
   LayoutDashboard,
+  Link2,
   LogOut,
   Menu,
   Plus,
@@ -34,6 +35,7 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; sho
 const NAV: NavItem[] = [
   { to: '/', label: 'Início', icon: LayoutDashboard, end: true, show: (_, can) => can('uniforms.read') },
   { to: '/producao', label: 'Pedidos e produção', icon: KanbanSquare, show: (_, can) => can('uniforms.read') },
+  { to: '/links', label: 'Links do cliente', icon: Link2, show: (a) => a.createOrder },
   { to: '/financeiro', label: 'Financeiro', icon: Wallet, show: (a) => a.finance },
   { to: '/clientes', label: 'Clientes', icon: Users, show: (a) => a.customers },
   { to: '/produtos', label: 'Produtos', icon: Shirt, show: (a) => a.products },
