@@ -12,7 +12,7 @@ import { Badge, Button, ErrorBox, PageHeader, Spinner } from '@/components/ui'
 import { daysUntil, int, money } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { useAccess } from '@/lib/access'
-import { useIntakes, useQueue } from '@/lib/queries'
+import { useIncidents, useIntakes, useQueue } from '@/lib/queries'
 import { ART_STATUS_META, STAGES, STAGE_META, orderRef, type Order } from '@/lib/uniforms'
 
 const monthRange = () => {
@@ -38,6 +38,9 @@ export const PainelPage = () => {
   const access = useAccess()
   // Pedidos que chegaram pelo link e esperam a conferência (F232).
   const toReview = useIntakes('enviado', access.createOrder).data?.length ?? 0
+  // Refazer e problemas em aberto (F234).
+  const openIncidents = useIncidents('aberta').data ?? []
+  const toRedo = openIncidents.filter((incident) => incident.kind === 'refazer').length
   const firstName = session?.user.displayName.split(' ')[0] ?? ''
   const items = queue.data?.items ?? []
   const late = items.filter((o) => o.late)
@@ -74,6 +77,17 @@ export const PainelPage = () => {
           <span className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
             {toReview === 1 ? '1 pedido chegou pelo link do cliente' : `${String(toReview)} pedidos chegaram pelo link do cliente`} — confira
+          </span>
+          <ArrowRight className="h-5 w-5" />
+        </Link>
+      )}
+
+      {openIncidents.length > 0 && (
+        <Link to="/ocorrencias" className="mb-5 flex items-center justify-between gap-3 rounded-3xl bg-red-600 px-5 py-4 font-bold text-white">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            {openIncidents.length === 1 ? '1 ocorrência aberta' : `${String(openIncidents.length)} ocorrências abertas`}
+            {toRedo > 0 && ` — ${String(toRedo)} para refazer`}
           </span>
           <ArrowRight className="h-5 w-5" />
         </Link>

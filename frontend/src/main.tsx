@@ -15,6 +15,7 @@ import { EquipePage } from '@/pages/Equipe'
 import { EstoquePage } from '@/pages/Estoque'
 import { CostureirasPage } from '@/pages/Costureiras'
 import { LinksPage } from '@/pages/Links'
+import { OcorrenciasPage } from '@/pages/Ocorrencias'
 import { ProdutosPage } from '@/pages/Produtos'
 import { FichaImpressaoPage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
@@ -109,6 +110,7 @@ const App = () => (
       <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
       <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
       <Route path="links" element={<Guard allow={(a) => a.createOrder}><LinksPage /></Guard>} />
+      <Route path="ocorrencias" element={<OcorrenciasPage />} />
       <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>

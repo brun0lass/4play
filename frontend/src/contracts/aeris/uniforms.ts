@@ -96,6 +96,8 @@ export const UNIFORM_EVENT_KIND_VALUES = [
   'impressoras',
   'repetido',
   'link',
+  'ocorrencia',
+  'ocorrencia-resolvida',
 ] as const
 
 export const UniformStageSchema = z.enum(UNIFORM_STAGE_VALUES)
@@ -367,6 +369,8 @@ export const ProductionOrderSummary = z.object({
       })
     )
     .default([]),
+  /** Ocorrências abertas do pedido: refazer e problemas (F234). */
+  openIncidents: z.number().int().default(0),
 })
 
 export type ProductionOrderSummaryType = z.infer<typeof ProductionOrderSummary>
@@ -1071,6 +1075,19 @@ export const IntakeSubmissionSchema = z.object({
     .min(1, 'Escolha pelo menos uma peça.')
     .max(30),
   notes: optionalText(1000),
+  /**
+   * Para um evento: a data e o nome. O despacho fica uma semana antes (F233).
+   * Nulo: sem evento, o despacho é o envio mais o prazo do link.
+   */
+  event: z
+    .object({
+      date: Day,
+      name: optionalText(200),
+    })
+    .nullable()
+    .default(null),
+  /** O tecido que o cliente quer; nulo é "não sei, a loja ajuda". */
+  fabric: UniformFabricSchema.nullable().default(null),
 })
 
 export type IntakeSubmissionBody = z.input<typeof IntakeSubmissionSchema>
@@ -1097,6 +1114,13 @@ export const PublicIntakeResponse = z.object({
     })
   ),
   sizes: z.array(UniformSizeSchema),
+  /** O prazo de produção do link, em dias depois do envio (F233). */
+  leadDays: z.number().int(),
+  /** Quantos dias antes do evento o pedido sai. */
+  eventLeadDays: z.number().int(),
+  fabrics: z.array(UniformFabricSchema),
+  /** "Hoje" no fuso da loja, para a página mostrar a previsão. */
+  today: z.string(),
   expiresAt: z.string(),
   submittedAt: z.string().nullable(),
 })
@@ -1118,6 +1142,8 @@ export const CreateIntakeRequest = z
     /** As peças que o cliente pode escolher. Vazio: todas as ativas. */
     productIds: z.array(z.uuid()).max(100).default([]),
     expiresInDays: z.number().int().min(1).max(60).default(7),
+    /** O prazo de produção: o despacho sem evento é o envio mais estes dias (F233). */
+    leadDays: z.number().int().min(1).max(180).default(30),
     message: optionalText(500),
   })
   .refine(
@@ -1142,6 +1168,7 @@ export const IntakeSummary = z.object({
   contactPhone: z.string().nullable(),
   contactEmail: z.string().nullable(),
   showPrices: z.boolean(),
+  leadDays: z.number().int(),
   products: z.array(z.object({ id: z.string(), name: z.string() })),
   message: z.string().nullable(),
   expiresAt: z.string(),
@@ -1210,6 +1237,14 @@ export const IntakeDetailResponse = z.object({
         })
       ),
       notes: z.string().nullable(),
+      event: z
+        .object({ date: z.string(), name: z.string().nullable() })
+        .nullable(),
+      fabric: UniformFabricSchema.nullable(),
+      /** O despacho que o link calcula (F233); a atendente muda na ficha. */
+      dispatchDate: z.string().nullable(),
+      /** Evento com menos de uma semana: prazo curto. */
+      tight: z.boolean(),
     })
     .nullable(),
 })
@@ -1224,3 +1259,153 @@ export const ConvertIntakeResponse = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
 })
+
+// ---------------------------------------------------------------------------
+// O andamento da grade e as ocorrências (F234)
+// ---------------------------------------------------------------------------
+
+export const PROGRESS_STEP_VALUES = [
+  'impressao',
+  'corte',
+  'costura',
+  'embalagem',
+] as const
+
+export const INCIDENT_KIND_VALUES = ['refazer', 'problema'] as const
+
+export const INCIDENT_SECTOR_VALUES = [
+  'atendimento',
+  'arte',
+  'impressao',
+  'corte',
+  'costura',
+  'embalagem',
+  'expedicao',
+] as const
+
+export const INCIDENT_STATUS_VALUES = ['aberta', 'resolvida'] as const
+
+export const ProgressStepSchema = z.enum(PROGRESS_STEP_VALUES)
+export const IncidentKindSchema = z.enum(INCIDENT_KIND_VALUES)
+export const IncidentSectorSchema = z.enum(INCIDENT_SECTOR_VALUES)
+export const IncidentStatusSchema = z.enum(INCIDENT_STATUS_VALUES)
+
+/** Uma linha da grade como a fábrica a marca: o atleta, ou a peça sem nome num tamanho. */
+export const ProgressLineSchema = z.object({
+  key: z.string(),
+  kind: z.enum(['nome', 'grade']),
+  label: z.string(),
+  piece: z.string(),
+  size: UniformSizeSchema,
+  quantity: z.number().int(),
+})
+
+export type ProgressLineType = z.infer<typeof ProgressLineSchema>
+
+export const ProgressEntrySchema = z.object({
+  lineKey: z.string().min(1).max(200),
+  step: ProgressStepSchema,
+  /** Quantas peças desta linha já passaram por este passo. */
+  done: z.number().int().min(0).max(100_000),
+})
+
+export type ProgressEntryType = z.infer<typeof ProgressEntrySchema>
+
+/** O andamento do pedido: as linhas da grade e o que foi feito de cada uma. */
+export const ProductionProgressResponse = z.object({
+  lines: z.array(ProgressLineSchema),
+  progress: z.array(ProgressEntrySchema),
+  /** Feito e total de cada passo: o que está faltando. */
+  totals: z.object({
+    impressao: z.object({ done: z.number().int(), total: z.number().int() }),
+    corte: z.object({ done: z.number().int(), total: z.number().int() }),
+    costura: z.object({ done: z.number().int(), total: z.number().int() }),
+    embalagem: z.object({ done: z.number().int(), total: z.number().int() }),
+  }),
+})
+
+export type ProductionProgressResponseType = z.infer<
+  typeof ProductionProgressResponse
+>
+
+/** Marca (ou desmarca) linhas: o que vier substitui o que estava, linha a linha. */
+export const SaveProgressRequest = z.object({
+  entries: z.array(ProgressEntrySchema).min(1).max(4_000),
+})
+
+export type SaveProgressBody = z.input<typeof SaveProgressRequest>
+
+export const IncidentSummary = z.object({
+  id: z.string(),
+  salesDocumentId: z.string(),
+  orderNumber: z.number().int().nullable(),
+  customerName: z.string(),
+  batchId: z.string().nullable(),
+  /** 1 é o restante; nulo quando a ocorrência é do pedido todo. */
+  batchNumber: z.number().int().nullable(),
+  kind: IncidentKindSchema,
+  sector: IncidentSectorSchema,
+  description: z.string(),
+  lines: z.array(
+    z.object({
+      lineKey: z.string(),
+      label: z.string(),
+      quantity: z.number().int(),
+    })
+  ),
+  status: IncidentStatusSchema,
+  resolution: z.string().nullable(),
+  createdAt: z.string(),
+  createdByName: z.string().nullable(),
+  resolvedAt: z.string().nullable(),
+  resolvedByName: z.string().nullable(),
+  version: z.number().int(),
+})
+
+export type IncidentSummaryType = z.infer<typeof IncidentSummary>
+
+export const IncidentListQuery = z.object({
+  statuses: csv(IncidentStatusSchema),
+  sectors: csv(IncidentSectorSchema),
+})
+
+export const IncidentListResponse = z.object({
+  incidents: z.array(IncidentSummary),
+})
+
+export type IncidentListResponseType = z.infer<typeof IncidentListResponse>
+
+export const IncidentResponse = z.object({ incident: IncidentSummary })
+
+/** Abrir uma ocorrência: refazer (as linhas voltam) ou um problema qualquer. */
+export const CreateIncidentRequest = z.object({
+  kind: IncidentKindSchema,
+  sector: IncidentSectorSchema,
+  /** A leva (F230); nulo é o pedido, ou a leva 1. */
+  batchId: z.uuid().nullable().default(null),
+  description: z.string().trim().min(1, 'Diga o que aconteceu.').max(1000),
+  lines: z
+    .array(
+      z.object({
+        lineKey: z.string().min(1).max(200),
+        quantity: z.number().int().min(1).max(100_000),
+      })
+    )
+    .max(500)
+    .default([]),
+})
+
+export type CreateIncidentBody = z.input<typeof CreateIncidentRequest>
+
+export const ResolveIncidentRequest = z.object({
+  version: z.number().int().positive(),
+  resolution: z
+    .string()
+    .trim()
+    .max(1000)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+})
+
+export type ResolveIncidentBody = z.input<typeof ResolveIncidentRequest>

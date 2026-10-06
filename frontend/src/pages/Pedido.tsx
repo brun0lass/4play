@@ -1,18 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { ArrowLeft, ArrowRight, Grid3x3, Headset, History, Layers, Palette, Printer, Repeat2, Save } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, Grid3x3, Headset, History, Layers, Palette, Printer, Repeat2, Save } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import { repeatOrder } from '@/api/uniforms'
 import { CustomerHistory } from '@/components/CustomerHistory'
 import { ArtForm, PrintersForm } from '@/components/ficha/ArtAndPrinters'
+import { ArtMock } from '@/components/ficha/ArtMock'
 import { FichaContext, Section, useFichaRegistry } from '@/components/ficha/Section'
 import { Attachments } from '@/components/ficha/Attachments'
 import { GradeEditor } from '@/components/ficha/GradeEditor'
 import { PersonalizationEditor } from '@/components/ficha/PersonalizationEditor'
 import { SheetForm } from '@/components/ficha/SheetForm'
 import { LevasPanel } from '@/components/order/Levas'
+import { GradeProgress, OrderIncidents } from '@/components/progress/GradeProgress'
 import { OrderActions } from '@/components/order/OrderActions'
 import { Timeline } from '@/components/ficha/Timeline'
 import { DispatchChip } from '@/components/OrderCard'
@@ -243,7 +245,7 @@ export const PedidoPage = () => {
               const Icon = t.icon
               const pending = t.blocks.some((b) => registry.dirtyIds.includes(b))
               const counter =
-                t.key === 'grade' ? pieces : t.key === 'arte' ? attachments.length : t.key === 'levas' && split ? parts.length : null
+                t.key === 'grade' ? pieces : t.key === 'arte' ? attachments.length : t.key === 'levas' && split ? parts.length : t.key === 'ocorrencias' ? order.openIncidents : null
               return (
                 <button
                   key={t.key}
@@ -286,6 +288,8 @@ export const PedidoPage = () => {
               editable={open && canWork(viewer, 'atendimento')}
               readOnlyReason={closedReason}
             />
+            {/* O que foi feito de cada linha, em cada passo (F234). */}
+            <GradeProgress order={order} editable={open} />
           </div>
 
           <div role="tabpanel" hidden={tab !== 'arte'} className="grid items-start gap-6 lg:grid-cols-2">
@@ -299,15 +303,21 @@ export const PedidoPage = () => {
           <div role="tabpanel" hidden={tab !== 'levas'}>
             <LevasPanel order={order} editable={open} />
           </div>
+
+          <div role="tabpanel" hidden={tab !== 'ocorrencias'}>
+            <OrderIncidents order={order} />
+          </div>
         </div>
 
         {/* A conversa da equipe acompanha a pessoa em qualquer aba. */}
         <aside className="space-y-6 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:scroll-thin xl:rounded-[1.25rem]">
+          {/* O mock sempre à vista, em cima da linha do tempo (o dono, 06/10). */}
+          <ArtMock attachments={attachments} onGoToArt={() => chooseTab('arte')} />
+          <Timeline orderId={order.id} timeline={timeline} />
           {/* Em qual máquina saiu da outra vez (F229): o que se procura quando o cliente repete. */}
           <Section title="Pedidos anteriores do cliente" icon={<History className="h-3.5 w-3.5" />}>
             <CustomerHistory partyId={order.customerPartyId} exceptOrderId={order.id} limit={3} />
           </Section>
-          <Timeline orderId={order.id} timeline={timeline} />
         </aside>
       </div>
 
@@ -399,13 +409,14 @@ const Stat = ({
   </div>
 )
 
-type TabKey = 'atendimento' | 'grade' | 'arte' | 'levas'
+type TabKey = 'atendimento' | 'grade' | 'arte' | 'levas' | 'ocorrencias'
 
 const TABS: { key: TabKey; label: string; icon: typeof Headset; blocks: string[] }[] = [
   { key: 'atendimento', label: 'Atendimento', icon: Headset, blocks: ['sheet'] },
   { key: 'grade', label: 'Grade e nomes', icon: Grid3x3, blocks: ['grade', 'personalization'] },
   { key: 'arte', label: 'Arte e impressão', icon: Palette, blocks: ['art', 'printers'] },
   { key: 'levas', label: 'Levas', icon: Layers, blocks: [] },
+  { key: 'ocorrencias', label: 'Ocorrências', icon: AlertTriangle, blocks: [] },
 ]
 
 /** O operador precisa dos tamanhos para cortar e costurar: abre na grade. */

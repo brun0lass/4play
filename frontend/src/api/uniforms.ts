@@ -1,4 +1,14 @@
 import {
+  CreateIncidentRequest,
+  IncidentListResponse,
+  IncidentResponse,
+  ProductionProgressResponse,
+  ResolveIncidentRequest,
+  SaveProgressRequest,
+  type CreateIncidentBody,
+  type IncidentSummaryType,
+  type ProductionProgressResponseType,
+  type ProgressEntryType,
   ConvertIntakeResponse,
   CreateIntakeRequest,
   IntakeDetailResponse,
@@ -211,6 +221,40 @@ export const cancelSewingJob = async (id: string, version: number): Promise<Sewi
   SewingJobResponse.parse(
     await request(`${BASE}/sewing/${id}/cancel`, { method: 'POST', body: CancelSewingJobRequest.parse({ version }) })
   ).job
+
+// ---------------------------------------------------------------------------
+// O andamento da grade e as ocorrências (F234 do Aeris)
+// ---------------------------------------------------------------------------
+
+export const fetchProgress = async (orderId: string, signal?: AbortSignal): Promise<ProductionProgressResponseType> =>
+  ProductionProgressResponse.parse(await request(`${BASE}/orders/${orderId}/progress`, { signal }))
+
+export const saveProgress = async (orderId: string, entries: ProgressEntryType[]): Promise<ProductionProgressResponseType> =>
+  ProductionProgressResponse.parse(
+    await request(`${BASE}/orders/${orderId}/progress`, { method: 'PUT', body: SaveProgressRequest.parse({ entries }) })
+  )
+
+export const fetchOrderIncidents = async (orderId: string, signal?: AbortSignal): Promise<IncidentSummaryType[]> =>
+  IncidentListResponse.parse(await request(`${BASE}/orders/${orderId}/incidents`, { signal })).incidents
+
+export const fetchIncidents = async (
+  query: { statuses?: string; sectors?: string },
+  signal?: AbortSignal
+): Promise<IncidentSummaryType[]> =>
+  IncidentListResponse.parse(await request(`${BASE}/incidents${qs(query)}`, { signal })).incidents
+
+export const createIncident = async (orderId: string, input: CreateIncidentBody): Promise<IncidentSummaryType> =>
+  IncidentResponse.parse(
+    await request(`${BASE}/orders/${orderId}/incidents`, { method: 'POST', body: CreateIncidentRequest.parse(input) })
+  ).incident
+
+export const resolveIncident = async (id: string, version: number, resolution: string | null): Promise<IncidentSummaryType> =>
+  IncidentResponse.parse(
+    await request(`${BASE}/incidents/${id}/resolve`, {
+      method: 'POST',
+      body: ResolveIncidentRequest.parse({ version, resolution }),
+    })
+  ).incident
 
 // ---------------------------------------------------------------------------
 // O link do cliente (F232 do Aeris)

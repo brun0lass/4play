@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { CalendarClock, ChevronRight, Layers, Printer, Scissors, Shirt } from 'lucide-react'
+import { AlertTriangle, CalendarClock, ChevronRight, Layers, Printer, Scissors, Shirt } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { Avatar, Badge } from '@/components/ui'
@@ -107,6 +107,11 @@ export const OrderCard = ({
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           <DispatchChip order={order} />
+          {order.openIncidents > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white" title="Ocorrências abertas: refazer ou problema">
+              <AlertTriangle className="h-3 w-3" aria-hidden /> {order.openIncidents}
+            </span>
+          )}
         </div>
         {split && <p className="mt-2 text-xs font-semibold text-ink/80">{piecesText(part.pieces)}</p>}
 

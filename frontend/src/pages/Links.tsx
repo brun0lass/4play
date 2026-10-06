@@ -13,7 +13,7 @@ import { Badge, Button, Empty, ErrorBox, Modal, PageHeader, Spinner } from '@/co
 import { day, int } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { keys, useIntake, useIntakes } from '@/lib/queries'
-import { orderRef } from '@/lib/uniforms'
+import { FABRIC_LABELS, orderRef } from '@/lib/uniforms'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success' | 'lime'
 
@@ -212,6 +212,7 @@ const CreateDialog = ({
   const [restrict, setRestrict] = useState(false)
   const [productIds, setProductIds] = useState<string[]>([])
   const [days, setDays] = useState(7)
+  const [leadDays, setLeadDays] = useState(30)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -224,6 +225,7 @@ const CreateDialog = ({
     setRestrict(false)
     setProductIds([])
     setDays(7)
+    setLeadDays(30)
     setMessage('')
   }, [open])
 
@@ -249,6 +251,7 @@ const CreateDialog = ({
         showPrices,
         productIds: restrict ? productIds : [],
         expiresInDays: days,
+        leadDays,
         message: message.trim() || null,
       }),
     onSuccess: (intake) => {
@@ -361,6 +364,18 @@ const CreateDialog = ({
               {option} dias
             </button>
           ))}
+        </div>
+
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-extrabold tracking-wide uppercase">Prazo de produção</span>
+            {[15, 20, 30, 45].map((option) => (
+              <button key={option} type="button" onClick={() => setLeadDays(option)} className={clsx('rounded-full border-2 px-3 py-1 text-xs font-extrabold', leadDays === option ? 'border-ink bg-lime' : 'border-line')}>
+                {option} dias
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-muted">Sem evento, o despacho fica para o dia do envio mais este prazo. Com evento, uma semana antes da data dele.</p>
         </div>
 
         <label className="block">
@@ -502,6 +517,19 @@ const ReviewDialog = ({ id, onClose }: { id: string | null; onClose: () => void 
               </section>
             )
           })}
+          <section className={clsx('rounded-2xl p-4', submission.tight ? 'bg-amber-100 text-amber-900' : 'bg-paper')}>
+            <p className="mb-1 text-xs font-extrabold tracking-wide uppercase">Para quando</p>
+            <p>
+              {submission.event
+                ? <>Evento{submission.event.name ? ` "${submission.event.name}"` : ''} em <strong>{day(submission.event.date)}</strong>. </>
+                : <>Sem evento ({detail.data.intake.leadDays} dias de prazo). </>}
+              Despacho calculado: <strong>{day(submission.dispatchDate)}</strong>
+              {submission.tight && ' — prazo curto, confira se dá tempo.'}
+            </p>
+            <p className="mt-1">
+              Tecido: <strong>{submission.fabric === null ? 'não sabe — a loja ajuda' : FABRIC_LABELS[submission.fabric]}</strong>
+            </p>
+          </section>
           {submission.notes && <p className="rounded-2xl bg-paper p-3"><strong>Observação:</strong> {submission.notes}</p>}
           <p className="text-xs text-muted">
             Ao criar, {customer ? 'o cadastro do cliente nasce, ' : ''}o pedido é confirmado pelo preço da tabela e entra em Atendimento com a grade e os nomes. Dá para ajustar tudo depois na ficha.

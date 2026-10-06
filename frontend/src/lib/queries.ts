@@ -2,6 +2,9 @@ import type { ProductionQueueQueryInput } from '@/contracts/aeris/uniforms.ts'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import {
+  fetchIncidents,
+  fetchOrderIncidents,
+  fetchProgress,
   fetchCustomerHistory,
   fetchIntake,
   fetchIntakes,
@@ -33,6 +36,10 @@ export const keys = {
   intakes: (statuses?: string) => ['uniforms', 'intakes', statuses ?? 'all'] as const,
   intakesAll: ['uniforms', 'intakes'] as const,
   intake: (id: string) => ['uniforms', 'intake', id] as const,
+  progress: (orderId: string) => ['uniforms', 'progress', orderId] as const,
+  orderIncidents: (orderId: string) => ['uniforms', 'order-incidents', orderId] as const,
+  incidents: (statuses?: string, sectors?: string) => ['uniforms', 'incidents', statuses ?? 'all', sectors ?? 'all'] as const,
+  incidentsAll: ['uniforms', 'incidents'] as const,
 }
 
 export const useQueue = (query: ProductionQueueQueryInput, refetchInterval = 30_000) =>
@@ -100,6 +107,8 @@ export const useOrderSewing = (orderId: string) =>
   useQuery({
     queryKey: keys.orderSewing(orderId),
     queryFn: ({ signal }) => fetchOrderSewing(orderId, signal),
+    // O diálogo fechado não tem pedido: nada a buscar.
+    enabled: orderId !== '',
   })
 
 /** Os links de pedido para o cliente (F232). */
@@ -116,4 +125,26 @@ export const useIntake = (id: string | null) =>
     queryKey: keys.intake(id ?? ''),
     queryFn: ({ signal }) => fetchIntake(id ?? '', signal),
     enabled: id !== null,
+  })
+
+/** O andamento da grade do pedido (F234). */
+export const useProgress = (orderId: string) =>
+  useQuery({
+    queryKey: keys.progress(orderId),
+    queryFn: ({ signal }) => fetchProgress(orderId, signal),
+  })
+
+export const useOrderIncidents = (orderId: string) =>
+  useQuery({
+    queryKey: keys.orderIncidents(orderId),
+    queryFn: ({ signal }) => fetchOrderIncidents(orderId, signal),
+  })
+
+/** As ocorrências de todos os pedidos (F234). */
+export const useIncidents = (statuses?: string, sectors?: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.incidents(statuses, sectors),
+    queryFn: ({ signal }) => fetchIncidents({ statuses, sectors }, signal),
+    enabled,
+    refetchInterval: 60_000,
   })

@@ -265,3 +265,51 @@ export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): 
 
 /** A peça como chave — a mesma regra do Aeris (`pieceKey`): "Camisa" = " camisa". */
 export const pieceKey = (piece: string): string => piece.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
+
+// ---------------------------------------------------------------------------
+// O andamento da grade e as ocorrências (F234 do Aeris)
+// ---------------------------------------------------------------------------
+
+export type ProgressStep = 'impressao' | 'corte' | 'costura' | 'embalagem'
+export type IncidentSector = 'atendimento' | 'arte' | 'impressao' | 'corte' | 'costura' | 'embalagem' | 'expedicao'
+
+export const PROGRESS_STEPS: readonly ProgressStep[] = ['impressao', 'corte', 'costura', 'embalagem']
+
+export const STEP_LABELS: Record<ProgressStep, string> = {
+  impressao: 'Impressão',
+  corte: 'Corte',
+  costura: 'Costura',
+  embalagem: 'Embalagem',
+}
+
+export const INCIDENT_SECTORS: readonly IncidentSector[] = [
+  'atendimento',
+  'arte',
+  'impressao',
+  'corte',
+  'costura',
+  'embalagem',
+  'expedicao',
+]
+
+export const SECTOR_LABELS: Record<IncidentSector, string> = {
+  atendimento: 'Atendimento',
+  arte: 'Arte',
+  impressao: 'Impressão',
+  corte: 'Corte',
+  costura: 'Costura',
+  embalagem: 'Embalagem',
+  expedicao: 'Expedição',
+}
+
+/** Os passos que um "refazer" deste setor desfaz — a mesma regra do Aeris (`stepsToRedo`). */
+export const stepsToRedo = (sector: IncidentSector): readonly ProgressStep[] =>
+  sector === 'expedicao'
+    ? []
+    : sector === 'corte'
+      ? ['corte', 'costura', 'embalagem']
+      : sector === 'costura'
+        ? ['costura', 'embalagem']
+        : sector === 'embalagem'
+          ? ['embalagem']
+          : PROGRESS_STEPS

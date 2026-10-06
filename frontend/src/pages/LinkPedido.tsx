@@ -13,6 +13,17 @@ import { day, int, money } from '@/lib/format'
 import { ApiError, errorMessage } from '@/lib/http'
 
 type Size = PublicIntakeResponseType['sizes'][number]
+type Fabric = PublicIntakeResponseType['fabrics'][number]
+
+const FABRIC_NAMES: Record<Fabric, string> = {
+  elastano: 'Elastano',
+  furadinho: 'Furadinho',
+  'cem-por-cento': '100% poliéster',
+}
+
+/** `AAAA-MM-DD` mais (ou menos) dias, como o Aeris calcula (`addDays`). */
+const shiftDay = (day: string, days: number): string =>
+  new Date(new Date(`${day}T12:00:00Z`).getTime() + days * 86_400_000).toISOString().slice(0, 10)
 type NamedRow = { key: number; name: string; number: string; size: Size | ''; quantity: string }
 type Item = { named: NamedRow[]; bySize: Partial<Record<Size, string>> }
 
@@ -89,6 +100,11 @@ const Content = ({ token, data, onSent }: { token: string; data: PublicIntakeRes
 const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntakeResponseType; onSent: () => void }) => {
   const [items, setItems] = useState<Record<string, Item>>({})
   const [notes, setNotes] = useState('')
+  // Para quando (F233): evento com data, ou o prazo do link.
+  const [isEvent, setIsEvent] = useState<boolean | null>(null)
+  const [eventDate, setEventDate] = useState('')
+  const [eventName, setEventName] = useState('')
+  const [fabric, setFabric] = useState<Fabric | null>(null)
   const [customer, setCustomer] = useState({
     kind: 'person' as 'person' | 'company',
     name: '',
@@ -182,6 +198,8 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           .map((product) => ({ productId: product.id, rows: rowsOf(items[product.id] ?? { named: [], bySize: {} }) }))
           .filter((item) => item.rows.length > 0),
         notes: notes.trim() || null,
+        event: isEvent === true ? { date: eventDate, name: eventName.trim() || null } : null,
+        fabric,
       })
     },
     onSuccess: () => {
@@ -189,6 +207,16 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
       onSent()
     },
   })
+
+  const dispatch =
+    isEvent === true
+      ? eventDate === ''
+        ? null
+        : shiftDay(eventDate, -data.eventLeadDays)
+      : shiftDay(data.today, data.leadDays)
+  const eventPast = isEvent === true && eventDate !== '' && eventDate < data.today
+  const eventTight = isEvent === true && dispatch !== null && !eventPast && dispatch <= data.today
+  const whenMissing = isEvent === null || (isEvent && (eventDate === '' || eventPast))
 
   const registrationMissing =
     data.needsRegistration && (customer.name.trim().length < 2 || customer.phone.replace(/\D/g, '').length < 10)
@@ -306,10 +334,66 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
         })}
       </section>
 
+      <section className="card space-y-4 p-5">
+        <h2 className="text-sm font-extrabold tracking-wider uppercase">Para quando?</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(
+            [
+              [false, 'Não é para um evento', `A gente produz em até ${String(data.leadDays)} dias.`],
+              [true, 'É para um evento', 'Diga a data: o pedido sai uma semana antes.'],
+            ] as const
+          ).map(([value, label, what]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setIsEvent(value)}
+              className={clsx('rounded-2xl border-2 px-4 py-3 text-left transition', isEvent === value ? 'border-ink bg-lime' : 'border-line hover:border-ink/30')}
+            >
+              <span className="block text-sm font-extrabold">{label}</span>
+              <span className="text-xs text-ink/70">{what}</span>
+            </button>
+          ))}
+        </div>
+        {isEvent === true && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Data do evento" required>
+              <input type="date" min={data.today} value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="field" />
+            </Field>
+            <Field label="Qual evento (opcional)">
+              <input value={eventName} onChange={(e) => setEventName(e.target.value)} maxLength={200} className="field" placeholder="Copa, corrida, formatura…" />
+            </Field>
+          </div>
+        )}
+        {isEvent !== null && dispatch !== null && !eventPast && (
+          <p className={clsx('rounded-2xl p-3 text-sm font-semibold', eventTight ? 'bg-amber-100 text-amber-900' : 'bg-paper')}>
+            {eventTight
+              ? `O evento é em menos de uma semana. Envie mesmo assim: quem te atendeu vai ver se dá tempo.`
+              : `Previsão de despacho: ${day(dispatch)}. Quem te atendeu confirma na conferência.`}
+          </p>
+        )}
+        {eventPast && <p className="text-sm font-semibold text-red-700">Essa data já passou.</p>}
+
+        <div>
+          <p className="label">Tecido</p>
+          <div className="flex flex-wrap gap-2">
+            {[...data.fabrics.map((value) => [value, FABRIC_NAMES[value]] as const), [null, 'Não sei — a loja ajuda'] as const].map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setFabric(value)}
+                className={clsx('rounded-full border-2 px-3 py-1.5 text-xs font-extrabold', fabric === value ? 'border-ink bg-lime' : 'border-line')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="card p-5">
         <label className="block">
           <span className="mb-1 block text-sm font-extrabold tracking-wider uppercase">Observação</span>
-          <textarea rows={3} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} className="field resize-y" placeholder="Data do evento, cor, detalhes da gola, quem vai retirar…" />
+          <textarea rows={3} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} className="field resize-y" placeholder="Cor, detalhes da gola, quem vai retirar…" />
         </label>
       </section>
 
@@ -324,7 +408,7 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           <Button
             variant="lime"
             icon={send.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            disabled={pieces === 0 || registrationMissing || incomplete.length > 0 || send.isPending}
+            disabled={pieces === 0 || registrationMissing || whenMissing || incomplete.length > 0 || send.isPending}
             onClick={() => {
               if (window.confirm('Enviar o pedido? Depois de enviado, só quem te atendeu consegue mudar.')) send.mutate()
             }}
@@ -333,6 +417,9 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           </Button>
         </div>
         {registrationMissing && <p className="mt-2 text-xs font-semibold text-lime">Preencha o seu nome e o WhatsApp com DDD.</p>}
+        {!registrationMissing && whenMissing && pieces > 0 && (
+          <p className="mt-2 text-xs font-semibold text-lime">Diga para quando: é para um evento ou não.</p>
+        )}
         {incomplete.length > 0 && <p className="mt-2 text-xs font-semibold text-lime">Falta o tamanho em alguma linha de {incomplete[0]}.</p>}
         {send.isError && (
           <div className="mt-3">
