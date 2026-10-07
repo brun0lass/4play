@@ -20,7 +20,7 @@ export const OcorrenciasPage = () => {
     <div>
       <PageHeader kicker="Refazer e problemas" title="Ocorrências">
         <p className="mt-2 text-sm font-semibold text-muted">
-          O que precisa ser refeito e os incidentes de cada pedido. Abra pela ficha do pedido (aba Ocorrências, ou "refazer" no andamento da grade).
+          O que precisa ser refeito e os incidentes de cada pedido. Abra pela ficha do pedido (aba Ocorrências) ou pela tela do setor.
         </p>
       </PageHeader>
 

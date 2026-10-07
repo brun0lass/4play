@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   fetchIncidents,
   fetchOrderIncidents,
-  fetchProgress,
+  fetchSector,
   fetchCustomerHistory,
   fetchIntake,
   fetchIntakes,
@@ -36,7 +36,8 @@ export const keys = {
   intakes: (statuses?: string) => ['uniforms', 'intakes', statuses ?? 'all'] as const,
   intakesAll: ['uniforms', 'intakes'] as const,
   intake: (id: string) => ['uniforms', 'intake', id] as const,
-  progress: (orderId: string) => ['uniforms', 'progress', orderId] as const,
+  sector: (sector: string) => ['uniforms', 'sector', sector] as const,
+  sectorAll: ['uniforms', 'sector'] as const,
   orderIncidents: (orderId: string) => ['uniforms', 'order-incidents', orderId] as const,
   incidents: (statuses?: string, sectors?: string) => ['uniforms', 'incidents', statuses ?? 'all', sectors ?? 'all'] as const,
   incidentsAll: ['uniforms', 'incidents'] as const,
@@ -127,11 +128,12 @@ export const useIntake = (id: string | null) =>
     enabled: id !== null,
   })
 
-/** O andamento da grade do pedido (F234). */
-export const useProgress = (orderId: string) =>
+/** O que o setor tem para fazer (F235): as levas na etapa dele, com o feito. */
+export const useSector = (sector: string) =>
   useQuery({
-    queryKey: keys.progress(orderId),
-    queryFn: ({ signal }) => fetchProgress(orderId, signal),
+    queryKey: keys.sector(sector),
+    queryFn: ({ signal }) => fetchSector(sector, signal),
+    refetchInterval: 30_000,
   })
 
 export const useOrderIncidents = (orderId: string) =>

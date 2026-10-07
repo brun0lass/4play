@@ -2,13 +2,17 @@ import {
   CreateIncidentRequest,
   IncidentListResponse,
   IncidentResponse,
-  ProductionProgressResponse,
   ResolveIncidentRequest,
-  SaveProgressRequest,
+  SectorResponse,
+  SendSectorRequest,
+  SendSectorResponse,
+  SetSectorDoneRequest,
   type CreateIncidentBody,
   type IncidentSummaryType,
-  type ProductionProgressResponseType,
-  type ProgressEntryType,
+  type SectorResponseType,
+  type SendSectorBody,
+  type SendSectorResponseType,
+  type SetSectorDoneBody,
   ConvertIntakeResponse,
   CreateIntakeRequest,
   IntakeDetailResponse,
@@ -223,16 +227,30 @@ export const cancelSewingJob = async (id: string, version: number): Promise<Sewi
   ).job
 
 // ---------------------------------------------------------------------------
-// O andamento da grade e as ocorrências (F234 do Aeris)
+// O setor e a grade (F235 do Aeris)
 // ---------------------------------------------------------------------------
 
-export const fetchProgress = async (orderId: string, signal?: AbortSignal): Promise<ProductionProgressResponseType> =>
-  ProductionProgressResponse.parse(await request(`${BASE}/orders/${orderId}/progress`, { signal }))
+export const fetchSector = async (sector: string, signal?: AbortSignal): Promise<SectorResponseType> =>
+  SectorResponse.parse(await request(`${BASE}/sectors/${sector}`, { signal }))
 
-export const saveProgress = async (orderId: string, entries: ProgressEntryType[]): Promise<ProductionProgressResponseType> =>
-  ProductionProgressResponse.parse(
-    await request(`${BASE}/orders/${orderId}/progress`, { method: 'PUT', body: SaveProgressRequest.parse({ entries }) })
+export const setSectorDone = async (orderId: string, sector: string, input: SetSectorDoneBody): Promise<void> => {
+  await request(`${BASE}/orders/${orderId}/sectors/${sector}/done`, {
+    method: 'PUT',
+    body: SetSectorDoneRequest.parse(input),
+  })
+}
+
+export const sendSector = async (orderId: string, sector: string, input: SendSectorBody): Promise<SendSectorResponseType> =>
+  SendSectorResponse.parse(
+    await request(`${BASE}/orders/${orderId}/sectors/${sector}/send`, {
+      method: 'POST',
+      body: SendSectorRequest.parse(input),
+    })
   )
+
+// ---------------------------------------------------------------------------
+// As ocorrências (F234 do Aeris)
+// ---------------------------------------------------------------------------
 
 export const fetchOrderIncidents = async (orderId: string, signal?: AbortSignal): Promise<IncidentSummaryType[]> =>
   IncidentListResponse.parse(await request(`${BASE}/orders/${orderId}/incidents`, { signal })).incidents

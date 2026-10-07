@@ -212,9 +212,35 @@ export type Part = {
 export const piecesTotal = (pieces: readonly PieceCount[]): number =>
   pieces.reduce((sum, count) => sum + count.quantity, 0)
 
-/** "10 Camisa · 5 Shorts". */
-export const piecesText = (pieces: readonly PieceCount[]): string =>
-  pieces.length === 0 ? 'Sem grade' : pieces.map((count) => `${String(count.quantity)} ${count.piece}`).join(' · ')
+/** A célula como chave — a mesma regra do Aeris (`cellKey`): "camisa|M". */
+export const cellKey = (count: Pick<PieceCount, 'piece' | 'size'>): string => `${pieceKey(count.piece)}|${count.size ?? ''}`
+
+/** "Camisa M", ou só "Camisa" quando a leva antiga não sabe o tamanho. */
+export const cellLabel = (count: Pick<PieceCount, 'piece' | 'size'>): string =>
+  count.size === null ? count.piece : `${count.piece} ${count.size}`
+
+/** "10 Camisa (1 P · 9 M) · 5 Shorts (M)": por peça, e os tamanhos dela. */
+export const piecesText = (pieces: readonly PieceCount[]): string => {
+  if (pieces.length === 0) return 'Sem grade'
+  const groups: { piece: string; total: number; sizes: PieceCount[] }[] = []
+  for (const count of pieces) {
+    const group = groups.find((item) => pieceKey(item.piece) === pieceKey(count.piece))
+    if (group) {
+      group.total += count.quantity
+      group.sizes.push(count)
+    } else groups.push({ piece: count.piece, total: count.quantity, sizes: [count] })
+  }
+  return groups
+    .map((group) => {
+      if (group.sizes.every((count) => count.size === null)) return `${String(group.total)} ${group.piece}`
+      const sizes =
+        group.sizes.length === 1
+          ? (group.sizes[0]?.size ?? '')
+          : group.sizes.map((count) => `${String(count.quantity)} ${count.size ?? 's/ tam.'}`).join(' · ')
+      return `${String(group.total)} ${group.piece} (${sizes})`
+    })
+    .join(' · ')
+}
 
 export const isSplit = (order: Pick<Order, 'batches'>): boolean => order.batches.length > 0
 
@@ -252,11 +278,11 @@ export const partsNotReady = (order: Order): Part[] => partsOf(order).filter((pa
 export const partLabel = (part: Pick<Part, 'number' | 'batch'>): string =>
   part.batch === null ? 'Leva 1 (restante)' : `Leva ${String(part.number)}`
 
-/** As peças do pedido inteiro, por peça: o restante mais as levas. */
+/** As células do pedido inteiro (peça e tamanho): o restante mais as levas. */
 export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): PieceCount[] => {
   const merged: PieceCount[] = []
   for (const count of [...order.remainingPieces, ...order.batches.flatMap((batch) => batch.pieces)]) {
-    const found = merged.find((item) => item.piece.toLocaleLowerCase('pt-BR') === count.piece.toLocaleLowerCase('pt-BR'))
+    const found = merged.find((item) => cellKey(item) === cellKey(count))
     if (found) found.quantity += count.quantity
     else merged.push({ ...count })
   }
@@ -270,17 +296,7 @@ export const pieceKey = (piece: string): string => piece.trim().replace(/\s+/g, 
 // O andamento da grade e as ocorrências (F234 do Aeris)
 // ---------------------------------------------------------------------------
 
-export type ProgressStep = 'impressao' | 'corte' | 'costura' | 'embalagem'
 export type IncidentSector = 'atendimento' | 'arte' | 'impressao' | 'corte' | 'costura' | 'embalagem' | 'expedicao'
-
-export const PROGRESS_STEPS: readonly ProgressStep[] = ['impressao', 'corte', 'costura', 'embalagem']
-
-export const STEP_LABELS: Record<ProgressStep, string> = {
-  impressao: 'Impressão',
-  corte: 'Corte',
-  costura: 'Costura',
-  embalagem: 'Embalagem',
-}
 
 export const INCIDENT_SECTORS: readonly IncidentSector[] = [
   'atendimento',
@@ -302,14 +318,13 @@ export const SECTOR_LABELS: Record<IncidentSector, string> = {
   expedicao: 'Expedição',
 }
 
-/** Os passos que um "refazer" deste setor desfaz — a mesma regra do Aeris (`stepsToRedo`). */
-export const stepsToRedo = (sector: IncidentSector): readonly ProgressStep[] =>
-  sector === 'expedicao'
-    ? []
-    : sector === 'corte'
-      ? ['corte', 'costura', 'embalagem']
-      : sector === 'costura'
-        ? ['costura', 'embalagem']
-        : sector === 'embalagem'
-          ? ['embalagem']
-          : PROGRESS_STEPS
+// ---------------------------------------------------------------------------
+// O setor e a grade (F235 do Aeris)
+// ---------------------------------------------------------------------------
+
+export type FactorySector = 'impressao' | 'corte' | 'costura' | 'embalagem'
+
+export const FACTORY_SECTORS: readonly FactorySector[] = ['impressao', 'corte', 'costura', 'embalagem']
+
+export const isFactorySector = (value: string | null): value is FactorySector =>
+  value !== null && (FACTORY_SECTORS as readonly string[]).includes(value)

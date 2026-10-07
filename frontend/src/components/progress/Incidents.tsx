@@ -1,4 +1,4 @@
-import type { IncidentSummaryType, ProgressLineType } from '@/contracts/aeris/uniforms.ts'
+import type { IncidentSummaryType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
@@ -6,29 +6,34 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { createIncident, resolveIncident } from '@/api/uniforms'
+import { Section } from '@/components/ficha/Section'
 import { useToast } from '@/components/Toast'
-import { Badge, Button, ErrorBox, Modal } from '@/components/ui'
+import { Badge, Button, ErrorBox, Modal, Spinner } from '@/components/ui'
 import { useAccess } from '@/lib/access'
 import { ago, day } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
-import { keys } from '@/lib/queries'
+import { keys, useOrderIncidents } from '@/lib/queries'
 import {
   INCIDENT_SECTORS,
   SECTOR_LABELS,
-  STEP_LABELS,
+  cellKey,
+  cellLabel,
+  orderPieces,
   orderRef,
   partLabel,
-  stepsToRedo,
+  partsOf,
   type IncidentSector,
+  type Order,
   type Part,
+  type PieceCount,
 } from '@/lib/uniforms'
 
-/** Depois de qualquer mudança numa ocorrência: o andamento, o pedido, as listas. */
+/** Depois de qualquer mudança numa ocorrência: o pedido, os setores, as listas. */
 export const useIncidentInvalidate = () => {
   const queryClient = useQueryClient()
   return (orderId: string) => {
     void queryClient.invalidateQueries({ queryKey: keys.orderIncidents(orderId) })
-    void queryClient.invalidateQueries({ queryKey: keys.progress(orderId) })
+    void queryClient.invalidateQueries({ queryKey: keys.sectorAll })
     void queryClient.invalidateQueries({ queryKey: keys.order(orderId) })
     void queryClient.invalidateQueries({ queryKey: keys.queueAll })
     void queryClient.invalidateQueries({ queryKey: keys.incidentsAll })
@@ -49,19 +54,23 @@ export type IncidentDraft = {
 }
 
 /**
- * Abrir uma ocorrência (F234 do Aeris): refazer — as linhas escolhidas voltam
- * do setor em diante — ou um problema qualquer, com ou sem linhas.
+ * Abrir uma ocorrência (F234 do Aeris): o que precisa ser refeito, ou um
+ * problema qualquer — com as peças e tamanhos afetados, se quiser.
  */
 export const IncidentDialog = ({
   orderId,
   lines,
   parts,
+  batchId: fixedBatchId = null,
   draft,
   onClose,
 }: {
   orderId: string
-  lines: readonly ProgressLineType[]
+  /** As células do pedido (peça e tamanho) que podem ser apontadas. */
+  lines: readonly PieceCount[]
   parts: readonly Part[]
+  /** A leva já sabida (a tela do setor abre a ocorrência de uma leva). */
+  batchId?: string | null
   draft: IncidentDraft | null
   onClose: () => void
 }) => {
@@ -77,13 +86,13 @@ export const IncidentDialog = ({
     if (draft === null) return
     setKind(draft.kind)
     setSector(draft.sector)
-    setBatchId('')
+    setBatchId(fixedBatchId ?? '')
     setDescription('')
     setChosen(Object.fromEntries(Object.entries(draft.lines).map(([key, quantity]) => [key, String(quantity)])))
-  }, [draft])
+  }, [draft, fixedBatchId])
 
   const picked = lines
-    .map((line) => ({ line, quantity: Number(chosen[line.key] ?? '0') }))
+    .map((line) => ({ line, quantity: Number(chosen[cellKey(line)] ?? '0') }))
     .filter((entry) => Number.isInteger(entry.quantity) && entry.quantity > 0)
   const over = picked.find((entry) => entry.quantity > entry.line.quantity)
 
@@ -94,7 +103,7 @@ export const IncidentDialog = ({
         sector,
         batchId: batchId || null,
         description,
-        lines: picked.map((entry) => ({ lineKey: entry.line.key, quantity: entry.quantity })),
+        lines: picked.map((entry) => ({ lineKey: cellKey(entry.line), quantity: entry.quantity })),
       }),
     onSuccess: () => {
       toast(kind === 'refazer' ? 'Refazer registrado.' : 'Problema registrado.')
@@ -102,8 +111,6 @@ export const IncidentDialog = ({
       onClose()
     },
   })
-
-  const redo = stepsToRedo(sector)
 
   return (
     <Modal
@@ -133,7 +140,7 @@ export const IncidentDialog = ({
         <div className="grid gap-2 sm:grid-cols-2">
           {(
             [
-              ['refazer', 'Refazer', 'Peças que precisam ser refeitas: voltam do setor em diante.'],
+              ['refazer', 'Refazer', 'Peças que precisam ser feitas de novo — fica anotado até alguém resolver.'],
               ['problema', 'Problema', 'Um incidente qualquer, para ficar registrado e ser resolvido.'],
             ] as const
           ).map(([value, label, what]) => (
@@ -163,13 +170,6 @@ export const IncidentDialog = ({
               </button>
             ))}
           </div>
-          {kind === 'refazer' && (
-            <p className="mt-2 text-xs text-muted">
-              {redo.length === 0
-                ? 'Na expedição a peça não volta para a fábrica: nada é desmarcado.'
-                : `As linhas escolhidas voltam em: ${redo.map((step) => STEP_LABELS[step]).join(', ')}.`}
-            </p>
-          )}
         </div>
 
         {parts.length > 1 && (
@@ -192,30 +192,30 @@ export const IncidentDialog = ({
         {lines.length > 0 && (
           <div>
             <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">
-              {kind === 'refazer' ? 'O que refazer' : 'Linhas afetadas (opcional)'}
+              {kind === 'refazer' ? 'O que refazer' : 'Peças afetadas (opcional)'}
             </p>
             <div className="max-h-64 space-y-1 overflow-y-auto">
               {lines.map((line) => {
-                const value = chosen[line.key] ?? ''
+                const value = chosen[cellKey(line)] ?? ''
                 const on = Number(value) > 0
                 return (
-                  <div key={line.key} className={clsx('flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5', on ? 'border-ink bg-lime/30' : 'border-line')}>
+                  <div key={cellKey(line)} className={clsx('flex items-center justify-between gap-2 rounded-xl border px-3 py-1.5', on ? 'border-ink bg-lime/30' : 'border-line')}>
                     <label className="flex min-w-0 items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         checked={on}
-                        onChange={(e) => setChosen((all) => ({ ...all, [line.key]: e.target.checked ? String(line.quantity) : '' }))}
+                        onChange={(e) => setChosen((all) => ({ ...all, [cellKey(line)]: e.target.checked ? String(line.quantity) : '' }))}
                       />
-                      <span className="truncate">{line.label}</span>
+                      <span className="truncate">{cellLabel(line)}</span>
                     </label>
                     {line.quantity > 1 && (
                       <span className="flex items-center gap-1 text-xs text-muted">
                         <input
                           value={value}
-                          onChange={(e) => setChosen((all) => ({ ...all, [line.key]: e.target.value.replace(/\D/g, '') }))}
+                          onChange={(e) => setChosen((all) => ({ ...all, [cellKey(line)]: e.target.value.replace(/\D/g, '') }))}
                           inputMode="numeric"
                           className="field h-8 w-16 text-right"
-                          aria-label={`Quantas ${line.label}`}
+                          aria-label={`Quantas ${cellLabel(line)}`}
                         />
                         de {line.quantity}
                       </span>
@@ -224,7 +224,7 @@ export const IncidentDialog = ({
                 )
               })}
             </div>
-            {over && <p className="mt-1 text-xs font-semibold text-red-700">{over.line.label} só tem {over.line.quantity}.</p>}
+            {over && <p className="mt-1 text-xs font-semibold text-red-700">{cellLabel(over.line)} só tem {over.line.quantity}.</p>}
           </div>
         )}
 
@@ -289,5 +289,35 @@ export const IncidentRow = ({ incident, showOrder = false }: { incident: Inciden
       )}
       {resolve.isError && <p className="mt-1 text-xs font-semibold text-red-700">{errorMessage(resolve.error)}</p>}
     </article>
+  )
+}
+
+/** As ocorrências do pedido: abrir, ver e resolver (F234 do Aeris). */
+export const OrderIncidents = ({ order }: { order: Order }) => {
+  const incidents = useOrderIncidents(order.id)
+  const canReport = useCanReport()
+  const [draft, setDraft] = useState<IncidentDraft | null>(null)
+
+  return (
+    <Section
+      title="Ocorrências"
+      icon={<AlertTriangle className="h-3.5 w-3.5" />}
+      aside={
+        canReport && (
+          <Button size="sm" variant="ink" icon={<AlertTriangle className="h-3.5 w-3.5" />} onClick={() => setDraft({ kind: 'problema', sector: 'impressao', lines: {} })}>
+            Nova ocorrência
+          </Button>
+        )
+      }
+    >
+      <p className="mb-3 text-sm text-muted">O que precisa ser refeito e os problemas do pedido. Resolver fecha a ocorrência.</p>
+      {incidents.isPending && <Spinner />}
+      {incidents.isError && <ErrorBox message={errorMessage(incidents.error)} />}
+      {incidents.data?.length === 0 && <p className="text-sm text-muted">Nenhuma ocorrência neste pedido.</p>}
+      <div className="space-y-2">
+        {incidents.data?.map((incident) => <IncidentRow key={incident.id} incident={incident} />)}
+      </div>
+      <IncidentDialog orderId={order.id} lines={orderPieces(order)} parts={partsOf(order)} draft={draft} onClose={() => setDraft(null)} />
+    </Section>
   )
 }

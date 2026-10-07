@@ -23,6 +23,7 @@ import { LoginPage } from '@/pages/Login'
 import { LinkPedidoPage } from '@/pages/LinkPedido'
 import { PainelPage } from '@/pages/Painel'
 import { PedidoPage } from '@/pages/Pedido'
+import { SetoresPage } from '@/pages/Setores'
 import { ProducaoPage } from '@/pages/Producao'
 import { TrocarSenhaPage } from '@/pages/TrocarSenha'
 
@@ -110,6 +111,7 @@ const App = () => (
       <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
       <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
       <Route path="links" element={<Guard allow={(a) => a.createOrder}><LinksPage /></Guard>} />
+      <Route path="setores" element={<Guard allow={(a) => a.sectors}><SetoresPage /></Guard>} />
       <Route path="ocorrencias" element={<OcorrenciasPage />} />
       <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
       <Route path="*" element={<Navigate to="/" replace />} />

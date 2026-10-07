@@ -14,7 +14,7 @@ import { GradeEditor } from '@/components/ficha/GradeEditor'
 import { PersonalizationEditor } from '@/components/ficha/PersonalizationEditor'
 import { SheetForm } from '@/components/ficha/SheetForm'
 import { LevasPanel } from '@/components/order/Levas'
-import { GradeProgress, OrderIncidents } from '@/components/progress/GradeProgress'
+import { OrderIncidents } from '@/components/progress/Incidents'
 import { OrderActions } from '@/components/order/OrderActions'
 import { Timeline } from '@/components/ficha/Timeline'
 import { DispatchChip } from '@/components/OrderCard'
@@ -288,8 +288,6 @@ export const PedidoPage = () => {
               editable={open && canWork(viewer, 'atendimento')}
               readOnlyReason={closedReason}
             />
-            {/* O que foi feito de cada linha, em cada passo (F234). */}
-            <GradeProgress order={order} editable={open} />
           </div>
 
           <div role="tabpanel" hidden={tab !== 'arte'} className="grid items-start gap-6 lg:grid-cols-2">

@@ -269,6 +269,8 @@ export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
 /** Uma quantidade de uma peça — "100 Camisa" (F230). */
 export const ProductionPieceCount = z.object({
   piece: z.string(),
+  /** O tamanho da célula (F235). Nulo na leva antiga, que não dizia. */
+  size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
   quantity: z.number().int(),
 })
 
@@ -631,6 +633,8 @@ export const SplitBatchRequest = z.object({
     .array(
       z.object({
         piece: z.string().trim().max(40),
+        /** O tamanho (F235). Nulo: a peça, saindo na ordem dos tamanhos. */
+        size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
         quantity: z.number().int().min(1).max(100_000),
       })
     )
@@ -1264,7 +1268,8 @@ export const ConvertIntakeResponse = z.object({
 // O andamento da grade e as ocorrências (F234)
 // ---------------------------------------------------------------------------
 
-export const PROGRESS_STEP_VALUES = [
+/** Os setores da fábrica, na ordem em que a peça passa (F235). */
+export const FACTORY_SECTOR_VALUES = [
   'impressao',
   'corte',
   'costura',
@@ -1285,55 +1290,106 @@ export const INCIDENT_SECTOR_VALUES = [
 
 export const INCIDENT_STATUS_VALUES = ['aberta', 'resolvida'] as const
 
-export const ProgressStepSchema = z.enum(PROGRESS_STEP_VALUES)
+export const FactorySectorSchema = z.enum(FACTORY_SECTOR_VALUES)
 export const IncidentKindSchema = z.enum(INCIDENT_KIND_VALUES)
 export const IncidentSectorSchema = z.enum(INCIDENT_SECTOR_VALUES)
 export const IncidentStatusSchema = z.enum(INCIDENT_STATUS_VALUES)
 
-/** Uma linha da grade como a fábrica a marca: o atleta, ou a peça sem nome num tamanho. */
-export const ProgressLineSchema = z.object({
+/** Uma célula da leva no setor: o que tem e quantas o setor já fez (F235). */
+export const SectorCellSchema = z.object({
   key: z.string(),
-  kind: z.enum(['nome', 'grade']),
-  label: z.string(),
   piece: z.string(),
-  size: UniformSizeSchema,
+  size: z.enum(UNIFORM_SIZE_VALUES).nullable(),
   quantity: z.number().int(),
+  done: z.number().int(),
 })
 
-export type ProgressLineType = z.infer<typeof ProgressLineSchema>
+export type SectorCellType = z.infer<typeof SectorCellSchema>
 
-export const ProgressEntrySchema = z.object({
-  lineKey: z.string().min(1).max(200),
-  step: ProgressStepSchema,
-  /** Quantas peças desta linha já passaram por este passo. */
-  done: z.number().int().min(0).max(100_000),
+/** Uma leva na tela do setor: o pedido, a grade dela e o feito (F235). */
+export const SectorPartSchema = z.object({
+  orderId: z.string(),
+  orderNumber: z.number().int().nullable(),
+  customerName: z.string(),
+  dispatchDate: z.string().nullable(),
+  late: z.boolean(),
+  eventDate: z.string().nullable(),
+  fabric: UniformFabricSchema.nullable(),
+  /** Nula é a leva 1, o restante. */
+  batchId: z.string().nullable(),
+  batchNumber: z.number().int(),
+  /** O pedido dividido em levas: mostra "leva N". */
+  split: z.boolean(),
+  stage: UniformStageSchema,
+  stageChangedAt: z.string(),
+  cells: z.array(SectorCellSchema),
+  total: z.number().int(),
+  done: z.number().int(),
+  printers: z.array(ProductionPrinterRef),
+  /** Quem costura esta leva agora (F231). */
+  seamstresses: z.array(z.string()),
+  /** Os nomes do pedido, para consulta: a impressão precisa deles. */
+  names: z.array(
+    z.object({
+      name: z.string(),
+      number: z.string(),
+      piece: z.string(),
+      size: UniformSizeSchema,
+      quantity: z.number().int(),
+    })
+  ),
+  openIncidents: z.number().int(),
 })
 
-export type ProgressEntryType = z.infer<typeof ProgressEntrySchema>
+export type SectorPartType = z.infer<typeof SectorPartSchema>
 
-/** O andamento do pedido: as linhas da grade e o que foi feito de cada uma. */
-export const ProductionProgressResponse = z.object({
-  lines: z.array(ProgressLineSchema),
-  progress: z.array(ProgressEntrySchema),
-  /** Feito e total de cada passo: o que está faltando. */
-  totals: z.object({
-    impressao: z.object({ done: z.number().int(), total: z.number().int() }),
-    corte: z.object({ done: z.number().int(), total: z.number().int() }),
-    costura: z.object({ done: z.number().int(), total: z.number().int() }),
-    embalagem: z.object({ done: z.number().int(), total: z.number().int() }),
-  }),
+export const SectorResponse = z.object({
+  sector: FactorySectorSchema,
+  /** As etapas que são deste setor, e para onde ele manda. */
+  stages: z.array(UniformStageSchema),
+  nextStage: UniformStageSchema,
+  parts: z.array(SectorPartSchema),
 })
 
-export type ProductionProgressResponseType = z.infer<
-  typeof ProductionProgressResponse
->
+export type SectorResponseType = z.infer<typeof SectorResponse>
 
-/** Marca (ou desmarca) linhas: o que vier substitui o que estava, linha a linha. */
-export const SaveProgressRequest = z.object({
-  entries: z.array(ProgressEntrySchema).min(1).max(4_000),
+/** Marca quantas peças de cada célula da leva o setor já fez. */
+export const SetSectorDoneRequest = z.object({
+  batchId: z.uuid().nullable().default(null),
+  cells: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(120),
+        done: z.number().int().min(0).max(100_000),
+      })
+    )
+    .min(1)
+    .max(500),
 })
 
-export type SaveProgressBody = z.input<typeof SaveProgressRequest>
+export type SetSectorDoneBody = z.input<typeof SetSectorDoneRequest>
+
+/**
+ * Manda as feitas para a próxima etapa: separa a leva com elas, ou move a leva
+ * inteira quando tudo foi feito. A impressão diz em qual máquina.
+ */
+export const SendSectorRequest = z.object({
+  batchId: z.uuid().nullable().default(null),
+  /** A etapa que a tela mostrava para a leva. */
+  from: UniformStageSchema,
+  printerIds: z.array(z.uuid()).max(20).default([]),
+})
+
+export type SendSectorBody = z.input<typeof SendSectorRequest>
+
+export const SendSectorResponse = z.object({
+  /** `tudo`: a leva inteira andou; `parte`: as feitas viraram uma leva nova. */
+  moved: z.enum(['tudo', 'parte']),
+  to: UniformStageSchema,
+  pieces: z.number().int(),
+})
+
+export type SendSectorResponseType = z.infer<typeof SendSectorResponse>
 
 export const IncidentSummary = z.object({
   id: z.string(),

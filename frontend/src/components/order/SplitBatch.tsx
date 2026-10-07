@@ -13,6 +13,8 @@ import {
   STAGE_META,
   STAGE_REFUSALS,
   canMoveStage,
+  cellKey,
+  cellLabel,
   entersFactory,
   orderRef,
   partLabel,
@@ -55,15 +57,16 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
     setTo(STAGES[STAGES.indexOf(part.stage) + 1] ?? part.stage)
   }, [part])
 
-  const quantityOf = (piece: string): number => {
-    const value = Number(amounts[piece] ?? '')
+  // Por célula (F235 do Aeris): "10 Camisa M", não só "10 Camisa".
+  const quantityOf = (key: string): number => {
+    const value = Number(amounts[key] ?? '')
     return Number.isInteger(value) && value > 0 ? value : 0
   }
   const pieces = part?.pieces ?? []
-  const chosen = pieces.filter((count) => quantityOf(count.piece) > 0)
-  const over = pieces.find((count) => quantityOf(count.piece) > count.quantity)
-  const everything = chosen.length > 0 && pieces.every((count) => quantityOf(count.piece) === count.quantity)
-  const moving = piecesTotal(chosen.map((count) => ({ piece: count.piece, quantity: quantityOf(count.piece) })))
+  const chosen = pieces.filter((count) => quantityOf(cellKey(count)) > 0)
+  const over = pieces.find((count) => quantityOf(cellKey(count)) > count.quantity)
+  const everything = chosen.length > 0 && pieces.every((count) => quantityOf(cellKey(count)) === count.quantity)
+  const moving = piecesTotal(chosen.map((count) => ({ ...count, quantity: quantityOf(cellKey(count)) })))
 
   const from = part?.stage ?? 'atendimento'
   const allowed = part !== null && canMoveStage(viewer, from, to)
@@ -85,7 +88,7 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
         sourceBatchId: part.batch?.id ?? null,
         from,
         to,
-        pieces: chosen.map((count) => ({ piece: count.piece, quantity: quantityOf(count.piece) })),
+        pieces: chosen.map((count) => ({ piece: count.piece, size: count.size, quantity: quantityOf(cellKey(count)) })),
         printerIds,
         force,
       })
@@ -111,7 +114,7 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
         ? 'Do atendimento o pedido vai para a arte. Pular a arte é de quem gerencia a produção.'
         : 'Você não tem a função para essa troca de etapa.'
     if (unapproved && viewer?.manages !== true) return STAGE_REFUSALS.art_not_approved ?? null
-    if (over) return `A leva só tem ${String(over.quantity)} ${over.piece}.`
+    if (over) return `A leva só tem ${String(over.quantity)} ${cellLabel(over)}.`
     if (everything && to === from) return 'Escolheu a leva inteira na mesma etapa: não há o que separar.'
     return null
   })()
@@ -163,7 +166,7 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
           </p>
 
           <div>
-            <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">Quantas de cada peça</p>
+            <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">Quantas de cada peça e tamanho</p>
             {pieces.length === 0 && (
               <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                 Este pedido ainda não tem grade. Preencha a grade e os personalizados antes de dividir.
@@ -171,9 +174,9 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
             )}
             <div className="grid gap-2 sm:grid-cols-2">
               {pieces.map((count) => (
-                <label key={count.piece} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-3 py-2">
+                <label key={cellKey(count)} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-3 py-2">
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold">{count.piece}</span>
+                    <span className="block truncate text-sm font-bold">{cellLabel(count)}</span>
                     <span className="text-[11px] text-muted">tem {count.quantity}</span>
                   </span>
                   <span className="flex items-center gap-1.5">
@@ -182,15 +185,15 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
                       inputMode="numeric"
                       min={0}
                       max={count.quantity}
-                      value={amounts[count.piece] ?? ''}
-                      onChange={(event) => setAmounts((current) => ({ ...current, [count.piece]: event.target.value }))}
+                      value={amounts[cellKey(count)] ?? ''}
+                      onChange={(event) => setAmounts((current) => ({ ...current, [cellKey(count)]: event.target.value }))}
                       placeholder="0"
-                      className={clsx('field w-20 text-right', quantityOf(count.piece) > count.quantity && 'border-red-500')}
-                      aria-label={`Quantas ${count.piece}`}
+                      className={clsx('field w-20 text-right', quantityOf(cellKey(count)) > count.quantity && 'border-red-500')}
+                      aria-label={`Quantas ${cellLabel(count)}`}
                     />
                     <button
                       type="button"
-                      onClick={() => setAmounts((current) => ({ ...current, [count.piece]: String(count.quantity) }))}
+                      onClick={() => setAmounts((current) => ({ ...current, [cellKey(count)]: String(count.quantity) }))}
                       className="rounded-full px-2 py-1 text-[11px] font-bold text-muted hover:bg-black/5 hover:text-ink"
                     >
                       Todas
