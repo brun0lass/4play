@@ -45,7 +45,7 @@ const refusalText = (error: unknown): string =>
 const left = (part: SectorPartType): number => part.total - part.done
 
 /**
- * O setor e a grade (F235 do Aeris): cada setor da fábrica vê só as levas que
+ * O setor e a grade (F239 do Aeris): cada setor da fábrica vê só as levas que
  * estão com ele, a grade por peça e tamanho, e vai marcando embaixo quantas já
  * fez — como na folha da grade. As feitas vão para o próximo setor num botão;
  * o que falta continua aqui.
@@ -78,7 +78,7 @@ export const SetoresPage = () => {
   const toast = useToast()
 
   /*
-   * A fila da impressão (F238): quem gerencia põe as levas em ordem; a tela
+   * A fila da impressão (F242): quem gerencia põe as levas em ordem; a tela
    * manda a fila inteira a cada mudança.
    */
   const queued = (current.data?.parts ?? [])
@@ -213,7 +213,7 @@ const byPiece = (cells: readonly SectorCellType[]) => {
 }
 
 /** Uma leva no setor: a grade com o feito embaixo, e mandar as feitas. */
-/** A leva na fila da impressão (F238): a posição e, para quem gerencia, mexer nela. */
+/** A leva na fila da impressão (F242): a posição e, para quem gerencia, mexer nela. */
 type QueueControls = {
   position: number | null
   busy?: boolean

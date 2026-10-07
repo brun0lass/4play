@@ -37,7 +37,7 @@ export type Access = {
   team: boolean
   /** A tela das costureiras (F231): quem gerencia e a produção. */
   seamstresses: boolean
-  /** As telas dos setores da fábrica (F235): quem gerencia e a produção. */
+  /** As telas dos setores da fábrica (F239): quem gerencia e a produção. */
   sectors: boolean
   /** Cadastrar costureira, mudar tabela e prazo, marcar a costura entregue. */
   manageSeamstresses: boolean

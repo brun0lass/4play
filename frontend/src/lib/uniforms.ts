@@ -319,7 +319,7 @@ export const SECTOR_LABELS: Record<IncidentSector, string> = {
 }
 
 // ---------------------------------------------------------------------------
-// O setor e a grade (F235 do Aeris)
+// O setor e a grade (F239 do Aeris)
 // ---------------------------------------------------------------------------
 
 export type FactorySector = 'impressao' | 'corte' | 'costura' | 'embalagem'

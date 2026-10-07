@@ -38,9 +38,9 @@ const suggestion = (row: Row, pieces: number): string => {
 }
 
 /**
- * A baixa do dia (F237 do Aeris): no fim do dia, o que a produção gastou de
+ * A baixa do dia (F241 do Aeris): no fim do dia, o que a produção gastou de
  * tecido, papel e tinta sai do estoque de uma vez. A tela sugere pelo consumo
- * por peça × as peças que cada setor fez no dia (F236); a pessoa confere e
+ * por peça × as peças que cada setor fez no dia (F240); a pessoa confere e
  * muda. O mesmo dia não fecha duas vezes.
  */
 export const DayCloseDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {

@@ -135,7 +135,7 @@ export const useIntake = (id: string | null) =>
     enabled: id !== null,
   })
 
-/** O que cada setor fez no período (F236). */
+/** O que cada setor fez no período (F240). */
 export const useSectorStats = (from: string, to: string, group: 'day' | 'week' | 'month', enabled = true) =>
   useQuery({
     queryKey: keys.stats(from, to, group),
@@ -144,15 +144,15 @@ export const useSectorStats = (from: string, to: string, group: 'day' | 'week' |
     refetchInterval: 60_000,
   })
 
-/** Quanto de cada material vai numa peça (F237). */
+/** Quanto de cada material vai numa peça (F241). */
 export const useMaterialRates = (enabled = true) =>
   useQuery({ queryKey: keys.materialRates, queryFn: ({ signal }) => fetchMaterialRates(signal), enabled })
 
-/** As últimas baixas do dia (F237). */
+/** As últimas baixas do dia (F241). */
 export const useDayCloses = (enabled = true) =>
   useQuery({ queryKey: keys.dayCloses, queryFn: ({ signal }) => fetchDayCloses(signal), enabled })
 
-/** O que o setor tem para fazer (F235): as levas na etapa dele, com o feito. */
+/** O que o setor tem para fazer (F239): as levas na etapa dele, com o feito. */
 export const useSector = (sector: string) =>
   useQuery({
     queryKey: keys.sector(sector),

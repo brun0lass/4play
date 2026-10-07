@@ -190,6 +190,8 @@ export const DashboardSalesResponse = z.object({
   exchanges: z.object({
     completed: z.number().int().nonnegative(),
     rejected: z.number().int().nonnegative(),
+    /** O valor das peças que voltaram nas trocas concluídas (F236). */
+    returnedAmount: money.default('0.00'),
     vouchersIssued: CountAmount,
     /** Quanto de vale foi usado para pagar, em valor positivo. */
     vouchersRedeemed: money,

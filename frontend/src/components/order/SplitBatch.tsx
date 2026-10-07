@@ -57,7 +57,7 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
     setTo(STAGES[STAGES.indexOf(part.stage) + 1] ?? part.stage)
   }, [part])
 
-  // Por célula (F235 do Aeris): "10 Camisa M", não só "10 Camisa".
+  // Por célula (F239 do Aeris): "10 Camisa M", não só "10 Camisa".
   const quantityOf = (key: string): number => {
     const value = Number(amounts[key] ?? '')
     return Number.isInteger(value) && value > 0 ? value : 0

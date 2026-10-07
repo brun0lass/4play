@@ -61,7 +61,7 @@ const bucketLabel = (start: string, group: Group): string => {
 }
 
 /**
- * A produção de cada setor (F236 do Aeris): as peças que saíram de cada setor
+ * A produção de cada setor (F240 do Aeris): as peças que saíram de cada setor
  * para a frente, por dia, semana ou mês — e, para quem gerencia, por pessoa.
  * "Atendimento" e "Arte" contam as peças dos pedidos que eles mandaram adiante.
  */

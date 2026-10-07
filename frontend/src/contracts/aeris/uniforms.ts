@@ -269,7 +269,7 @@ export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
 /** Uma quantidade de uma peça — "100 Camisa" (F230). */
 export const ProductionPieceCount = z.object({
   piece: z.string(),
-  /** O tamanho da célula (F235). Nulo na leva antiga, que não dizia. */
+  /** O tamanho da célula (F239). Nulo na leva antiga, que não dizia. */
   size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
   quantity: z.number().int(),
 })
@@ -633,7 +633,7 @@ export const SplitBatchRequest = z.object({
     .array(
       z.object({
         piece: z.string().trim().max(40),
-        /** O tamanho (F235). Nulo: a peça, saindo na ordem dos tamanhos. */
+        /** O tamanho (F239). Nulo: a peça, saindo na ordem dos tamanhos. */
         size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
         quantity: z.number().int().min(1).max(100_000),
       })
@@ -1268,7 +1268,7 @@ export const ConvertIntakeResponse = z.object({
 // O andamento da grade e as ocorrências (F234)
 // ---------------------------------------------------------------------------
 
-/** Os setores da fábrica, na ordem em que a peça passa (F235). */
+/** Os setores da fábrica, na ordem em que a peça passa (F239). */
 export const FACTORY_SECTOR_VALUES = [
   'impressao',
   'corte',
@@ -1295,7 +1295,7 @@ export const IncidentKindSchema = z.enum(INCIDENT_KIND_VALUES)
 export const IncidentSectorSchema = z.enum(INCIDENT_SECTOR_VALUES)
 export const IncidentStatusSchema = z.enum(INCIDENT_STATUS_VALUES)
 
-/** Uma célula da leva no setor: o que tem e quantas o setor já fez (F235). */
+/** Uma célula da leva no setor: o que tem e quantas o setor já fez (F239). */
 export const SectorCellSchema = z.object({
   key: z.string(),
   piece: z.string(),
@@ -1306,7 +1306,7 @@ export const SectorCellSchema = z.object({
 
 export type SectorCellType = z.infer<typeof SectorCellSchema>
 
-/** Uma leva na tela do setor: o pedido, a grade dela e o feito (F235). */
+/** Uma leva na tela do setor: o pedido, a grade dela e o feito (F239). */
 export const SectorPartSchema = z.object({
   orderId: z.string(),
   orderNumber: z.number().int().nullable(),
@@ -1339,7 +1339,7 @@ export const SectorPartSchema = z.object({
     })
   ),
   openIncidents: z.number().int(),
-  /** A posição na fila da impressão (F238); nula fora da fila. */
+  /** A posição na fila da impressão (F242); nula fora da fila. */
   queuePosition: z.number().int().nullable(),
 })
 
@@ -1469,7 +1469,7 @@ export const ResolveIncidentRequest = z.object({
 export type ResolveIncidentBody = z.input<typeof ResolveIncidentRequest>
 
 // ---------------------------------------------------------------------------
-// A produção por setor (F236)
+// A produção por setor (F240)
 // ---------------------------------------------------------------------------
 
 /** Os setores com estatística: o atendimento, a arte e os da fábrica. */
@@ -1527,7 +1527,7 @@ export const SectorStatsResponse = z.object({
 export type SectorStatsResponseType = z.infer<typeof SectorStatsResponse>
 
 // ---------------------------------------------------------------------------
-// O consumo por peça e a baixa do dia (F237)
+// O consumo por peça e a baixa do dia (F241)
 // ---------------------------------------------------------------------------
 
 /** Quantidade de estoque: até 6 casas, com ponto, maior que zero. */
@@ -1618,7 +1618,7 @@ export const DayCloseListResponse = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// A fila da impressão (F238)
+// A fila da impressão (F242)
 // ---------------------------------------------------------------------------
 
 /** A fila inteira, na ordem em que vai ser impressa. */

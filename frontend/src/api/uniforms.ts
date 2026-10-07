@@ -240,7 +240,7 @@ export const cancelSewingJob = async (id: string, version: number): Promise<Sewi
   ).job
 
 // ---------------------------------------------------------------------------
-// O setor e a grade (F235 do Aeris)
+// O setor e a grade (F239 do Aeris)
 // ---------------------------------------------------------------------------
 
 export const fetchSector = async (sector: string, signal?: AbortSignal): Promise<SectorResponseType> =>
@@ -262,7 +262,7 @@ export const sendSector = async (orderId: string, sector: string, input: SendSec
   )
 
 // ---------------------------------------------------------------------------
-// A produção por setor, a baixa do dia e a fila da impressão (F236–F238 do Aeris)
+// A produção por setor, a baixa do dia e a fila da impressão (F240–F242 do Aeris)
 // ---------------------------------------------------------------------------
 
 export const fetchSectorStats = async (

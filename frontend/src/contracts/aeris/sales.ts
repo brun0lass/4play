@@ -248,6 +248,12 @@ export const SalesDocumentSummary = z.object({
   exchangeScope: ExchangeScopeSchema,
   /** A conferência do estoque e a do caixa (26/09). Servidor antigo: nenhuma. */
   checks: SalesChecksSchema.default({ stock: null, cashier: null }),
+  /**
+   * Como a venda foi paga (F238): as formas, a de mais valor primeiro — no
+   * balcão e no acerto do motoboy. Nulo para quem não lê pagamentos, e na
+   * ficha, que lista os pagamentos inteiros.
+   */
+  paymentMethods: z.array(z.string()).nullable().default(null),
   /** The optimistic-concurrency token. ADR-0014. */
   version: z.number().int(),
   updatedAt: z.string(),
@@ -433,6 +439,11 @@ export const SalesDocumentListQuery = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /**
+   * Só o que foi pago com esta forma (F238): no balcão, ou no acerto do
+   * motoboy. Exige `payment.read`, como a coluna "Pagamento".
+   */
+  paymentMethodId: z.uuid().optional(),
   /** Matches the document number or the customer's name. */
   search: z.string().trim().max(120).optional(),
   /** Inclusive, on the issue date. What "hoje" and "este mês" are made of. */
@@ -475,6 +486,8 @@ export type SalesDocumentListRequest = {
   exchangeable?: boolean | undefined
   /** Esconde o orçamento que já virou pedido ou venda (F162). */
   hideConverted?: boolean | undefined
+  /** Só o que foi pago com esta forma (F238). */
+  paymentMethodId?: string | undefined
   search?: string | undefined
   issuedFrom?: string | undefined
   issuedTo?: string | undefined

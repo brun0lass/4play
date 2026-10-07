@@ -224,6 +224,8 @@ export const CommissionRatesResponse = z.object({
         z.object({
           rate: z.string(),
           validFrom: z.string(),
+          /** Quando foi gravada. Difere de `validFrom` na % retroativa (F235). */
+          createdAt: z.string(),
           actorName: z.string().nullable(),
         })
       ),
@@ -236,9 +238,29 @@ export type CommissionRatesResponse = z.infer<typeof CommissionRatesResponse>
 export const SetCommissionRateRequest = z.object({
   userId: z.uuid(),
   rate: CommissionRateInput,
+  /**
+   * Desde o começo de que mês a % vale (F235). Nulo: a partir de agora.
+   *
+   * O gerente da Elite pôs a % depois que as vendedoras já vendiam, e as
+   * vendas do primeiro dia ficaram sem comissão. Mês com extrato fechado do
+   * vendedor é recusado.
+   */
+  since: CommissionPeriod.nullable().default(null),
+  /** O relógio da loja, que diz onde o mês começa. */
+  timeZone: TimeZone,
 })
 export type SetCommissionRateRequest = z.input<typeof SetCommissionRateRequest>
 export type SetCommissionRateBody = z.output<typeof SetCommissionRateRequest>
+
+export const SetCommissionRateResponse = z.object({
+  userId: z.string(),
+  rate: z.string(),
+  /** O instante a partir do qual a % vale. */
+  validFrom: z.string(),
+})
+export type SetCommissionRateResponse = z.infer<
+  typeof SetCommissionRateResponse
+>
 
 export const SetCommissionPayeeRequest = z.object({
   partyId: z.uuid(),
@@ -247,6 +269,19 @@ export const SetCommissionPayeeRequest = z.object({
 })
 export type SetCommissionPayeeRequest = z.infer<
   typeof SetCommissionPayeeRequest
+>
+
+/**
+ * Cadastrar a vendedora como Pessoa e já pô-la como quem recebe (F235).
+ *
+ * Só a versão de quem recebe: o nome vem da conta da equipe, no servidor.
+ */
+export const RegisterCommissionPayeePartyRequest = z.object({
+  /** 0 quando ainda não há quem receba. */
+  version: z.number().int().nonnegative(),
+})
+export type RegisterCommissionPayeePartyRequest = z.infer<
+  typeof RegisterCommissionPayeePartyRequest
 >
 
 // ---------------------------------------------------------------------------
@@ -259,6 +294,21 @@ export const CloseCommissionPeriodRequest = z.object({
   /** Vencimento do título: `2026-10-05`. */
   dueOn: z.iso.date(),
   timeZone: TimeZone,
+  /**
+   * "Já paguei" (F235): quem já recebeu, em que dia e como.
+   *
+   * O título dessas pessoas nasce pago, com a baixa no dia informado e sem
+   * mexer em caixa nenhum. Dinheiro, Pix ou transferência. Exige
+   * `finance.settle`, como dar baixa no Financeiro.
+   */
+  paid: z
+    .object({
+      paidOn: z.iso.date(),
+      paymentMethodId: z.uuid(),
+      userIds: z.array(z.uuid()).min(1),
+    })
+    .nullable()
+    .default(null),
 })
 export type CloseCommissionPeriodRequest = z.input<
   typeof CloseCommissionPeriodRequest
@@ -275,6 +325,8 @@ export const CloseCommissionPeriodResponse = z.object({
       name: z.string(),
       commissionAmount: money,
       financeEntryId: z.string(),
+      /** O título já nasceu pago ("já paguei", F235). */
+      settled: z.boolean(),
     })
   ),
 })

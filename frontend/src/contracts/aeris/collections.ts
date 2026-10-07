@@ -150,6 +150,8 @@ export const CollectionEntry = z.object({
   instalmentNumber: z.number().int(),
   instalmentCount: z.number().int(),
   originType: z.string(),
+  /** A venda (ou o pedido) que gerou o título, quando foi uma (F237). */
+  salesDocumentId: z.string().nullable().default(null),
   issuedAt: z.string(),
   dueAt: z.string(),
   amount: z.string(),
@@ -210,6 +212,27 @@ export const CollectionRenegotiation = z.object({
 
 export type CollectionRenegotiation = z.infer<typeof CollectionRenegotiation>
 
+/**
+ * A nota por trás dos títulos (F237): o que o cliente levou, uma vez por
+ * venda — as parcelas 1/3 a 3/3 são da mesma nota.
+ */
+export const CollectionDocument = z.object({
+  id: z.string(),
+  kind: z.enum(['sale', 'order']),
+  number: z.number().int().nullable(),
+  issuedAt: z.string(),
+  lines: z.array(
+    z.object({
+      description: z.string(),
+      /** Como vem da fiação: `2.000000`. */
+      quantity: z.string(),
+      total: z.string(),
+    })
+  ),
+})
+
+export type CollectionDocument = z.infer<typeof CollectionDocument>
+
 export const CollectionDetailResponse = z.object({
   party: z.object({
     id: z.string(),
@@ -237,6 +260,7 @@ export const CollectionDetailResponse = z.object({
     creditBlockReason: z.string().nullable(),
   }),
   entries: z.array(CollectionEntry),
+  documents: z.array(CollectionDocument).default([]),
   settlements: z.array(CollectionSettlement),
   contacts: z.array(CollectionContact),
   renegotiations: z.array(CollectionRenegotiation),
