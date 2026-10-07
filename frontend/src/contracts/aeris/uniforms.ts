@@ -1339,6 +1339,8 @@ export const SectorPartSchema = z.object({
     })
   ),
   openIncidents: z.number().int(),
+  /** A posição na fila da impressão (F238); nula fora da fila. */
+  queuePosition: z.number().int().nullable(),
 })
 
 export type SectorPartType = z.infer<typeof SectorPartSchema>
@@ -1465,3 +1467,170 @@ export const ResolveIncidentRequest = z.object({
 })
 
 export type ResolveIncidentBody = z.input<typeof ResolveIncidentRequest>
+
+// ---------------------------------------------------------------------------
+// A produção por setor (F236)
+// ---------------------------------------------------------------------------
+
+/** Os setores com estatística: o atendimento, a arte e os da fábrica. */
+export const STATS_SECTOR_VALUES = [
+  'atendimento',
+  'arte',
+  'impressao',
+  'corte',
+  'costura',
+  'embalagem',
+] as const
+
+export const StatsSectorSchema = z.enum(STATS_SECTOR_VALUES)
+
+export const STATS_GROUP_VALUES = ['day', 'week', 'month'] as const
+
+const DayText = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.')
+
+export const SectorStatsQuery = z.object({
+  from: DayText,
+  to: DayText,
+  group: z.enum(STATS_GROUP_VALUES).default('day'),
+})
+
+export type SectorStatsQueryType = z.input<typeof SectorStatsQuery>
+
+const SectorCount = z.object({
+  sector: StatsSectorSchema,
+  /** As peças que saíram do setor para a frente. */
+  pieces: z.number().int(),
+  /** Quantas vezes (levas ou pedidos) saíram. */
+  moves: z.number().int(),
+})
+
+export const SectorStatsResponse = z.object({
+  from: z.string(),
+  to: z.string(),
+  group: z.enum(STATS_GROUP_VALUES),
+  /** Um período (dia, semana ou mês) por linha, do mais velho ao mais novo; sem os vazios. */
+  buckets: z.array(
+    z.object({ start: z.string(), sectors: z.array(SectorCount) })
+  ),
+  totals: z.array(SectorCount),
+  /** Por pessoa — só para quem gerencia. */
+  people: z.array(
+    SectorCount.extend({
+      userId: z.string().nullable(),
+      name: z.string().nullable(),
+    })
+  ),
+})
+
+export type SectorStatsResponseType = z.infer<typeof SectorStatsResponse>
+
+// ---------------------------------------------------------------------------
+// O consumo por peça e a baixa do dia (F237)
+// ---------------------------------------------------------------------------
+
+/** Quantidade de estoque: até 6 casas, com ponto, maior que zero. */
+const MaterialQuantity = z
+  .string()
+  .trim()
+  .regex(
+    /^\d{1,12}(\.\d{1,6})?$/,
+    'Informe uma quantidade com até 6 casas decimais, usando ponto.'
+  )
+  .refine(
+    (value) => /[1-9]/.test(value),
+    'A quantidade deve ser maior que zero.'
+  )
+
+export const MaterialRateSchema = z.object({
+  variantId: z.string(),
+  name: z.string(),
+  unit: z.string().nullable(),
+  /** De qual setor são as peças que gastam este material. */
+  sector: FactorySectorSchema,
+  perPiece: z.string(),
+})
+
+export type MaterialRateType = z.infer<typeof MaterialRateSchema>
+
+export const MaterialRatesResponse = z.object({
+  rates: z.array(MaterialRateSchema),
+})
+
+export const SaveMaterialRatesRequest = z.object({
+  rates: z
+    .array(
+      z.object({
+        variantId: z.uuid(),
+        sector: FactorySectorSchema,
+        perPiece: MaterialQuantity,
+      })
+    )
+    .max(100),
+})
+
+export type SaveMaterialRatesBody = z.input<typeof SaveMaterialRatesRequest>
+
+export const DayCloseRequest = z.object({
+  day: DayText,
+  /** A filial; sem ela, a da sessão. */
+  branchId: z.uuid().optional(),
+  lines: z
+    .array(z.object({ variantId: z.uuid(), quantity: MaterialQuantity }))
+    .min(1)
+    .max(50),
+  note: z
+    .string()
+    .trim()
+    .max(500)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+})
+
+export type DayCloseBody = z.input<typeof DayCloseRequest>
+
+export const DayCloseSchema = z.object({
+  id: z.string(),
+  branchId: z.string(),
+  branchName: z.string(),
+  day: z.string(),
+  lines: z.array(
+    z.object({
+      variantId: z.string(),
+      name: z.string(),
+      unit: z.string().nullable(),
+      quantity: z.string(),
+      movementId: z.string(),
+    })
+  ),
+  note: z.string().nullable(),
+  closedByName: z.string().nullable(),
+  closedAt: z.string(),
+})
+
+export type DayCloseType = z.infer<typeof DayCloseSchema>
+
+export const DayCloseResponse = z.object({ close: DayCloseSchema })
+export const DayCloseListResponse = z.object({
+  closes: z.array(DayCloseSchema),
+})
+
+// ---------------------------------------------------------------------------
+// A fila da impressão (F238)
+// ---------------------------------------------------------------------------
+
+/** A fila inteira, na ordem em que vai ser impressa. */
+export const SetPrintQueueRequest = z.object({
+  parts: z
+    .array(
+      z.object({
+        orderId: z.uuid(),
+        batchId: z.uuid().nullable().default(null),
+      })
+    )
+    .max(200),
+})
+
+export type SetPrintQueueBody = z.input<typeof SetPrintQueueRequest>

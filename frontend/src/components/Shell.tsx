@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 import {
   AlertTriangle,
+  BarChart3,
   Factory,
   KanbanSquare,
   LayoutDashboard,
@@ -38,6 +39,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Início', icon: LayoutDashboard, end: true, show: (_, can) => can('uniforms.read') },
   { to: '/producao', label: 'Pedidos e produção', icon: KanbanSquare, show: (_, can) => can('uniforms.read') },
   { to: '/setores', label: 'Setores', icon: Factory, show: (a) => a.sectors },
+  { to: '/estatisticas', label: 'Produção por setor', icon: BarChart3, show: (a) => a.sectors },
   { to: '/links', label: 'Links do cliente', icon: Link2, show: (a) => a.createOrder },
   { to: '/ocorrencias', label: 'Ocorrências', icon: AlertTriangle, show: (_, can) => can('uniforms.read') },
   { to: '/financeiro', label: 'Financeiro', icon: Wallet, show: (a) => a.finance },

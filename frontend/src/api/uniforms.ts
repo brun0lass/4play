@@ -4,6 +4,19 @@ import {
   IncidentResponse,
   ResolveIncidentRequest,
   SectorResponse,
+  SectorStatsResponse,
+  MaterialRatesResponse,
+  SaveMaterialRatesRequest,
+  DayCloseRequest,
+  DayCloseResponse,
+  DayCloseListResponse,
+  SetPrintQueueRequest,
+  type SectorStatsResponseType,
+  type MaterialRateType,
+  type SaveMaterialRatesBody,
+  type DayCloseBody,
+  type DayCloseType,
+  type SetPrintQueueBody,
   SendSectorRequest,
   SendSectorResponse,
   SetSectorDoneRequest,
@@ -247,6 +260,35 @@ export const sendSector = async (orderId: string, sector: string, input: SendSec
       body: SendSectorRequest.parse(input),
     })
   )
+
+// ---------------------------------------------------------------------------
+// A produção por setor, a baixa do dia e a fila da impressão (F236–F238 do Aeris)
+// ---------------------------------------------------------------------------
+
+export const fetchSectorStats = async (
+  query: { from: string; to: string; group: 'day' | 'week' | 'month' },
+  signal?: AbortSignal
+): Promise<SectorStatsResponseType> =>
+  SectorStatsResponse.parse(await request(`${BASE}/stats/sectors${qs(query)}`, { signal }))
+
+export const fetchMaterialRates = async (signal?: AbortSignal): Promise<MaterialRateType[]> =>
+  MaterialRatesResponse.parse(await request(`${BASE}/materials/rates`, { signal })).rates
+
+export const saveMaterialRates = async (input: SaveMaterialRatesBody): Promise<MaterialRateType[]> =>
+  MaterialRatesResponse.parse(
+    await request(`${BASE}/materials/rates`, { method: 'PUT', body: SaveMaterialRatesRequest.parse(input) })
+  ).rates
+
+export const fetchDayCloses = async (signal?: AbortSignal): Promise<DayCloseType[]> =>
+  DayCloseListResponse.parse(await request(`${BASE}/day-closes`, { signal })).closes
+
+export const createDayClose = async (input: DayCloseBody): Promise<DayCloseType> =>
+  DayCloseResponse.parse(await request(`${BASE}/day-closes`, { method: 'POST', body: DayCloseRequest.parse(input) }))
+    .close
+
+export const setPrintQueue = async (input: SetPrintQueueBody): Promise<void> => {
+  await request(`${BASE}/print-queue`, { method: 'PUT', body: SetPrintQueueRequest.parse(input) })
+}
 
 // ---------------------------------------------------------------------------
 // As ocorrências (F234 do Aeris)

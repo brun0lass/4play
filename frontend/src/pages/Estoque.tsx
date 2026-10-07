@@ -1,11 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, ChevronLeft, ChevronRight, ClipboardCheck, History, PackagePlus, Search } from 'lucide-react'
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, History, PackagePlus, Search } from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import { listBalances, type Balance } from '@/api/inventory'
 import { useAuth } from '@/auth/AuthProvider'
+import { DayCloseDialog, DayCloseHistory } from '@/components/inventory/DayClose'
 import { HistoryDialog, MovementDialog, type MovementKind } from '@/components/inventory/MovementDialog'
 import { StarterStockDialog } from '@/components/inventory/StarterStockDialog'
 import { Badge, Button, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui'
@@ -33,6 +34,7 @@ export const EstoquePage = () => {
   const [moving, setMoving] = useState<{ balance: Balance; kind: MovementKind } | null>(null)
   const [history, setHistory] = useState<Balance | null>(null)
   const [starting, setStarting] = useState(false)
+  const [closingDay, setClosingDay] = useState(false)
   const canCreate = can('catalog.write')
   const deferred = useDeferredValue(search.trim())
 
@@ -65,7 +67,16 @@ export const EstoquePage = () => {
       <PageHeader
         kicker="Tecido, tinta, papel e peça pronta"
         title="Estoque"
-        actions={canCreate && <Button variant="outline" icon={<PackagePlus className="h-4 w-4" />} onClick={() => setStarting(true)}>Cadastrar tecido, papel e tinta</Button>}
+        actions={
+          <>
+            {canMove && (
+              <Button variant="lime" icon={<CalendarCheck className="h-4 w-4" />} onClick={() => setClosingDay(true)}>
+                Baixa do dia
+              </Button>
+            )}
+            {canCreate && <Button variant="outline" icon={<PackagePlus className="h-4 w-4" />} onClick={() => setStarting(true)}>Cadastrar tecido, papel e tinta</Button>}
+          </>
+        }
       >
         <p className="mt-2 text-sm font-semibold text-muted">
           Para um item aparecer aqui, ligue "Controlar estoque" no cadastro dele em{' '}
@@ -192,6 +203,8 @@ export const EstoquePage = () => {
       <MovementDialog balance={moving?.balance ?? null} kind={moving?.kind ?? 'entry'} onClose={() => setMoving(null)} />
       <HistoryDialog balance={history} onClose={() => setHistory(null)} />
       <StarterStockDialog open={starting} onClose={() => setStarting(false)} />
+      <DayCloseDialog open={closingDay} onClose={() => setClosingDay(false)} />
+      <DayCloseHistory />
     </div>
   )
 }

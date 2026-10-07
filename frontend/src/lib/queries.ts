@@ -5,6 +5,9 @@ import {
   fetchIncidents,
   fetchOrderIncidents,
   fetchSector,
+  fetchSectorStats,
+  fetchMaterialRates,
+  fetchDayCloses,
   fetchCustomerHistory,
   fetchIntake,
   fetchIntakes,
@@ -38,6 +41,10 @@ export const keys = {
   intake: (id: string) => ['uniforms', 'intake', id] as const,
   sector: (sector: string) => ['uniforms', 'sector', sector] as const,
   sectorAll: ['uniforms', 'sector'] as const,
+  stats: (from: string, to: string, group: string) => ['uniforms', 'stats', from, to, group] as const,
+  statsAll: ['uniforms', 'stats'] as const,
+  materialRates: ['uniforms', 'material-rates'] as const,
+  dayCloses: ['uniforms', 'day-closes'] as const,
   orderIncidents: (orderId: string) => ['uniforms', 'order-incidents', orderId] as const,
   incidents: (statuses?: string, sectors?: string) => ['uniforms', 'incidents', statuses ?? 'all', sectors ?? 'all'] as const,
   incidentsAll: ['uniforms', 'incidents'] as const,
@@ -127,6 +134,23 @@ export const useIntake = (id: string | null) =>
     queryFn: ({ signal }) => fetchIntake(id ?? '', signal),
     enabled: id !== null,
   })
+
+/** O que cada setor fez no período (F236). */
+export const useSectorStats = (from: string, to: string, group: 'day' | 'week' | 'month', enabled = true) =>
+  useQuery({
+    queryKey: keys.stats(from, to, group),
+    queryFn: ({ signal }) => fetchSectorStats({ from, to, group }, signal),
+    enabled,
+    refetchInterval: 60_000,
+  })
+
+/** Quanto de cada material vai numa peça (F237). */
+export const useMaterialRates = (enabled = true) =>
+  useQuery({ queryKey: keys.materialRates, queryFn: ({ signal }) => fetchMaterialRates(signal), enabled })
+
+/** As últimas baixas do dia (F237). */
+export const useDayCloses = (enabled = true) =>
+  useQuery({ queryKey: keys.dayCloses, queryFn: ({ signal }) => fetchDayCloses(signal), enabled })
 
 /** O que o setor tem para fazer (F235): as levas na etapa dele, com o feito. */
 export const useSector = (sector: string) =>

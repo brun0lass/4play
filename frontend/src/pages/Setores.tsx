@@ -1,18 +1,18 @@
 import type { SectorCellType, SectorPartType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, ArrowRight, CheckCheck, Minus, Plus, Printer, Search, Users } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCheck, ListOrdered, Minus, Plus, Printer, Search, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { sendSector, setSectorDone } from '@/api/uniforms'
+import { sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
 import { DispatchChip } from '@/components/OrderCard'
 import { IncidentDialog, useCanReport, type IncidentDraft } from '@/components/progress/Incidents'
 import { useToast } from '@/components/Toast'
 import { Badge, Button, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui'
-import { day, int } from '@/lib/format'
+import { day, int, todaySP } from '@/lib/format'
 import { ApiError, errorMessage } from '@/lib/http'
-import { keys, usePrinters, useSector, useViewer } from '@/lib/queries'
+import { keys, usePrinters, useSector, useSectorStats, useViewer } from '@/lib/queries'
 import {
   FABRIC_LABELS,
   FACTORY_SECTORS,
@@ -71,6 +71,46 @@ export const SetoresPage = () => {
     embalagem: useSector('embalagem'),
   }
   const current = all[sector]
+  const today = todaySP()
+  const madeToday = useSectorStats(today, today, 'day')
+  const viewer = useViewer().data
+  const queryClient = useQueryClient()
+  const toast = useToast()
+
+  /*
+   * A fila da impressão (F238): quem gerencia põe as levas em ordem; a tela
+   * manda a fila inteira a cada mudança.
+   */
+  const queued = (current.data?.parts ?? [])
+    .filter((part) => part.queuePosition !== null)
+    .sort((left, right) => (left.queuePosition ?? 0) - (right.queuePosition ?? 0))
+  const reorder = useMutation({
+    mutationFn: (next: SectorPartType[]) =>
+      setPrintQueue({ parts: next.map((part) => ({ orderId: part.orderId, batchId: part.batchId })) }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.sector('impressao') }),
+    onError: (error) => toast(errorMessage(error)),
+  })
+  const same = (left: SectorPartType, right: SectorPartType) =>
+    left.orderId === right.orderId && left.batchId === right.batchId
+  const queueOf = (part: SectorPartType): QueueControls | undefined => {
+    if (sector !== 'impressao') return undefined
+    const index = queued.findIndex((item) => same(item, part))
+    const position = index === -1 ? null : index + 1
+    if (viewer?.manages !== true) return { position }
+    const move = (to: number) => {
+      const next = queued.filter((item) => !same(item, part))
+      next.splice(to, 0, part)
+      reorder.mutate(next)
+    }
+    return {
+      position,
+      busy: reorder.isPending,
+      add: index === -1 ? () => reorder.mutate([...queued, part]) : undefined,
+      up: index > 0 ? () => move(index - 1) : undefined,
+      down: index !== -1 && index < queued.length - 1 ? () => move(index + 1) : undefined,
+      remove: index === -1 ? undefined : () => reorder.mutate(queued.filter((item) => !same(item, part))),
+    }
+  }
 
   const choose = (next: FactorySector) => {
     setSector(next)
@@ -123,6 +163,11 @@ export const SetoresPage = () => {
                     ? 'Nada para fazer'
                     : `${int(pieces ?? 0)} peças · ${String(data.parts.length)} ${data.parts.length === 1 ? 'leva' : 'levas'}`}
               </span>
+              {madeToday.data && (
+                <span className="block text-[11px] font-extrabold text-ink">
+                  Hoje: {int(madeToday.data.totals.find((item) => item.sector === value)?.pieces ?? 0)} feitas
+                </span>
+              )}
             </button>
           )
         })}
@@ -143,7 +188,13 @@ export const SetoresPage = () => {
       <div className="space-y-4">
         {current.data &&
           parts.map((part) => (
-            <SectorCard key={`${part.orderId}:${part.batchId ?? '1'}`} sector={sector} nextStage={current.data.nextStage} part={part} />
+            <SectorCard
+              key={`${part.orderId}:${part.batchId ?? '1'}`}
+              sector={sector}
+              nextStage={current.data.nextStage}
+              part={part}
+              queue={queueOf(part)}
+            />
           ))}
       </div>
     </div>
@@ -162,7 +213,61 @@ const byPiece = (cells: readonly SectorCellType[]) => {
 }
 
 /** Uma leva no setor: a grade com o feito embaixo, e mandar as feitas. */
-const SectorCard = ({ sector, nextStage, part }: { sector: FactorySector; nextStage: Stage; part: SectorPartType }) => {
+/** A leva na fila da impressão (F238): a posição e, para quem gerencia, mexer nela. */
+type QueueControls = {
+  position: number | null
+  busy?: boolean
+  add?: () => void
+  up?: () => void
+  down?: () => void
+  remove?: () => void
+}
+
+const QueueBar = ({ queue }: { queue: QueueControls }) => {
+  const button = 'rounded-full p-1 text-muted hover:bg-black/5 hover:text-ink disabled:opacity-30'
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-2xl bg-paper px-3 py-1.5 text-xs font-bold">
+      <ListOrdered className="h-3.5 w-3.5" aria-hidden />
+      {queue.position === null ? (
+        <span className="text-muted">Fora da fila da impressão</span>
+      ) : (
+        <span>{queue.position}º na fila da impressão</span>
+      )}
+      <span className="ml-auto flex items-center gap-0.5">
+        {queue.add && (
+          <button type="button" onClick={queue.add} disabled={queue.busy} className="rounded-full px-2 py-0.5 hover:bg-black/5 disabled:opacity-30">
+            Pôr na fila
+          </button>
+        )}
+        {queue.position !== null && queue.remove && (
+          <>
+            <button type="button" onClick={queue.up} disabled={queue.busy || !queue.up} className={button} aria-label="Subir na fila">
+              <ArrowUp className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={queue.down} disabled={queue.busy || !queue.down} className={button} aria-label="Descer na fila">
+              <ArrowDown className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={queue.remove} disabled={queue.busy} className={button} aria-label="Tirar da fila">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
+      </span>
+    </div>
+  )
+}
+
+const SectorCard = ({
+  sector,
+  nextStage,
+  part,
+  queue,
+}: {
+  sector: FactorySector
+  nextStage: Stage
+  part: SectorPartType
+  queue?: QueueControls
+}) => {
   const queryClient = useQueryClient()
   const toast = useToast()
   const viewer = useViewer().data
@@ -248,6 +353,7 @@ const SectorCard = ({ sector, nextStage, part }: { sector: FactorySector; nextSt
 
   return (
     <article className={clsx('rounded-3xl border bg-white p-4 sm:p-5', part.late ? 'border-red-300' : 'border-line')}>
+      {queue && (queue.position !== null || queue.add) && <QueueBar queue={queue} />}
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <Link to={`/pedidos/${part.orderId}`} className="text-base font-extrabold hover:underline">
