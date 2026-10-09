@@ -50,12 +50,10 @@ const SidebarLink = ({
       onClick={onNavigate}
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition focus-visible:outline-lime lg:py-2',
-          nested ? 'text-[13px] font-semibold' : 'font-bold',
+          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition focus-visible:outline-lime lg:py-2',
+          nested && 'text-[13px]',
           isActive
-            ? nested
-              ? 'bg-lime/10 text-lime'
-              : 'bg-lime text-ink'
+            ? 'bg-lime text-ink shadow-[0_2px_0_0_rgb(0_0_0/0.6)]'
             : 'text-white/65 hover:bg-white/5 hover:text-white'
         )
       }
@@ -87,9 +85,9 @@ const Sidebar = ({
   const id = useId()
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden border-r border-white/10 bg-ink text-white">
-      <div className="shrink-0 px-5 py-5">
-        <CoBrand layout="inline" />
+    <div className="brush-bg flex h-full min-h-0 flex-col overflow-hidden border-r border-white/10 text-white">
+      <div className="shrink-0 px-6 pt-7 pb-6">
+        <CoBrand size="sm" />
       </div>
 
       {openNewOrder && (
@@ -100,7 +98,7 @@ const Sidebar = ({
               onNavigate?.()
               openNewOrder?.()
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-lime px-4 py-3 text-sm font-extrabold text-ink transition hover:bg-lime-600 focus-visible:outline-lime active:translate-y-0.5"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-lime px-4 py-3.5 text-sm font-extrabold text-ink shadow-[0_3px_0_0_rgb(0_0_0/0.8)] transition hover:bg-lime-600 focus-visible:outline-lime active:translate-y-0.5 active:shadow-none"
           >
             <Plus className="h-5 w-5" strokeWidth={3} /> Novo pedido
           </button>
@@ -188,7 +186,7 @@ const Sidebar = ({
       </nav>
 
       <div className="shrink-0 border-t border-white/10 p-3">
-        <div className="rounded-xl bg-white/5 p-3">
+        <div className="rounded-2xl bg-white/5 p-3">
           <div className="flex items-center gap-3">
             <Avatar
               name={session?.user.displayName ?? null}
