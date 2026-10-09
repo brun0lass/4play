@@ -72,8 +72,15 @@ export const archivePersonalizationType = async (
 }
 
 export const fetchPieces = async (signal?: AbortSignal) =>
-  U.UniformPieceListResponse.parse(await request(`${BASE}/pieces`, { signal }))
-    .pieces
+  U.UniformPieceListResponse.parse(
+    await request(`${BASE}/pieces`, { signal })
+  ).pieces.map((piece) => ({
+    ...piece,
+    fabrics: piece.fabrics.map((fabric) => ({
+      ...fabric,
+      tiers: [...fabric.tiers].sort((a, b) => a.minQuantity - b.minQuantity),
+    })),
+  }))
 export const savePiece = async (id: string | null, body: U.SavePieceBody) =>
   U.UniformPieceResponse.parse(
     await request(`${BASE}/pieces${id ? `/${id}` : ''}`, {

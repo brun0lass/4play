@@ -31,6 +31,24 @@ test('tecido por id e faixas nos limites; a definir usa a padrão', () => {
   assert.equal(priceAt(tiersOf(product, 'novo-id'), 10), null)
 })
 
+test('faixas fora da ordem não alteram a faixa correta nem a apresentação', () => {
+  const tiers = [
+    { fabricId: 'tecido', minQuantity: 1, unitPrice: '89' },
+    { fabricId: 'tecido', minQuantity: 101, unitPrice: '69' },
+    { fabricId: 'tecido', minQuantity: 11, unitPrice: '80' },
+    { fabricId: 'tecido', minQuantity: 51, unitPrice: '74' },
+  ]
+  assert.equal(priceAt(tiers, 150), 69)
+  assert.equal(priceAt(tiers, 60), 74)
+  assert.deepEqual(
+    tiersOf(
+      { fabricIds: ['tecido'], tiers, personalizationTypeIds: [] },
+      'tecido'
+    ).map((t) => t.minQuantity),
+    [1, 11, 51, 101]
+  )
+})
+
 const types: OfferType[] = [
   {
     id: 'dados',

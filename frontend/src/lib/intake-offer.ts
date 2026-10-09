@@ -26,20 +26,28 @@ export const tiersOf = (
   product: OfferProduct,
   fabricId: string | null
 ): OfferTier[] =>
-  product.tiers.filter(
-    (tier) =>
-      tier.fabricId ===
-      (product.fabricIds === null || fabricId === null ? null : fabricId)
-  )
+  product.tiers
+    .filter(
+      (tier) =>
+        tier.fabricId ===
+        (product.fabricIds === null || fabricId === null ? null : fabricId)
+    )
+    .sort((a, b) => a.minQuantity - b.minQuantity)
 
 export const priceAt = (
   tiers: readonly { minQuantity: number; unitPrice: string }[],
   quantity: number
 ): number | null => {
   let price: number | null = null
+  let minimum = -1
   for (const tier of tiers)
-    if (Math.max(quantity, 1) >= tier.minQuantity)
+    if (
+      Math.max(quantity, 1) >= tier.minQuantity &&
+      tier.minQuantity >= minimum
+    ) {
+      minimum = tier.minQuantity
       price = Number(tier.unitPrice)
+    }
   return price
 }
 
