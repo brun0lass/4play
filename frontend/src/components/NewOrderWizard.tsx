@@ -185,7 +185,7 @@ export const NewOrderWizard = ({
     onSuccess: ({ id, number, confirmed }) => {
       void queryClient.invalidateQueries({ queryKey: keys.queueAll })
       if (confirmed)
-        toast(`Pedido #${String(number)} criado — já está na fila, em Arte.`)
+        toast(`Pedido #${String(number)} criado — já está na fila, em Atendimento.`)
       onClose()
       void navigate(`/pedidos/${id}`)
     },
