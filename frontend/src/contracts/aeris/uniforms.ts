@@ -49,12 +49,6 @@ export const UNIFORM_SIZE_VALUES = [
   '16',
 ] as const
 
-export const UNIFORM_FABRIC_VALUES = [
-  'elastano',
-  'furadinho',
-  'cem-por-cento',
-] as const
-
 export const UNIFORM_LOGISTICS_VALUES = [
   'correios',
   'van',
@@ -105,7 +99,6 @@ export const UniformFunctionSchema = z.enum(UNIFORM_FUNCTION_VALUES)
 export const UniformArtStatusSchema = z.enum(UNIFORM_ART_STATUS_VALUES)
 export const UniformEventKindSchema = z.enum(UNIFORM_EVENT_KIND_VALUES)
 export const UniformSizeSchema = z.enum(UNIFORM_SIZE_VALUES)
-export const UniformFabricSchema = z.enum(UNIFORM_FABRIC_VALUES)
 export const UniformLogisticsSchema = z.enum(UNIFORM_LOGISTICS_VALUES)
 export const UniformPaymentMarkSchema = z.enum(UNIFORM_PAYMENT_MARK_VALUES)
 
@@ -214,8 +207,11 @@ export const ProductionQueueQuery = z.object({
   designerUserIds: csv(z.uuid()),
   salespersonUserIds: csv(z.uuid()),
   printerIds: csv(z.uuid()),
-  /** `a-definir` é o tecido em branco — o "?" da planilha. */
-  fabrics: csv(z.enum([...UNIFORM_FABRIC_VALUES, 'a-definir'])),
+  /**
+   * Os tecidos da loja (F260); `a-definir` é o tecido em branco — o "?" da
+   * planilha.
+   */
+  fabricIds: csv(z.union([z.uuid(), z.literal('a-definir')])),
   logistics: csv(UniformLogisticsSchema),
   paymentMarks: csv(UniformPaymentMarkSchema),
   artStatuses: csv(UniformArtStatusSchema),
@@ -316,7 +312,9 @@ export const ProductionOrderSummary = z.object({
   designerUserId: z.string().nullable(),
   designerName: z.string().nullable(),
   dispatchDate: z.string().nullable(),
-  fabric: UniformFabricSchema.nullable(),
+  /** O tecido da loja (F260); nulo é "a definir". */
+  fabricId: z.string().nullable(),
+  fabricName: z.string().nullable(),
   personalized: z.boolean(),
   logistics: z.array(UniformLogisticsSchema),
   eventDate: z.string().nullable(),
@@ -544,7 +542,8 @@ export const UpdateProductionSheetRequest = z.object({
   /** 0 = o pedido ainda não tinha ficha. */
   version: z.number().int().min(0),
   dispatchDate: Day.nullable(),
-  fabric: UniformFabricSchema.nullable(),
+  /** Um tecido da loja (F260); nulo é "a definir". */
+  fabricId: z.uuid().nullable(),
   personalized: z.boolean(),
   logistics: z
     .array(UniformLogisticsSchema)
@@ -1074,6 +1073,8 @@ export const IntakeSubmissionSchema = z.object({
       z.object({
         productId: z.uuid(),
         rows: z.array(IntakeRowSchema).min(1).max(2_000),
+        /** As personalizações de marcar que o cliente quis nesta peça (F261). */
+        options: z.array(z.uuid()).max(20).default([]),
       })
     )
     .min(1, 'Escolha pelo menos uma peça.')
@@ -1090,12 +1091,8 @@ export const IntakeSubmissionSchema = z.object({
     })
     .nullable()
     .default(null),
-  /** O tecido que o cliente quer; nulo é "não sei, a loja ajuda". */
-  fabric: UniformFabricSchema.nullable().default(null),
-  /** Sem o logo da loja: a cobrança `sem-logo` por peça (F258). */
-  noLogo: z.boolean().default(false),
-  /** Quer aprovar a arte antes do pedido: a cobrança `arte` (F258). */
-  earlyArt: z.boolean().default(false),
+  /** O tecido da loja que o cliente quer (F260); nulo é "não sei, a loja ajuda". */
+  fabricId: z.uuid().nullable().default(null),
 })
 
 export type IntakeSubmissionBody = z.input<typeof IntakeSubmissionSchema>
@@ -1103,7 +1100,8 @@ export type IntakeSubmissionType = z.infer<typeof IntakeSubmissionSchema>
 
 /** Uma faixa da tabela de preço: o preço a partir desta quantidade (F258). */
 export const PriceTierSchema = z.object({
-  fabric: UniformFabricSchema.nullable(),
+  /** O tecido (F260); nulo é a peça antiga, sem tecido marcado. */
+  fabricId: z.string().nullable(),
   minQuantity: z.number().int(),
   unitPrice: z.string(),
 })
@@ -1131,11 +1129,21 @@ export const PublicSizeChartSchema = z.object({
 
 export type PublicSizeChartType = z.infer<typeof PublicSizeChartSchema>
 
-/** Uma cobrança do pedido no link: o nome e o preço (por peça, ou fixo). */
-const ExtraOffer = z.object({
+/** Um tipo de personalização como o cliente vê no link (F261). */
+export const PublicPersonalizationTypeSchema = z.object({
+  id: z.string(),
   name: z.string(),
+  kind: z.enum(['dados', 'opcao']),
+  fields: z.array(z.enum(['nome', 'numero'])),
+  charge: z.enum(['por-peca', 'por-pedido', 'nenhuma']),
+  /** Nulo quando o link não mostra preço, ou o tipo não cobra. */
   unitPrice: z.string().nullable(),
+  description: z.string().nullable(),
 })
+
+export type PublicPersonalizationTypeType = z.infer<
+  typeof PublicPersonalizationTypeSchema
+>
 
 /** A página pública do link: o que o cliente vê. */
 export const PublicIntakeResponse = z.object({
@@ -1156,10 +1164,10 @@ export const PublicIntakeResponse = z.object({
       /** Nulo quando a atendente escolheu não mostrar o preço. */
       unitPrice: z.string().nullable(),
       /**
-       * Os tecidos em que a peça existe (F258); nulo é "qualquer um, pelo
-       * mesmo preço".
+       * Os tecidos em que a peça existe (F260); nulo é "qualquer um, pelo
+       * mesmo preço" (a peça antiga, sem tecido marcado).
        */
-      fabrics: z.array(UniformFabricSchema).nullable(),
+      fabricIds: z.array(z.string()).nullable(),
       /**
        * As faixas da tabela: o preço a partir de cada quantidade, por tecido
        * (nulo é a variação padrão — o "não sei"). Vazio quando o preço não
@@ -1168,25 +1176,25 @@ export const PublicIntakeResponse = z.object({
       tiers: z.array(PriceTierSchema),
       /** As tabelas de medidas da peça (F259), em `sizeCharts`. */
       sizeChartIds: z.array(z.string()),
+      /** As personalizações da peça (F261), em `personalizationTypes`. */
+      personalizationTypeIds: z.array(z.string()),
+      /**
+       * O que o cliente preenche em cada peça (F261): os campos do tipo de
+       * preencher da peça; vazio quando ela não tem — a grade só por tamanho.
+       */
+      fields: z.array(z.enum(['nome', 'numero'])),
     })
   ),
+  personalizationTypes: z.array(PublicPersonalizationTypeSchema),
   /** As tabelas de medidas das peças do link (F259). */
   sizeCharts: z.array(PublicSizeChartSchema),
-  /**
-   * As cobranças do pedido (F258). Nula é "esta loja não cobra isso pelo
-   * link"; o preço é nulo quando o link não mostra preço.
-   */
-  extras: z.object({
-    personalization: ExtraOffer.nullable(),
-    noLogo: ExtraOffer.nullable(),
-    earlyArt: ExtraOffer.nullable(),
-  }),
   sizes: z.array(UniformSizeSchema),
   /** O prazo de produção do link, em dias depois do envio (F233). */
   leadDays: z.number().int(),
   /** Quantos dias antes do evento o pedido sai. */
   eventLeadDays: z.number().int(),
-  fabrics: z.array(UniformFabricSchema),
+  /** Os tecidos que o link oferece (F260). */
+  fabrics: z.array(z.object({ id: z.string(), name: z.string() })),
   /** "Hoje" no fuso da loja, para a página mostrar a previsão. */
   today: z.string(),
   expiresAt: z.string(),
@@ -1212,8 +1220,8 @@ export const CreateIntakeRequest = z
      * descontinuadas (F258); escolhida, a descontinuada também entra.
      */
     productIds: z.array(z.uuid()).max(100).default([]),
-    /** Os tecidos do link. Vazio: os que não estão descontinuados (F258). */
-    fabrics: z.array(UniformFabricSchema).max(3).default([]),
+    /** Os tecidos do link. Vazio: os que não estão descontinuados (F260). */
+    fabricIds: z.array(z.uuid()).max(30).default([]),
     expiresInDays: z.number().int().min(1).max(60).default(7),
     /** O prazo de produção: o despacho sem evento é o envio mais estes dias (F233). */
     leadDays: z.number().int().min(1).max(180).default(30),
@@ -1243,8 +1251,8 @@ export const IntakeSummary = z.object({
   showPrices: z.boolean(),
   leadDays: z.number().int(),
   products: z.array(z.object({ id: z.string(), name: z.string() })),
-  /** Os tecidos escolhidos; vazio é "os não descontinuados" (F258). */
-  fabrics: z.array(UniformFabricSchema),
+  /** Os tecidos escolhidos; vazio é "os não descontinuados" (F260). */
+  fabricIds: z.array(z.string()),
   message: z.string().nullable(),
   expiresAt: z.string(),
   createdAt: z.string(),
@@ -1309,15 +1317,16 @@ export const IntakeDetailResponse = z.object({
           productId: z.string(),
           productName: z.string(),
           rows: z.array(IntakeRowOut),
+          /** As personalizações de marcar que o cliente quis (F261). */
+          options: z.array(z.object({ id: z.string(), name: z.string() })),
         })
       ),
       notes: z.string().nullable(),
       event: z
         .object({ date: z.string(), name: z.string().nullable() })
         .nullable(),
-      fabric: UniformFabricSchema.nullable(),
-      noLogo: z.boolean(),
-      earlyArt: z.boolean(),
+      fabricId: z.string().nullable(),
+      fabricName: z.string().nullable(),
       /** O despacho que o link calcula (F233); a atendente muda na ficha. */
       dispatchDate: z.string().nullable(),
       /** Evento com menos de uma semana: prazo curto. */
@@ -1387,7 +1396,7 @@ export const SectorPartSchema = z.object({
   dispatchDate: z.string().nullable(),
   late: z.boolean(),
   eventDate: z.string().nullable(),
-  fabric: UniformFabricSchema.nullable(),
+  fabricName: z.string().nullable(),
   /** Nula é a leva 1, o restante. */
   batchId: z.string().nullable(),
   batchNumber: z.number().int(),
@@ -1709,75 +1718,385 @@ export const SetPrintQueueRequest = z.object({
 export type SetPrintQueueBody = z.input<typeof SetPrintQueueRequest>
 
 // ---------------------------------------------------------------------------
-// A tabela de preços da loja: o tecido, o descontinuado e as cobranças (F258)
+// Os tecidos da loja (F260)
 // ---------------------------------------------------------------------------
 
-export const UNIFORM_PRODUCT_KIND_VALUES = [
-  'peca',
-  'personalizacao',
-  'sem-logo',
-  'arte',
-] as const
+const FabricName = z
+  .string()
+  .trim()
+  .min(1, 'Dê um nome ao tecido: "92% poliéster 8% elastano".')
+  .max(60, 'Use no máximo 60 caracteres.')
 
-export const UniformProductKindSchema = z.enum(UNIFORM_PRODUCT_KIND_VALUES)
-
-export const UniformCatalogProductSchema = z.object({
+export const UniformFabricSchema = z.object({
   id: z.string(),
   name: z.string(),
-  kind: UniformProductKindSchema,
+  /** Fora do link por padrão; quem gera o link ainda pode marcar. */
   discontinued: z.boolean(),
-  variants: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string().nullable(),
-      sku: z.string(),
-      isDefault: z.boolean(),
-      fabric: UniformFabricSchema.nullable(),
-    })
-  ),
-  /** As tabelas de medidas da peça (F259). */
-  sizeChartIds: z.array(z.string()),
+  /** Quantas peças têm preço neste tecido. */
+  productCount: z.number().int(),
+  version: z.number().int(),
 })
 
-export type UniformCatalogProductType = z.infer<
-  typeof UniformCatalogProductSchema
->
+export type UniformFabricType = z.infer<typeof UniformFabricSchema>
 
-export const UniformCatalogResponse = z.object({
-  products: z.array(UniformCatalogProductSchema),
-  fabrics: z.array(
-    z.object({ fabric: UniformFabricSchema, discontinued: z.boolean() })
-  ),
+export const UniformFabricListResponse = z.object({
+  fabrics: z.array(UniformFabricSchema),
 })
 
-export type UniformCatalogResponseType = z.infer<typeof UniformCatalogResponse>
+export const UniformFabricResponse = z.object({ fabric: UniformFabricSchema })
 
-/** O produto todo: o tipo, o descontinuado e o tecido de cada variação. */
-export const UpdateUniformProductRequest = z.object({
-  kind: UniformProductKindSchema,
-  discontinued: z.boolean(),
-  fabrics: z
-    .array(
-      z.object({
-        variantId: z.uuid(),
-        fabric: UniformFabricSchema.nullable(),
-      })
-    )
-    .max(50)
-    .default([]),
-  /** As tabelas de medidas da peça (F259); ausente deixa como está. */
-  sizeChartIds: z.array(z.uuid()).max(20).optional(),
+export const CreateUniformFabricRequest = z.object({
+  name: FabricName,
+  discontinued: z.boolean().default(false),
 })
 
-export type UpdateUniformProductBody = z.input<
-  typeof UpdateUniformProductRequest
->
+export type CreateUniformFabricBody = z.input<typeof CreateUniformFabricRequest>
 
 export const UpdateUniformFabricRequest = z.object({
+  name: FabricName,
   discontinued: z.boolean(),
+  version: z.number().int().positive(),
 })
 
-export const UniformFabricParams = z.object({ fabric: UniformFabricSchema })
+export type UpdateUniformFabricBody = z.input<typeof UpdateUniformFabricRequest>
+
+export const UniformVersionRequest = z.object({
+  version: z.number().int().positive(),
+})
+
+// ---------------------------------------------------------------------------
+// As personalizações da loja (F261)
+// ---------------------------------------------------------------------------
+
+export const PERSONALIZATION_KIND_VALUES = ['dados', 'opcao'] as const
+export const PERSONALIZATION_FIELD_VALUES = ['nome', 'numero'] as const
+export const PERSONALIZATION_CHARGE_VALUES = [
+  'por-peca',
+  'por-pedido',
+  'nenhuma',
+] as const
+
+export const PersonalizationKindSchema = z.enum(PERSONALIZATION_KIND_VALUES)
+export const PersonalizationFieldSchema = z.enum(PERSONALIZATION_FIELD_VALUES)
+export const PersonalizationChargeSchema = z.enum(PERSONALIZATION_CHARGE_VALUES)
+
+const Price = z
+  .string()
+  .trim()
+  .regex(/^\d{1,9}([.,]\d{1,2})?$/, 'Use um valor como 6 ou 6,50.')
+  .transform((value) => value.replace(',', '.'))
+
+export const PersonalizationTypeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: PersonalizationKindSchema,
+  fields: z.array(PersonalizationFieldSchema),
+  charge: PersonalizationChargeSchema,
+  /** Nulo quando o tipo não cobra. */
+  unitPrice: z.string().nullable(),
+  description: z.string().nullable(),
+  /** Em quantas peças o tipo vale. */
+  productCount: z.number().int(),
+  version: z.number().int(),
+})
+
+export type PersonalizationTypeType = z.infer<typeof PersonalizationTypeSchema>
+
+export const PersonalizationTypeListResponse = z.object({
+  types: z.array(PersonalizationTypeSchema),
+})
+
+export const PersonalizationTypeResponse = z.object({
+  type: PersonalizationTypeSchema,
+})
+
+const personalizationTypeFields = {
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Dê um nome: "Nome e número", "Sem o logo".')
+    .max(60),
+  kind: PersonalizationKindSchema,
+  /** Só no tipo `dados`: o que o cliente preenche em cada peça. */
+  fields: z.array(PersonalizationFieldSchema).max(2).default([]),
+  charge: PersonalizationChargeSchema,
+  /** Obrigatório quando cobra. */
+  unitPrice: Price.nullable().default(null),
+  description: z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+}
+
+const checkPersonalizationType = (
+  value: {
+    kind: 'dados' | 'opcao'
+    fields: readonly string[]
+    charge: string
+    unitPrice: string | null
+  },
+  context: z.RefinementCtx
+): void => {
+  if (value.kind === 'dados' && value.fields.length === 0) {
+    context.addIssue({
+      code: 'custom',
+      path: ['fields'],
+      message: 'Diga o que o cliente preenche: o nome, o número ou os dois.',
+    })
+  }
+  if (value.charge !== 'nenhuma' && value.unitPrice === null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['unitPrice'],
+      message: 'Diga o preço (ou escolha "não cobra no pedido").',
+    })
+  }
+}
+
+export const CreatePersonalizationTypeRequest = z
+  .object(personalizationTypeFields)
+  .superRefine(checkPersonalizationType)
+
+export type CreatePersonalizationTypeBody = z.input<
+  typeof CreatePersonalizationTypeRequest
+>
+
+export const UpdatePersonalizationTypeRequest = z
+  .object({
+    ...personalizationTypeFields,
+    version: z.number().int().positive(),
+  })
+  .superRefine(checkPersonalizationType)
+
+export type UpdatePersonalizationTypeBody = z.input<
+  typeof UpdatePersonalizationTypeRequest
+>
+
+// ---------------------------------------------------------------------------
+// As peças: o preço por tecido (F260), a personalização (F261), as medidas
+// ---------------------------------------------------------------------------
+
+export const PieceFabricSchema = z.object({
+  fabricId: z.string(),
+  fabricName: z.string(),
+  /** O tecido foi apagado depois: a peça ainda tem preço nele. */
+  fabricArchived: z.boolean(),
+  variantId: z.string(),
+  /** A faixa base é a de `minQuantity` 1. */
+  tiers: z.array(
+    z.object({ minQuantity: z.number().int(), unitPrice: z.string() })
+  ),
+  cost: z.string().nullable(),
+})
+
+export const UniformPieceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  discontinued: z.boolean(),
+  /** "Tem personalização?" */
+  personalized: z.boolean(),
+  personalizationTypeIds: z.array(z.string()),
+  sizeChartIds: z.array(z.string()),
+  fabrics: z.array(PieceFabricSchema),
+  version: z.number().int(),
+})
+
+export type UniformPieceType = z.infer<typeof UniformPieceSchema>
+
+export const UniformPieceListResponse = z.object({
+  pieces: z.array(UniformPieceSchema),
+})
+
+export const UniformPieceResponse = z.object({ piece: UniformPieceSchema })
+
+const PieceTier = z.object({
+  minQuantity: z.number().int().min(1).max(1_000_000),
+  unitPrice: Price,
+})
+
+export const SavePieceRequest = z
+  .object({
+    name: z.string().trim().min(1, 'Dê um nome à peça.').max(120),
+    discontinued: z.boolean().default(false),
+    personalized: z.boolean().default(false),
+    personalizationTypeIds: z.array(z.uuid()).max(20).default([]),
+    sizeChartIds: z.array(z.uuid()).max(20).default([]),
+    fabrics: z
+      .array(
+        z.object({
+          fabricId: z.uuid(),
+          tiers: z.array(PieceTier).min(1, 'Diga o preço.').max(10),
+          cost: Price.nullable().default(null),
+        })
+      )
+      .min(1, 'Escolha pelo menos um tecido e diga o preço.')
+      .max(30),
+    /** Ausente ao criar; a versão lida ao editar. */
+    version: z.number().int().positive().optional(),
+  })
+  .superRefine((value, context) => {
+    const fabrics = value.fabrics.map((entry) => entry.fabricId)
+    if (new Set(fabrics).size !== fabrics.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['fabrics'],
+        message: 'O mesmo tecido apareceu duas vezes.',
+      })
+    }
+    value.fabrics.forEach((entry, index) => {
+      const mins = entry.tiers.map((tier) => tier.minQuantity)
+      if (mins[0] !== 1) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fabrics', index, 'tiers'],
+          message: 'A primeira faixa começa em 1 peça.',
+        })
+      }
+      if (mins.some((min, at) => at > 0 && min <= (mins[at - 1] ?? 0))) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fabrics', index, 'tiers'],
+          message: 'Cada faixa começa numa quantidade maior que a anterior.',
+        })
+      }
+    })
+  })
+
+export type SavePieceBody = z.input<typeof SavePieceRequest>
+
+// ---------------------------------------------------------------------------
+// Os rolos de tecido (F262)
+// ---------------------------------------------------------------------------
+
+export const ROLL_UNIT_VALUES = ['kg', 'm'] as const
+export const RollUnitSchema = z.enum(ROLL_UNIT_VALUES)
+
+const RollQuantity = z
+  .string()
+  .trim()
+  .regex(/^\d{1,8}([.,]\d{1,3})?$/, 'Use um número como 20 ou 18,5.')
+  .transform((value) => value.replace(',', '.'))
+
+export const FabricRollSchema = z.object({
+  id: z.string(),
+  number: z.number().int(),
+  fabricId: z.string(),
+  fabricName: z.string(),
+  color: z.string().nullable(),
+  unit: RollUnitSchema,
+  initialQuantity: z.string(),
+  /** O que veio menos as baixas. */
+  remaining: z.string(),
+  cost: z.string().nullable(),
+  supplier: z.string().nullable(),
+  receivedOn: z.string(),
+  note: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  /** A última baixa. */
+  lastUseOn: z.string().nullable(),
+  version: z.number().int(),
+})
+
+export type FabricRollType = z.infer<typeof FabricRollSchema>
+
+export const FabricRollListQuery = z.object({
+  status: z.enum(['abertos', 'acabados']).default('abertos'),
+})
+
+export const FabricRollListResponse = z.object({
+  rolls: z.array(FabricRollSchema),
+})
+
+export const FabricRollResponse = z.object({ roll: FabricRollSchema })
+
+const rollFields = {
+  fabricId: z.uuid(),
+  color: z
+    .string()
+    .trim()
+    .max(60)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  unit: RollUnitSchema,
+  initialQuantity: RollQuantity,
+  cost: Price.nullable().default(null),
+  supplier: z
+    .string()
+    .trim()
+    .max(120)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  receivedOn: Day,
+  note: z
+    .string()
+    .trim()
+    .max(300)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+}
+
+export const CreateFabricRollRequest = z.object({
+  ...rollFields,
+  /** Vários rolos iguais de uma vez (a compra de 5 rolos). */
+  copies: z.number().int().min(1).max(50).default(1),
+})
+
+export type CreateFabricRollBody = z.input<typeof CreateFabricRollRequest>
+
+export const UpdateFabricRollRequest = z.object({
+  ...rollFields,
+  version: z.number().int().positive(),
+})
+
+export type UpdateFabricRollBody = z.input<typeof UpdateFabricRollRequest>
+
+/** A baixa do fim do dia: quanto saiu de cada rolo, e quais acabaram. */
+export const RollDayUseRequest = z
+  .object({
+    day: Day,
+    uses: z
+      .array(
+        z.object({
+          rollId: z.uuid(),
+          quantity: RollQuantity,
+          finished: z.boolean().default(false),
+        })
+      )
+      .min(1, 'Diga quanto saiu de pelo menos um rolo.')
+      .max(200),
+  })
+  .refine(
+    (value) =>
+      new Set(value.uses.map((use) => use.rollId)).size === value.uses.length,
+    'O mesmo rolo apareceu duas vezes. Some numa linha só.'
+  )
+
+export type RollDayUseBody = z.input<typeof RollDayUseRequest>
+
+export const RollUseSchema = z.object({
+  id: z.string(),
+  rollId: z.string(),
+  rollNumber: z.number().int(),
+  fabricName: z.string(),
+  unit: RollUnitSchema,
+  day: z.string(),
+  quantity: z.string(),
+  finished: z.boolean(),
+  createdByName: z.string().nullable(),
+  createdAt: z.string(),
+})
+
+export type RollUseType = z.infer<typeof RollUseSchema>
+
+export const RollUseListQuery = z.object({ day: Day })
+
+export const RollUseListResponse = z.object({ uses: z.array(RollUseSchema) })
 
 // ---------------------------------------------------------------------------
 // A tabela de medidas (F259)

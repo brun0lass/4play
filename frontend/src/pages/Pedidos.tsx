@@ -1,5 +1,11 @@
 import { clsx } from 'clsx'
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -11,7 +17,6 @@ import { useAccess } from '@/lib/access'
 import { useQueue } from '@/lib/queries'
 import {
   ART_STATUS_META,
-  FABRIC_LABELS,
   PAYMENT_MARK_META,
   STAGES,
   STAGE_META,
@@ -20,7 +25,8 @@ import {
   type Stage,
 } from '@/lib/uniforms'
 
-type Sort = 'dispatchDate' | 'number' | 'customer' | 'total' | 'stage' | 'pieces'
+type Sort =
+  'dispatchDate' | 'number' | 'customer' | 'total' | 'stage' | 'pieces'
 
 const PAGE_SIZE = 50
 
@@ -48,7 +54,9 @@ export const OrderList = () => {
     pageSize: PAGE_SIZE,
   })
 
-  const pages = queue.data ? Math.max(1, Math.ceil(queue.data.total / PAGE_SIZE)) : 1
+  const pages = queue.data
+    ? Math.max(1, Math.ceil(queue.data.total / PAGE_SIZE))
+    : 1
 
   const header = (key: Sort, label: string, className?: string) => (
     <th className={clsx('px-3 py-3 font-bold', className)}>
@@ -56,7 +64,8 @@ export const OrderList = () => {
         type="button"
         className="inline-flex items-center gap-1 hover:text-ink"
         onClick={() => {
-          if (sort === key) setDirection((value) => (value === 'asc' ? 'desc' : 'asc'))
+          if (sort === key)
+            setDirection((value) => (value === 'asc' ? 'desc' : 'asc'))
           else {
             setSort(key)
             setDirection('asc')
@@ -66,7 +75,11 @@ export const OrderList = () => {
       >
         {label}
         {sort === key &&
-          (direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+          (direction === 'asc' ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          ))}
       </button>
     </th>
   )
@@ -75,7 +88,8 @@ export const OrderList = () => {
     <div>
       {queue.data && (
         <p className="mb-3 text-sm font-semibold text-muted">
-          {int(queue.data.total)} pedidos · {int(queue.data.pieces)} peças no filtro
+          {int(queue.data.total)} pedidos · {int(queue.data.pieces)} peças no
+          filtro
         </p>
       )}
 
@@ -104,22 +118,45 @@ export const OrderList = () => {
           {STAGES.map((value) => (
             <option key={value} value={value}>
               {STAGE_META[value].label}
-              {queue.data?.byStage[value] !== undefined ? ` (${String(queue.data.byStage[value])})` : ''}
+              {queue.data?.byStage[value] !== undefined
+                ? ` (${String(queue.data.byStage[value])})`
+                : ''}
             </option>
           ))}
         </select>
         <label className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-xs font-bold">
-          <input type="checkbox" checked={late} onChange={(e) => { setLate(e.target.checked); setPage(1) }} className="accent-ink" />
+          <input
+            type="checkbox"
+            checked={late}
+            onChange={(e) => {
+              setLate(e.target.checked)
+              setPage(1)
+            }}
+            className="accent-ink"
+          />
           Só atrasados
         </label>
         <label className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 text-xs font-bold">
-          <input type="checkbox" checked={drafts} onChange={(e) => { setDrafts(e.target.checked); setPage(1) }} className="accent-ink" />
+          <input
+            type="checkbox"
+            checked={drafts}
+            onChange={(e) => {
+              setDrafts(e.target.checked)
+              setPage(1)
+            }}
+            className="accent-ink"
+          />
           Rascunhos
         </label>
       </div>
 
       {queue.isPending && <Spinner />}
-      {queue.isError && <ErrorBox message={errorMessage(queue.error)} onRetry={() => void queue.refetch()} />}
+      {queue.isError && (
+        <ErrorBox
+          message={errorMessage(queue.error)}
+          onRetry={() => void queue.refetch()}
+        />
+      )}
       {queue.data?.items.length === 0 && (
         <Empty title="Nenhum pedido">Nada na fila com esses filtros.</Empty>
       )}
@@ -155,18 +192,31 @@ export const OrderList = () => {
                         order.late && 'bg-red-50/60'
                       )}
                     >
-                      <td className="px-3 py-3 font-extrabold">{orderRef(order)}</td>
+                      <td className="px-3 py-3 font-extrabold">
+                        {orderRef(order)}
+                      </td>
                       <td className="min-w-[220px] px-3 py-3">
                         <p className="font-bold">{order.customerName}</p>
-                        {order.customerCity && <p className="text-xs text-muted">{order.customerCity}</p>}
+                        {order.customerCity && (
+                          <p className="text-xs text-muted">
+                            {order.customerCity}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-3">
                         <span className="inline-flex items-center gap-1.5 font-semibold">
-                          <Icon className="h-4 w-4" /> {STAGE_META[order.stage].label}
+                          <Icon className="h-4 w-4" />{' '}
+                          {STAGE_META[order.stage].label}
                         </span>
                         {order.batches.length > 0 && (
                           <span className="block text-[11px] font-semibold text-muted">
-                            + {order.batches.map((batch) => `leva ${String(batch.number)} em ${STAGE_META[batch.stage].label}`).join(', ')}
+                            +{' '}
+                            {order.batches
+                              .map(
+                                (batch) =>
+                                  `leva ${String(batch.number)} em ${STAGE_META[batch.stage].label}`
+                              )
+                              .join(', ')}
                           </span>
                         )}
                       </td>
@@ -178,26 +228,42 @@ export const OrderList = () => {
                       <td className="px-3 py-3">
                         <DispatchChip order={order} />
                       </td>
-                      <td className="px-3 py-3 text-right font-bold">{int(order.pieces)}</td>
+                      <td className="px-3 py-3 text-right font-bold">
+                        {int(order.pieces)}
+                      </td>
                       {seeMoney && (
                         <td className="px-3 py-3 text-right">
-                          <p className="font-bold">{money(order.totalAmount)}</p>
+                          <p className="font-bold">
+                            {money(order.totalAmount)}
+                          </p>
                           {order.ticketPerPiece && (
-                            <p className="text-[11px] text-muted">{money(order.ticketPerPiece)}/pç</p>
+                            <p className="text-[11px] text-muted">
+                              {money(order.ticketPerPiece)}/pç
+                            </p>
                           )}
                         </td>
                       )}
                       {seeMoney && (
                         <td className="px-3 py-3">
-                          <p className="text-xs font-semibold">{money(order.paidAmount)}</p>
+                          <p className="text-xs font-semibold">
+                            {money(order.paidAmount)}
+                          </p>
                           {order.paymentMark === 'cortesia' && (
-                            <Badge tone={PAYMENT_MARK_META.cortesia.tone}>Cortesia</Badge>
+                            <Badge tone={PAYMENT_MARK_META.cortesia.tone}>
+                              Cortesia
+                            </Badge>
                           )}
                         </td>
                       )}
-                      <td className="px-3 py-3">{order.fabric ? FABRIC_LABELS[order.fabric] : '?'}</td>
-                      <td className="px-3 py-3">{logisticsText(order.logistics)}</td>
-                      <td className="px-3 py-3 whitespace-nowrap">{order.designerName ?? '—'}</td>
+                      <td className="px-3 py-3">
+                        {order.fabricName ? order.fabricName : '?'}
+                      </td>
+                      <td className="px-3 py-3">
+                        {logisticsText(order.logistics)}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {order.designerName ?? '—'}
+                      </td>
                     </tr>
                   )
                 })}
@@ -209,10 +275,20 @@ export const OrderList = () => {
               Página {page} de {pages}
             </span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
                 <ChevronLeft className="h-4 w-4" /> Anterior
               </Button>
-              <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={page >= pages}
+                onClick={() => setPage((p) => p + 1)}
+              >
                 Próxima <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

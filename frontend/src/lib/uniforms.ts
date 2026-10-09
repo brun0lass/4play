@@ -1,7 +1,6 @@
 import type {
   ProductionOrderSummaryType,
   UNIFORM_ART_STATUS_VALUES,
-  UNIFORM_FABRIC_VALUES,
   UNIFORM_FUNCTION_VALUES,
   UNIFORM_LOGISTICS_VALUES,
   UNIFORM_PAYMENT_MARK_VALUES,
@@ -27,7 +26,7 @@ import {
  */
 
 export type Stage = (typeof UNIFORM_STAGE_VALUES)[number]
-export type Fabric = (typeof UNIFORM_FABRIC_VALUES)[number]
+export type Fabric = string
 export type Logistics = (typeof UNIFORM_LOGISTICS_VALUES)[number]
 export type PaymentMark = (typeof UNIFORM_PAYMENT_MARK_VALUES)[number]
 export type ArtStatus = (typeof UNIFORM_ART_STATUS_VALUES)[number]
@@ -48,13 +47,38 @@ export const STAGES: readonly Stage[] = [
 ]
 
 export const SIZES: readonly Size[] = [
-  'PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'ESP',
-  'G1', 'G2', 'G3', 'G4',
-  '2', '4', '6', '8', '10', '12', '14', '16',
+  'PP',
+  'P',
+  'M',
+  'G',
+  'GG',
+  'XG',
+  'EXG',
+  'ESP',
+  'G1',
+  'G2',
+  'G3',
+  'G4',
+  '2',
+  '4',
+  '6',
+  '8',
+  '10',
+  '12',
+  '14',
+  '16',
 ]
 
 /** Os tamanhos que a grade mostra por padrão; os outros abrem sob demanda. */
-export const ADULT_SIZES: readonly Size[] = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG']
+export const ADULT_SIZES: readonly Size[] = [
+  'PP',
+  'P',
+  'M',
+  'G',
+  'GG',
+  'XG',
+  'EXG',
+]
 
 type StageMeta = { label: string; icon: LucideIcon; what: string; dot: string }
 
@@ -89,21 +113,30 @@ export const STAGE_META: Record<Stage, StageMeta> = {
     what: 'Saiu da impressora e espera o corte.',
     dot: 'bg-cyan-500',
   },
-  cortando: { label: 'Cortando', icon: Scissors, what: 'No corte.', dot: 'bg-orange-500' },
-  costurando: { label: 'Costurando', icon: Shirt, what: 'Na costura.', dot: 'bg-pink-500' },
-  embalando: { label: 'Embalando', icon: Package, what: 'Embalando para sair.', dot: 'bg-yellow-500' },
+  cortando: {
+    label: 'Cortando',
+    icon: Scissors,
+    what: 'No corte.',
+    dot: 'bg-orange-500',
+  },
+  costurando: {
+    label: 'Costurando',
+    icon: Shirt,
+    what: 'Na costura.',
+    dot: 'bg-pink-500',
+  },
+  embalando: {
+    label: 'Embalando',
+    icon: Package,
+    what: 'Embalando para sair.',
+    dot: 'bg-yellow-500',
+  },
   pronto: {
     label: 'Pronto',
     icon: PackageCheck,
     what: 'Pronto para despachar ou retirar. Sai da fila quando sair da fábrica.',
     dot: 'bg-lime-600',
   },
-}
-
-export const FABRIC_LABELS: Record<Fabric, string> = {
-  elastano: 'Elastano',
-  furadinho: 'Furadinho',
-  'cem-por-cento': '100%',
 }
 
 export const LOGISTICS_LABELS: Record<Logistics, string> = {
@@ -113,28 +146,54 @@ export const LOGISTICS_LABELS: Record<Logistics, string> = {
   retirada: 'Retirada',
 }
 
-export type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success' | 'lime'
+export type Tone =
+  'neutral' | 'info' | 'warning' | 'danger' | 'success' | 'lime'
 
-export const PAYMENT_MARK_META: Record<PaymentMark, { label: string; tone: Tone }> = {
+export const PAYMENT_MARK_META: Record<
+  PaymentMark,
+  { label: string; tone: Tone }
+> = {
   nao: { label: 'Não pago', tone: 'danger' },
   sinal: { label: 'Sinal', tone: 'warning' },
   total: { label: '100% pago', tone: 'success' },
   cortesia: { label: 'Cortesia', tone: 'neutral' },
 }
 
-export const ART_STATUS_META: Record<ArtStatus, { label: string; tone: Tone; what: string }> = {
-  aguardando: { label: 'Aguardando', tone: 'neutral', what: 'Ninguém começou a arte ainda.' },
-  criando: { label: 'Criando', tone: 'info', what: 'O designer está fazendo a arte.' },
+export const ART_STATUS_META: Record<
+  ArtStatus,
+  { label: string; tone: Tone; what: string }
+> = {
+  aguardando: {
+    label: 'Aguardando',
+    tone: 'neutral',
+    what: 'Ninguém começou a arte ainda.',
+  },
+  criando: {
+    label: 'Criando',
+    tone: 'info',
+    what: 'O designer está fazendo a arte.',
+  },
   enviada: {
     label: 'Com o cliente',
     tone: 'warning',
     what: 'Arte enviada para o cliente aprovar.',
   },
-  ajuste: { label: 'Ajuste pedido', tone: 'danger', what: 'O cliente pediu mudança na arte.' },
-  aprovada: { label: 'Aprovada', tone: 'lime', what: 'Aprovada. Pode ir para a impressão.' },
+  ajuste: {
+    label: 'Ajuste pedido',
+    tone: 'danger',
+    what: 'O cliente pediu mudança na arte.',
+  },
+  aprovada: {
+    label: 'Aprovada',
+    tone: 'lime',
+    what: 'Aprovada. Pode ir para a impressão.',
+  },
 }
 
-export const FUNCTION_LABELS: Record<UniformFunction, { person: string; sector: string }> = {
+export const FUNCTION_LABELS: Record<
+  UniformFunction,
+  { person: string; sector: string }
+> = {
   atendimento: { person: 'Atendente', sector: 'Atendimento' },
   arte: { person: 'Designer', sector: 'Arte' },
   producao: { person: 'Operador', sector: 'Produção' },
@@ -145,7 +204,9 @@ export const logisticsText = (list: readonly Logistics[]): string =>
     ? '—'
     : list
         .map((value, index) =>
-          index === 0 ? LOGISTICS_LABELS[value] : LOGISTICS_LABELS[value].toLowerCase()
+          index === 0
+            ? LOGISTICS_LABELS[value]
+            : LOGISTICS_LABELS[value].toLowerCase()
         )
         .join(' ou ')
 
@@ -160,7 +221,10 @@ export const entersFactory = (from: Stage, to: Stage): boolean =>
   PRE_FACTORY.includes(from) && !PRE_FACTORY.includes(to)
 
 /** Quem pode mover de uma etapa para outra (a regra é do Aeris; a tela só antecipa). */
-export const stageMoveFunctions = (from: Stage, to: Stage): UniformFunction[] => {
+export const stageMoveFunctions = (
+  from: Stage,
+  to: Stage
+): UniformFunction[] => {
   // Do atendimento só a atendente tira, e só para a arte; pular a arte é de quem gerencia (F228).
   if (from === 'atendimento') return to === 'arte' ? ['atendimento'] : []
   if (to === 'atendimento') return ['atendimento', 'arte']
@@ -169,18 +233,30 @@ export const stageMoveFunctions = (from: Stage, to: Stage): UniformFunction[] =>
   return ['producao']
 }
 
-export type Viewer = { manages: boolean; functions: readonly UniformFunction[] }
+export type Viewer = {
+  manages: boolean
+  functions: readonly UniformFunction[]
+}
 
-export const canWork = (viewer: Viewer | undefined, fn: UniformFunction): boolean =>
+export const canWork = (
+  viewer: Viewer | undefined,
+  fn: UniformFunction
+): boolean =>
   viewer !== undefined && (viewer.manages || viewer.functions.includes(fn))
 
-export const canMoveStage = (viewer: Viewer | undefined, from: Stage, to: Stage): boolean =>
+export const canMoveStage = (
+  viewer: Viewer | undefined,
+  from: Stage,
+  to: Stage
+): boolean =>
   viewer !== undefined &&
-  (viewer.manages || stageMoveFunctions(from, to).some((fn) => viewer.functions.includes(fn)))
+  (viewer.manages ||
+    stageMoveFunctions(from, to).some((fn) => viewer.functions.includes(fn)))
 
 /** Mensagens das recusas de troca de etapa, pelo `code` do Aeris. */
 export const STAGE_REFUSALS: Record<string, string> = {
-  stage_changed: 'Alguém mexeu neste pedido agora há pouco. A fila foi atualizada — confira e tente de novo.',
+  stage_changed:
+    'Alguém mexeu neste pedido agora há pouco. A fila foi atualizada — confira e tente de novo.',
   printer_required: 'Para ir a "Imprimindo", escolha em qual impressora.',
   art_not_approved: 'A arte ainda não foi aprovada pelo cliente.',
   same_stage: 'O pedido já está nesta etapa.',
@@ -213,7 +289,8 @@ export const piecesTotal = (pieces: readonly PieceCount[]): number =>
   pieces.reduce((sum, count) => sum + count.quantity, 0)
 
 /** A célula como chave — a mesma regra do Aeris (`cellKey`): "camisa|M". */
-export const cellKey = (count: Pick<PieceCount, 'piece' | 'size'>): string => `${pieceKey(count.piece)}|${count.size ?? ''}`
+export const cellKey = (count: Pick<PieceCount, 'piece' | 'size'>): string =>
+  `${pieceKey(count.piece)}|${count.size ?? ''}`
 
 /** "Camisa M", ou só "Camisa" quando a leva antiga não sabe o tamanho. */
 export const cellLabel = (count: Pick<PieceCount, 'piece' | 'size'>): string =>
@@ -224,25 +301,39 @@ export const piecesText = (pieces: readonly PieceCount[]): string => {
   if (pieces.length === 0) return 'Sem grade'
   const groups: { piece: string; total: number; sizes: PieceCount[] }[] = []
   for (const count of pieces) {
-    const group = groups.find((item) => pieceKey(item.piece) === pieceKey(count.piece))
+    const group = groups.find(
+      (item) => pieceKey(item.piece) === pieceKey(count.piece)
+    )
     if (group) {
       group.total += count.quantity
       group.sizes.push(count)
-    } else groups.push({ piece: count.piece, total: count.quantity, sizes: [count] })
+    } else
+      groups.push({
+        piece: count.piece,
+        total: count.quantity,
+        sizes: [count],
+      })
   }
   return groups
     .map((group) => {
-      if (group.sizes.every((count) => count.size === null)) return `${String(group.total)} ${group.piece}`
+      if (group.sizes.every((count) => count.size === null))
+        return `${String(group.total)} ${group.piece}`
       const sizes =
         group.sizes.length === 1
           ? (group.sizes[0]?.size ?? '')
-          : group.sizes.map((count) => `${String(count.quantity)} ${count.size ?? 's/ tam.'}`).join(' · ')
+          : group.sizes
+              .map(
+                (count) =>
+                  `${String(count.quantity)} ${count.size ?? 's/ tam.'}`
+              )
+              .join(' · ')
       return `${String(group.total)} ${group.piece} (${sizes})`
     })
     .join(' · ')
 }
 
-export const isSplit = (order: Pick<Order, 'batches'>): boolean => order.batches.length > 0
+export const isSplit = (order: Pick<Order, 'batches'>): boolean =>
+  order.batches.length > 0
 
 /** As partes do pedido: o restante (se ainda tem peça) e as levas separadas. */
 export const partsOf = (order: Order): Part[] => {
@@ -273,15 +364,21 @@ export const partsOf = (order: Order): Part[] => {
 }
 
 /** O pedido só sai com tudo pronto: as levas que ainda não chegaram em Pronto. */
-export const partsNotReady = (order: Order): Part[] => partsOf(order).filter((part) => part.stage !== 'pronto')
+export const partsNotReady = (order: Order): Part[] =>
+  partsOf(order).filter((part) => part.stage !== 'pronto')
 
 export const partLabel = (part: Pick<Part, 'number' | 'batch'>): string =>
   part.batch === null ? 'Leva 1 (restante)' : `Leva ${String(part.number)}`
 
 /** As células do pedido inteiro (peça e tamanho): o restante mais as levas. */
-export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): PieceCount[] => {
+export const orderPieces = (
+  order: Pick<Order, 'remainingPieces' | 'batches'>
+): PieceCount[] => {
   const merged: PieceCount[] = []
-  for (const count of [...order.remainingPieces, ...order.batches.flatMap((batch) => batch.pieces)]) {
+  for (const count of [
+    ...order.remainingPieces,
+    ...order.batches.flatMap((batch) => batch.pieces),
+  ]) {
     const found = merged.find((item) => cellKey(item) === cellKey(count))
     if (found) found.quantity += count.quantity
     else merged.push({ ...count })
@@ -290,13 +387,21 @@ export const orderPieces = (order: Pick<Order, 'remainingPieces' | 'batches'>): 
 }
 
 /** A peça como chave — a mesma regra do Aeris (`pieceKey`): "Camisa" = " camisa". */
-export const pieceKey = (piece: string): string => piece.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
+export const pieceKey = (piece: string): string =>
+  piece.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
 
 // ---------------------------------------------------------------------------
 // O andamento da grade e as ocorrências (F234 do Aeris)
 // ---------------------------------------------------------------------------
 
-export type IncidentSector = 'atendimento' | 'arte' | 'impressao' | 'corte' | 'costura' | 'embalagem' | 'expedicao'
+export type IncidentSector =
+  | 'atendimento'
+  | 'arte'
+  | 'impressao'
+  | 'corte'
+  | 'costura'
+  | 'embalagem'
+  | 'expedicao'
 
 export const INCIDENT_SECTORS: readonly IncidentSector[] = [
   'atendimento',
@@ -324,7 +429,12 @@ export const SECTOR_LABELS: Record<IncidentSector, string> = {
 
 export type FactorySector = 'impressao' | 'corte' | 'costura' | 'embalagem'
 
-export const FACTORY_SECTORS: readonly FactorySector[] = ['impressao', 'corte', 'costura', 'embalagem']
+export const FACTORY_SECTORS: readonly FactorySector[] = [
+  'impressao',
+  'corte',
+  'costura',
+  'embalagem',
+]
 
 export const isFactorySector = (value: string | null): value is FactorySector =>
   value !== null && (FACTORY_SECTORS as readonly string[]).includes(value)

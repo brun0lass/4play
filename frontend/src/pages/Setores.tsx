@@ -1,20 +1,52 @@
-import type { SectorCellType, SectorPartType } from '@/contracts/aeris/uniforms.ts'
+import type {
+  SectorCellType,
+  SectorPartType,
+} from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CheckCheck, ListOrdered, Minus, Plus, Printer, Search, Users, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  CheckCheck,
+  ListOrdered,
+  Minus,
+  Plus,
+  Printer,
+  Search,
+  Users,
+  X,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
 import { DispatchChip } from '@/components/OrderCard'
-import { IncidentDialog, useCanReport, type IncidentDraft } from '@/components/progress/Incidents'
+import {
+  IncidentDialog,
+  useCanReport,
+  type IncidentDraft,
+} from '@/components/progress/Incidents'
 import { useToast } from '@/components/Toast'
-import { Badge, Button, Empty, ErrorBox, PageHeader, Spinner } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Empty,
+  ErrorBox,
+  PageHeader,
+  Spinner,
+} from '@/components/ui'
 import { day, int, todaySP } from '@/lib/format'
 import { ApiError, errorMessage } from '@/lib/http'
-import { keys, usePrinters, useSector, useSectorStats, useViewer } from '@/lib/queries'
 import {
-  FABRIC_LABELS,
+  keys,
+  usePrinters,
+  useSector,
+  useSectorStats,
+  useViewer,
+} from '@/lib/queries'
+import {
   FACTORY_SECTORS,
   SECTOR_LABELS,
   STAGE_META,
@@ -34,13 +66,17 @@ const SEND_REFUSALS: Record<string, string> = {
   ...STAGE_REFUSALS,
   nothing_done: 'Marque quantas peças já foram feitas antes de mandar.',
   not_in_sector: 'Esta leva já saiu deste setor. A tela foi atualizada.',
-  unknown_cell: 'A leva mudou enquanto a tela estava aberta. A tela foi atualizada.',
+  unknown_cell:
+    'A leva mudou enquanto a tela estava aberta. A tela foi atualizada.',
   over_quantity: 'Mais peças do que o tamanho tem.',
-  stage_changed: 'Alguém mexeu nesta leva agora há pouco. A tela foi atualizada.',
+  stage_changed:
+    'Alguém mexeu nesta leva agora há pouco. A tela foi atualizada.',
 }
 
 const refusalText = (error: unknown): string =>
-  error instanceof ApiError ? (SEND_REFUSALS[error.code] ?? errorMessage(error)) : errorMessage(error)
+  error instanceof ApiError
+    ? (SEND_REFUSALS[error.code] ?? errorMessage(error))
+    : errorMessage(error)
 
 const left = (part: SectorPartType): number => part.total - part.done
 
@@ -83,11 +119,21 @@ export const SetoresPage = () => {
    */
   const queued = (current.data?.parts ?? [])
     .filter((part) => part.queuePosition !== null)
-    .sort((left, right) => (left.queuePosition ?? 0) - (right.queuePosition ?? 0))
+    .sort(
+      (left, right) => (left.queuePosition ?? 0) - (right.queuePosition ?? 0)
+    )
   const reorder = useMutation({
     mutationFn: (next: SectorPartType[]) =>
-      setPrintQueue({ parts: next.map((part) => ({ orderId: part.orderId, batchId: part.batchId })) }),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.sector('impressao') }),
+      setPrintQueue({
+        parts: next.map((part) => ({
+          orderId: part.orderId,
+          batchId: part.batchId,
+        })),
+      }),
+    onSettled: () =>
+      void queryClient.invalidateQueries({
+        queryKey: keys.sector('impressao'),
+      }),
     onError: (error) => toast(errorMessage(error)),
   })
   const same = (left: SectorPartType, right: SectorPartType) =>
@@ -107,8 +153,14 @@ export const SetoresPage = () => {
       busy: reorder.isPending,
       add: index === -1 ? () => reorder.mutate([...queued, part]) : undefined,
       up: index > 0 ? () => move(index - 1) : undefined,
-      down: index !== -1 && index < queued.length - 1 ? () => move(index + 1) : undefined,
-      remove: index === -1 ? undefined : () => reorder.mutate(queued.filter((item) => !same(item, part))),
+      down:
+        index !== -1 && index < queued.length - 1
+          ? () => move(index + 1)
+          : undefined,
+      remove:
+        index === -1
+          ? undefined
+          : () => reorder.mutate(queued.filter((item) => !same(item, part))),
     }
   }
 
@@ -134,12 +186,16 @@ export const SetoresPage = () => {
     <div>
       <PageHeader kicker="Chão de fábrica" title="Setores">
         <p className="mt-2 max-w-2xl text-sm font-semibold text-muted">
-          Cada setor vê o que tem para fazer, por peça e tamanho. Marque embaixo quantas já foram feitas e mande as feitas para o
-          próximo setor — o resto continua aqui.
+          Cada setor vê o que tem para fazer, por peça e tamanho. Marque embaixo
+          quantas já foram feitas e mande as feitas para o próximo setor — o
+          resto continua aqui.
         </p>
       </PageHeader>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist">
+      <div
+        className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4"
+        role="tablist"
+      >
         {FACTORY_SECTORS.map((value) => {
           const data = all[value].data
           const pieces = data?.parts.reduce((sum, part) => sum + left(part), 0)
@@ -152,10 +208,14 @@ export const SetoresPage = () => {
               onClick={() => choose(value)}
               className={clsx(
                 'rounded-2xl border-2 px-3 py-2.5 text-left transition',
-                sector === value ? 'border-ink bg-lime' : 'border-line bg-white hover:border-ink/30'
+                sector === value
+                  ? 'border-ink bg-lime'
+                  : 'border-line bg-white hover:border-ink/30'
               )}
             >
-              <span className="block text-sm font-extrabold">{SECTOR_LABELS[value]}</span>
+              <span className="block text-sm font-extrabold">
+                {SECTOR_LABELS[value]}
+              </span>
               <span className="text-[11px] font-semibold text-ink/70">
                 {data === undefined
                   ? '…'
@@ -165,7 +225,12 @@ export const SetoresPage = () => {
               </span>
               {madeToday.data && (
                 <span className="block text-[11px] font-extrabold text-ink">
-                  Hoje: {int(madeToday.data.totals.find((item) => item.sector === value)?.pieces ?? 0)} feitas
+                  Hoje:{' '}
+                  {int(
+                    madeToday.data.totals.find((item) => item.sector === value)
+                      ?.pieces ?? 0
+                  )}{' '}
+                  feitas
                 </span>
               )}
             </button>
@@ -174,15 +239,38 @@ export const SetoresPage = () => {
       </div>
 
       <label className="relative mb-5 block max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cliente ou nº do pedido" className="field pl-9" />
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted"
+          aria-hidden
+        />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cliente ou nº do pedido"
+          className="field pl-9"
+        />
       </label>
 
       {current.isPending && <Spinner label="Carregando o setor…" />}
-      {current.isError && <ErrorBox message={errorMessage(current.error)} onRetry={() => void current.refetch()} />}
+      {current.isError && (
+        <ErrorBox
+          message={errorMessage(current.error)}
+          onRetry={() => void current.refetch()}
+        />
+      )}
       {current.data && parts.length === 0 && (
-        <Empty title={term === '' ? `Nada na ${SECTOR_LABELS[sector].toLocaleLowerCase('pt-BR')} agora` : 'Nada encontrado'}>
-          <p>{term === '' ? 'Quando uma leva chegar neste setor, ela aparece aqui.' : 'Tente outro nome ou número.'}</p>
+        <Empty
+          title={
+            term === ''
+              ? `Nada na ${SECTOR_LABELS[sector].toLocaleLowerCase('pt-BR')} agora`
+              : 'Nada encontrado'
+          }
+        >
+          <p>
+            {term === ''
+              ? 'Quando uma leva chegar neste setor, ela aparece aqui.'
+              : 'Tente outro nome ou número.'}
+          </p>
         </Empty>
       )}
       <div className="space-y-4">
@@ -205,7 +293,9 @@ export const SetoresPage = () => {
 const byPiece = (cells: readonly SectorCellType[]) => {
   const groups: { piece: string; cells: SectorCellType[] }[] = []
   for (const cell of cells) {
-    const group = groups.find((item) => pieceKey(item.piece) === pieceKey(cell.piece))
+    const group = groups.find(
+      (item) => pieceKey(item.piece) === pieceKey(cell.piece)
+    )
     if (group) group.cells.push(cell)
     else groups.push({ piece: cell.piece, cells: [cell] })
   }
@@ -224,7 +314,8 @@ type QueueControls = {
 }
 
 const QueueBar = ({ queue }: { queue: QueueControls }) => {
-  const button = 'rounded-full p-1 text-muted hover:bg-black/5 hover:text-ink disabled:opacity-30'
+  const button =
+    'rounded-full p-1 text-muted hover:bg-black/5 hover:text-ink disabled:opacity-30'
   return (
     <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-2xl bg-paper px-3 py-1.5 text-xs font-bold">
       <ListOrdered className="h-3.5 w-3.5" aria-hidden />
@@ -235,19 +326,42 @@ const QueueBar = ({ queue }: { queue: QueueControls }) => {
       )}
       <span className="ml-auto flex items-center gap-0.5">
         {queue.add && (
-          <button type="button" onClick={queue.add} disabled={queue.busy} className="rounded-full px-2 py-0.5 hover:bg-black/5 disabled:opacity-30">
+          <button
+            type="button"
+            onClick={queue.add}
+            disabled={queue.busy}
+            className="rounded-full px-2 py-0.5 hover:bg-black/5 disabled:opacity-30"
+          >
             Pôr na fila
           </button>
         )}
         {queue.position !== null && queue.remove && (
           <>
-            <button type="button" onClick={queue.up} disabled={queue.busy || !queue.up} className={button} aria-label="Subir na fila">
+            <button
+              type="button"
+              onClick={queue.up}
+              disabled={queue.busy || !queue.up}
+              className={button}
+              aria-label="Subir na fila"
+            >
               <ArrowUp className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={queue.down} disabled={queue.busy || !queue.down} className={button} aria-label="Descer na fila">
+            <button
+              type="button"
+              onClick={queue.down}
+              disabled={queue.busy || !queue.down}
+              className={button}
+              aria-label="Descer na fila"
+            >
               <ArrowDown className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={queue.remove} disabled={queue.busy} className={button} aria-label="Tirar da fila">
+            <button
+              type="button"
+              onClick={queue.remove}
+              disabled={queue.busy}
+              className={button}
+              aria-label="Tirar da fila"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </>
@@ -291,10 +405,15 @@ const SectorCard = ({
   }
 
   const save = useMutation({
-    mutationFn: (cells: { key: string; done: number }[]) => setSectorDone(part.orderId, sector, { batchId: part.batchId, cells }),
+    mutationFn: (cells: { key: string; done: number }[]) =>
+      setSectorDone(part.orderId, sector, { batchId: part.batchId, cells }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.sector(sector) })
-      setDraft((all) => Object.fromEntries(Object.entries(all).filter(([key]) => !(key in pending.current))))
+      setDraft((all) =>
+        Object.fromEntries(
+          Object.entries(all).filter(([key]) => !(key in pending.current))
+        )
+      )
     },
     onError: () => {
       setDraft({})
@@ -304,7 +423,10 @@ const SectorCard = ({
 
   const flush = async () => {
     window.clearTimeout(timer.current)
-    const cells = Object.entries(pending.current).map(([key, done]) => ({ key, done }))
+    const cells = Object.entries(pending.current).map(([key, done]) => ({
+      key,
+      done,
+    }))
     pending.current = {}
     if (cells.length > 0) await save.mutateAsync(cells)
   }
@@ -320,7 +442,8 @@ const SectorCard = ({
     timer.current = window.setTimeout(() => void flush(), 600)
   }
   const markAll = (value: 'tudo' | 'nada') => {
-    for (const cell of part.cells) mark(cell, value === 'tudo' ? cell.quantity : 0)
+    for (const cell of part.cells)
+      mark(cell, value === 'tudo' ? cell.quantity : 0)
   }
 
   const done = part.cells.reduce((sum, cell) => sum + doneOf(cell), 0)
@@ -348,15 +471,29 @@ const SectorCard = ({
   })
 
   const names = part.names.filter((row) =>
-    part.cells.some((cell) => pieceKey(cell.piece) === pieceKey(row.piece) && (cell.size === null || cell.size === row.size))
+    part.cells.some(
+      (cell) =>
+        pieceKey(cell.piece) === pieceKey(row.piece) &&
+        (cell.size === null || cell.size === row.size)
+    )
   )
 
   return (
-    <article className={clsx('rounded-3xl border bg-white p-4 sm:p-5', part.late ? 'border-red-300' : 'border-line')}>
-      {queue && (queue.position !== null || queue.add) && <QueueBar queue={queue} />}
+    <article
+      className={clsx(
+        'rounded-3xl border bg-white p-4 sm:p-5',
+        part.late ? 'border-red-300' : 'border-line'
+      )}
+    >
+      {queue && (queue.position !== null || queue.add) && (
+        <QueueBar queue={queue} />
+      )}
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <Link to={`/pedidos/${part.orderId}`} className="text-base font-extrabold hover:underline">
+          <Link
+            to={`/pedidos/${part.orderId}`}
+            className="text-base font-extrabold hover:underline"
+          >
             {orderRef({ number: part.orderNumber })} · {part.customerName}
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-muted">
@@ -364,16 +501,20 @@ const SectorCard = ({
             <Badge>{STAGE_META[part.stage].label}</Badge>
             <DispatchChip order={part} />
             {part.eventDate && <span>Evento {day(part.eventDate)}</span>}
-            {part.fabric && <span>· {FABRIC_LABELS[part.fabric]}</span>}
+            {part.fabricName && <span>· {part.fabricName}</span>}
             {part.printers.length > 0 && (
               <span className="inline-flex items-center gap-1">
-                · <Printer className="h-3 w-3" aria-hidden /> {part.printers.map((p) => p.name).join(', ')}
+                · <Printer className="h-3 w-3" aria-hidden />{' '}
+                {part.printers.map((p) => p.name).join(', ')}
               </span>
             )}
-            {part.seamstresses.length > 0 && <span>· Costura: {part.seamstresses.join(', ')}</span>}
+            {part.seamstresses.length > 0 && (
+              <span>· Costura: {part.seamstresses.join(', ')}</span>
+            )}
             {part.openIncidents > 0 && (
               <Badge tone="danger">
-                {part.openIncidents} {part.openIncidents === 1 ? 'ocorrência' : 'ocorrências'}
+                {part.openIncidents}{' '}
+                {part.openIncidents === 1 ? 'ocorrência' : 'ocorrências'}
               </Badge>
             )}
           </div>
@@ -389,17 +530,29 @@ const SectorCard = ({
         </div>
       </header>
 
-      <div className="mb-3 h-2 overflow-hidden rounded-full bg-black/5" aria-hidden>
-        <div className="h-full rounded-full bg-lime-600 transition-all" style={{ width: `${String(part.total === 0 ? 0 : (done / part.total) * 100)}%` }} />
+      <div
+        className="mb-3 h-2 overflow-hidden rounded-full bg-black/5"
+        aria-hidden
+      >
+        <div
+          className="h-full rounded-full bg-lime-600 transition-all"
+          style={{
+            width: `${String(part.total === 0 ? 0 : (done / part.total) * 100)}%`,
+          }}
+        />
       </div>
 
       {part.cells.length === 0 ? (
-        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Este pedido não tem grade. Peça ao atendimento.</p>
+        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+          Este pedido não tem grade. Peça ao atendimento.
+        </p>
       ) : (
         <div className="space-y-3">
           {byPiece(part.cells).map((group) => (
             <div key={group.piece}>
-              <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">{group.piece}</p>
+              <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
+                {group.piece}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {group.cells.map((cell) => {
                   const value = doneOf(cell)
@@ -407,15 +560,28 @@ const SectorCard = ({
                   return (
                     <div
                       key={cell.key}
-                      className={clsx('w-[7.5rem] rounded-2xl border-2 p-2 text-center', full ? 'border-lime-600 bg-lime/30' : 'border-line')}
+                      className={clsx(
+                        'w-[7.5rem] rounded-2xl border-2 p-2 text-center',
+                        full ? 'border-lime-600 bg-lime/30' : 'border-line'
+                      )}
                     >
-                      <p className="text-[11px] font-extrabold text-muted">{cell.size ?? 'sem tamanho'}</p>
-                      <p className="text-xl leading-tight font-extrabold" title="A fazer">
+                      <p className="text-[11px] font-extrabold text-muted">
+                        {cell.size ?? 'sem tamanho'}
+                      </p>
+                      <p
+                        className="text-xl leading-tight font-extrabold"
+                        title="A fazer"
+                      >
                         {int(cell.quantity - value)}
-                        <span className="text-[10px] font-bold text-muted"> /{int(cell.quantity)}</span>
+                        <span className="text-[10px] font-bold text-muted">
+                          {' '}
+                          /{int(cell.quantity)}
+                        </span>
                       </p>
                       <div className="mt-1 border-t border-dashed border-line pt-1">
-                        <p className="text-[10px] font-bold text-muted uppercase">Feitas</p>
+                        <p className="text-[10px] font-bold text-muted uppercase">
+                          Feitas
+                        </p>
                         {canMark ? (
                           <div className="flex items-center justify-center gap-0.5">
                             <button
@@ -429,12 +595,27 @@ const SectorCard = ({
                             </button>
                             <input
                               value={typing[cell.key] ?? String(value)}
-                              onChange={(e) => setTyping((all) => ({ ...all, [cell.key]: e.target.value.replace(/\D/g, '') }))}
+                              onChange={(e) =>
+                                setTyping((all) => ({
+                                  ...all,
+                                  [cell.key]: e.target.value.replace(/\D/g, ''),
+                                }))
+                              }
                               onFocus={(e) => e.currentTarget.select()}
                               onBlur={() => {
                                 const typed = typing[cell.key]
-                                if (typed !== undefined && Number(typed || '0') !== value) mark(cell, Number(typed || '0'))
-                                setTyping((all) => Object.fromEntries(Object.entries(all).filter(([key]) => key !== cell.key)))
+                                if (
+                                  typed !== undefined &&
+                                  Number(typed || '0') !== value
+                                )
+                                  mark(cell, Number(typed || '0'))
+                                setTyping((all) =>
+                                  Object.fromEntries(
+                                    Object.entries(all).filter(
+                                      ([key]) => key !== cell.key
+                                    )
+                                  )
+                                )
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') e.currentTarget.blur()
@@ -482,19 +663,25 @@ const SectorCard = ({
             onClick={() => setShowNames((value) => !value)}
             className="inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-ink"
           >
-            <Users className="h-3.5 w-3.5" /> {showNames ? 'Esconder' : 'Ver'} os nomes ({names.length})
+            <Users className="h-3.5 w-3.5" /> {showNames ? 'Esconder' : 'Ver'}{' '}
+            os nomes ({names.length})
           </button>
           {showNames && (
             <div className="scroll-thin mt-2 max-h-56 overflow-y-auto rounded-2xl bg-paper p-2">
               <table className="w-full text-xs">
                 <tbody>
                   {names.map((row, index) => (
-                    <tr key={`${row.name}-${row.number}-${String(index)}`} className="border-t border-line first:border-0">
+                    <tr
+                      key={`${row.name}-${row.number}-${String(index)}`}
+                      className="border-t border-line first:border-0"
+                    >
                       <td className="py-1 font-bold">{row.name || '—'}</td>
                       <td className="py-1 text-center">{row.number}</td>
                       <td className="py-1">{row.piece}</td>
                       <td className="py-1 text-center font-bold">{row.size}</td>
-                      <td className="py-1 text-right text-muted">{row.quantity > 1 ? `${String(row.quantity)}×` : ''}</td>
+                      <td className="py-1 text-right text-muted">
+                        {row.quantity > 1 ? `${String(row.quantity)}×` : ''}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -506,7 +693,9 @@ const SectorCard = ({
 
       {canSend && needsPrinter && done > 0 && (
         <div className="mt-4">
-          <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">Em qual máquina foi impresso</p>
+          <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
+            Em qual máquina foi impresso
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {printers.data?.map((printer) => {
               const on = chosenPrinters.includes(printer.id)
@@ -514,14 +703,27 @@ const SectorCard = ({
                 <button
                   key={printer.id}
                   type="button"
-                  onClick={() => setChosenPrinters((list) => (on ? list.filter((id) => id !== printer.id) : [...list, printer.id]))}
-                  className={clsx('inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold', on ? 'border-ink bg-lime' : 'border-line')}
+                  onClick={() =>
+                    setChosenPrinters((list) =>
+                      on
+                        ? list.filter((id) => id !== printer.id)
+                        : [...list, printer.id]
+                    )
+                  }
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold',
+                    on ? 'border-ink bg-lime' : 'border-line'
+                  )}
                 >
                   <Printer className="h-3.5 w-3.5" /> {printer.name}
                 </button>
               )
             })}
-            {printers.data?.length === 0 && <p className="text-xs text-muted">Nenhuma impressora cadastrada (Equipe e máquinas).</p>}
+            {printers.data?.length === 0 && (
+              <p className="text-xs text-muted">
+                Nenhuma impressora cadastrada (Equipe e máquinas).
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -532,7 +734,11 @@ const SectorCard = ({
             variant="lime"
             icon={<ArrowRight className="h-4 w-4" />}
             busy={send.isPending}
-            disabled={done === 0 || save.isPending || (needsPrinter && chosenPrinters.length === 0)}
+            disabled={
+              done === 0 ||
+              save.isPending ||
+              (needsPrinter && chosenPrinters.length === 0)
+            }
             onClick={() => send.mutate()}
           >
             {done === 0
@@ -543,7 +749,12 @@ const SectorCard = ({
           </Button>
         )}
         {canMark && part.cells.length > 0 && (
-          <Button variant="ghost" size="sm" icon={<CheckCheck className="h-3.5 w-3.5" />} onClick={() => markAll(everything ? 'nada' : 'tudo')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<CheckCheck className="h-3.5 w-3.5" />}
+            onClick={() => markAll(everything ? 'nada' : 'tudo')}
+          >
             {everything ? 'Desmarcar tudo' : 'Marcar tudo feito'}
           </Button>
         )}
@@ -557,11 +768,17 @@ const SectorCard = ({
             Ocorrência
           </Button>
         )}
-        {save.isPending && <span className="text-[11px] font-semibold text-muted">Salvando…</span>}
+        {save.isPending && (
+          <span className="text-[11px] font-semibold text-muted">
+            Salvando…
+          </span>
+        )}
       </footer>
       {!everything && done > 0 && canSend && (
         <p className="mt-2 text-[11px] text-muted">
-          As {int(done)} feitas viram uma leva nova em {STAGE_META[nextStage].label}; as {int(part.total - done)} que faltam continuam aqui.
+          As {int(done)} feitas viram uma leva nova em{' '}
+          {STAGE_META[nextStage].label}; as {int(part.total - done)} que faltam
+          continuam aqui.
         </p>
       )}
       {(save.isError || send.isError) && (

@@ -1,7 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router'
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { Guard } from '@/components/Guard'
@@ -12,11 +18,12 @@ import { ErrorBox } from '@/components/ui'
 import { ApiError, UnauthenticatedError, errorMessage } from '@/lib/http'
 import { ClientesPage } from '@/pages/Clientes'
 import { EquipePage } from '@/pages/Equipe'
-import { EstoquePage } from '@/pages/Estoque'
+import { EstoquePage } from '@/pages/RolosEstoque'
 import { CostureirasPage } from '@/pages/Costureiras'
 import { LinksPage } from '@/pages/Links'
 import { OcorrenciasPage } from '@/pages/Ocorrencias'
-import { ProdutosPage } from '@/pages/Produtos'
+import { ProdutosPage } from '@/pages/ProdutosLoja'
+import { TecidosPage, PersonalizacoesPage } from '@/pages/CadastrosUniformes'
 import { TabelaLojaPage } from '@/pages/TabelaLoja'
 import { FichaImpressaoPage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
@@ -58,10 +65,14 @@ const RequireSession = ({ children }: { children: ReactNode }) => {
   if (status === 'error')
     return (
       <div className="mx-auto max-w-md p-8">
-        <ErrorBox message={errorMessage(error)} onRetry={() => window.location.reload()} />
+        <ErrorBox
+          message={errorMessage(error)}
+          onRetry={() => window.location.reload()}
+        />
       </div>
     )
-  if (status === 'anonymous') return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (status === 'anonymous')
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (session?.user.mustChangePassword && location.pathname !== '/trocar-senha')
     return <Navigate to="/trocar-senha" replace />
   return <>{children}</>
@@ -105,19 +116,108 @@ const App = () => (
     >
       <Route index element={<Home />} />
       <Route path="producao" element={<ProducaoPage />} />
-      <Route path="pedidos" element={<Navigate to="/producao?vista=lista" replace />} />
+      <Route
+        path="pedidos"
+        element={<Navigate to="/producao?vista=lista" replace />}
+      />
       <Route path="pedidos/:id" element={<PedidoPage />} />
-      <Route path="financeiro" element={<Guard allow={(a) => a.finance}><FinanceiroPage /></Guard>} />
-      <Route path="clientes" element={<Guard allow={(a) => a.customers}><ClientesPage /></Guard>} />
-      <Route path="produtos" element={<Guard allow={(a) => a.products}><ProdutosPage /></Guard>} />
-      <Route path="tabela" element={<Guard allow={(a) => a.priceTable}><TabelaLojaPage /></Guard>} />
-      <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
-      <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
-      <Route path="links" element={<Guard allow={(a) => a.createOrder}><LinksPage /></Guard>} />
-      <Route path="setores" element={<Guard allow={(a) => a.sectors}><SetoresPage /></Guard>} />
-      <Route path="estatisticas" element={<Guard allow={(a) => a.sectors}><EstatisticasPage /></Guard>} />
+      <Route
+        path="financeiro"
+        element={
+          <Guard allow={(a) => a.finance}>
+            <FinanceiroPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="clientes"
+        element={
+          <Guard allow={(a) => a.customers}>
+            <ClientesPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="produtos"
+        element={
+          <Guard allow={(a) => a.products}>
+            <ProdutosPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="tabela"
+        element={
+          <Guard allow={(a) => a.priceTable}>
+            <TabelaLojaPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="tecidos"
+        element={
+          <Guard allow={(a) => a.priceTable}>
+            <TecidosPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="personalizacoes"
+        element={
+          <Guard allow={(a) => a.priceTable}>
+            <PersonalizacoesPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="estoque"
+        element={
+          <Guard allow={(a) => a.stock}>
+            <EstoquePage />
+          </Guard>
+        }
+      />
+      <Route
+        path="costureiras"
+        element={
+          <Guard allow={(a) => a.seamstresses}>
+            <CostureirasPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="links"
+        element={
+          <Guard allow={(a) => a.createOrder}>
+            <LinksPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="setores"
+        element={
+          <Guard allow={(a) => a.sectors}>
+            <SetoresPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="estatisticas"
+        element={
+          <Guard allow={(a) => a.sectors}>
+            <EstatisticasPage />
+          </Guard>
+        }
+      />
       <Route path="ocorrencias" element={<OcorrenciasPage />} />
-      <Route path="equipe" element={<Guard allow={(a) => a.team}><EquipePage /></Guard>} />
+      <Route
+        path="equipe"
+        element={
+          <Guard allow={(a) => a.team}>
+            <EquipePage />
+          </Guard>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   </Routes>

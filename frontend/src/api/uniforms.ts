@@ -104,15 +104,10 @@ import {
   CreateSizeChartRequest,
   SizeChartListResponse,
   SizeChartResponse,
-  UniformCatalogResponse,
   UpdateSizeChartRequest,
-  UpdateUniformFabricRequest,
-  UpdateUniformProductRequest,
   type CreateSizeChartBody,
   type SizeChartType,
-  type UniformCatalogResponseType,
   type UpdateSizeChartBody,
-  type UpdateUniformProductBody,
 } from '@/contracts/aeris/uniforms.ts'
 import { z } from 'zod'
 
@@ -132,18 +127,26 @@ export const fetchQueue = async (
   signal?: AbortSignal
 ): Promise<ProductionQueueResponseType> =>
   ProductionQueueResponse.parse(
-    await request(`${BASE}/orders${qs(query as Record<string, string | number | undefined>)}`, {
-      signal,
-    })
+    await request(
+      `${BASE}/orders${qs(query as Record<string, string | number | undefined>)}`,
+      {
+        signal,
+      }
+    )
   )
 
 export const fetchOrder = async (
   id: string,
   signal?: AbortSignal
 ): Promise<ProductionOrderResponseType> =>
-  ProductionOrderResponse.parse(await request(`${BASE}/orders/${id}`, { signal }))
+  ProductionOrderResponse.parse(
+    await request(`${BASE}/orders/${id}`, { signal })
+  )
 
-export const saveSheet = async (id: string, input: UpdateProductionSheetBody): Promise<number> =>
+export const saveSheet = async (
+  id: string,
+  input: UpdateProductionSheetBody
+): Promise<number> =>
   ProductionSheetVersionResponse.parse(
     await request(`${BASE}/orders/${id}`, {
       method: 'PUT',
@@ -151,7 +154,10 @@ export const saveSheet = async (id: string, input: UpdateProductionSheetBody): P
     })
   ).version
 
-export const saveGrade = async (id: string, input: ReplaceGradeBody): Promise<number> =>
+export const saveGrade = async (
+  id: string,
+  input: ReplaceGradeBody
+): Promise<number> =>
   ProductionSheetVersionResponse.parse(
     await request(`${BASE}/orders/${id}/grade`, {
       method: 'PUT',
@@ -170,7 +176,10 @@ export const savePersonalization = async (
     })
   ).version
 
-export const moveStage = async (id: string, input: MoveStageBody): Promise<MoveStageResponseType> =>
+export const moveStage = async (
+  id: string,
+  input: MoveStageBody
+): Promise<MoveStageResponseType> =>
   MoveStageResponse.parse(
     await request(`${BASE}/orders/${id}/stage`, {
       method: 'POST',
@@ -179,7 +188,10 @@ export const moveStage = async (id: string, input: MoveStageBody): Promise<MoveS
   )
 
 /** Separa uma leva: estas peças vão, como leva nova, para outra etapa (F230 do Aeris). */
-export const splitBatch = async (id: string, input: SplitBatchBody): Promise<ProductionBatchType> =>
+export const splitBatch = async (
+  id: string,
+  input: SplitBatchBody
+): Promise<ProductionBatchType> =>
   BatchResponse.parse(
     await request(`${BASE}/orders/${id}/batches`, {
       method: 'POST',
@@ -208,16 +220,29 @@ export const fetchSeamstresses = async (
   status: 'active' | 'archived' | undefined,
   signal?: AbortSignal
 ): Promise<SeamstressSummaryType[]> =>
-  SeamstressListResponse.parse(await request(`${BASE}/seamstresses${qs({ status })}`, { signal })).seamstresses
+  SeamstressListResponse.parse(
+    await request(`${BASE}/seamstresses${qs({ status })}`, { signal })
+  ).seamstresses
 
-export const createSeamstress = async (input: CreateSeamstressBody): Promise<SeamstressSummaryType> =>
+export const createSeamstress = async (
+  input: CreateSeamstressBody
+): Promise<SeamstressSummaryType> =>
   SeamstressResponse.parse(
-    await request(`${BASE}/seamstresses`, { method: 'POST', body: CreateSeamstressRequest.parse(input) })
+    await request(`${BASE}/seamstresses`, {
+      method: 'POST',
+      body: CreateSeamstressRequest.parse(input),
+    })
   ).seamstress
 
-export const updateSeamstress = async (id: string, input: UpdateSeamstressBody): Promise<SeamstressSummaryType> =>
+export const updateSeamstress = async (
+  id: string,
+  input: UpdateSeamstressBody
+): Promise<SeamstressSummaryType> =>
   SeamstressResponse.parse(
-    await request(`${BASE}/seamstresses/${id}`, { method: 'PUT', body: UpdateSeamstressRequest.parse(input) })
+    await request(`${BASE}/seamstresses/${id}`, {
+      method: 'PUT',
+      body: UpdateSeamstressRequest.parse(input),
+    })
   ).seamstress
 
 export const fetchSeamstressJobs = async (
@@ -225,47 +250,91 @@ export const fetchSeamstressJobs = async (
   statuses: string | undefined,
   signal?: AbortSignal
 ): Promise<SewingJobSummaryType[]> =>
-  SewingJobListResponse.parse(await request(`${BASE}/seamstresses/${id}/jobs${qs({ statuses })}`, { signal })).jobs
+  SewingJobListResponse.parse(
+    await request(`${BASE}/seamstresses/${id}/jobs${qs({ statuses })}`, {
+      signal,
+    })
+  ).jobs
 
-export const fetchOrderSewing = async (orderId: string, signal?: AbortSignal): Promise<SewingJobSummaryType[]> =>
-  SewingJobListResponse.parse(await request(`${BASE}/orders/${orderId}/sewing`, { signal })).jobs
+export const fetchOrderSewing = async (
+  orderId: string,
+  signal?: AbortSignal
+): Promise<SewingJobSummaryType[]> =>
+  SewingJobListResponse.parse(
+    await request(`${BASE}/orders/${orderId}/sewing`, { signal })
+  ).jobs
 
-export const createSewingJob = async (orderId: string, input: CreateSewingJobBody): Promise<SewingJobSummaryType> =>
+export const createSewingJob = async (
+  orderId: string,
+  input: CreateSewingJobBody
+): Promise<SewingJobSummaryType> =>
   SewingJobResponse.parse(
-    await request(`${BASE}/orders/${orderId}/sewing`, { method: 'POST', body: CreateSewingJobRequest.parse(input) })
+    await request(`${BASE}/orders/${orderId}/sewing`, {
+      method: 'POST',
+      body: CreateSewingJobRequest.parse(input),
+    })
   ).job
 
-export const updateSewingJob = async (id: string, input: UpdateSewingJobBody): Promise<SewingJobSummaryType> =>
+export const updateSewingJob = async (
+  id: string,
+  input: UpdateSewingJobBody
+): Promise<SewingJobSummaryType> =>
   SewingJobResponse.parse(
-    await request(`${BASE}/sewing/${id}`, { method: 'PATCH', body: UpdateSewingJobRequest.parse(input) })
+    await request(`${BASE}/sewing/${id}`, {
+      method: 'PATCH',
+      body: UpdateSewingJobRequest.parse(input),
+    })
   ).job
 
 /** Costura entregue: da terceirizada nasce a conta a pagar no prazo dela. */
-export const deliverSewingJob = async (id: string, input: DeliverSewingJobBody): Promise<SewingJobSummaryType> =>
+export const deliverSewingJob = async (
+  id: string,
+  input: DeliverSewingJobBody
+): Promise<SewingJobSummaryType> =>
   SewingJobResponse.parse(
-    await request(`${BASE}/sewing/${id}/deliver`, { method: 'POST', body: DeliverSewingJobRequest.parse(input) })
+    await request(`${BASE}/sewing/${id}/deliver`, {
+      method: 'POST',
+      body: DeliverSewingJobRequest.parse(input),
+    })
   ).job
 
-export const cancelSewingJob = async (id: string, version: number): Promise<SewingJobSummaryType> =>
+export const cancelSewingJob = async (
+  id: string,
+  version: number
+): Promise<SewingJobSummaryType> =>
   SewingJobResponse.parse(
-    await request(`${BASE}/sewing/${id}/cancel`, { method: 'POST', body: CancelSewingJobRequest.parse({ version }) })
+    await request(`${BASE}/sewing/${id}/cancel`, {
+      method: 'POST',
+      body: CancelSewingJobRequest.parse({ version }),
+    })
   ).job
 
 // ---------------------------------------------------------------------------
 // O setor e a grade (F239 do Aeris)
 // ---------------------------------------------------------------------------
 
-export const fetchSector = async (sector: string, signal?: AbortSignal): Promise<SectorResponseType> =>
+export const fetchSector = async (
+  sector: string,
+  signal?: AbortSignal
+): Promise<SectorResponseType> =>
   SectorResponse.parse(await request(`${BASE}/sectors/${sector}`, { signal }))
 
-export const setSectorDone = async (orderId: string, sector: string, input: SetSectorDoneBody): Promise<void> => {
+export const setSectorDone = async (
+  orderId: string,
+  sector: string,
+  input: SetSectorDoneBody
+): Promise<void> => {
   await request(`${BASE}/orders/${orderId}/sectors/${sector}/done`, {
     method: 'PUT',
     body: SetSectorDoneRequest.parse(input),
   })
 }
 
-export const sendSector = async (orderId: string, sector: string, input: SendSectorBody): Promise<SendSectorResponseType> =>
+export const sendSector = async (
+  orderId: string,
+  sector: string,
+  input: SendSectorBody
+): Promise<SendSectorResponseType> =>
   SendSectorResponse.parse(
     await request(`${BASE}/orders/${orderId}/sectors/${sector}/send`, {
       method: 'POST',
@@ -281,46 +350,88 @@ export const fetchSectorStats = async (
   query: { from: string; to: string; group: 'day' | 'week' | 'month' },
   signal?: AbortSignal
 ): Promise<SectorStatsResponseType> =>
-  SectorStatsResponse.parse(await request(`${BASE}/stats/sectors${qs(query)}`, { signal }))
+  SectorStatsResponse.parse(
+    await request(`${BASE}/stats/sectors${qs(query)}`, { signal })
+  )
 
-export const fetchMaterialRates = async (signal?: AbortSignal): Promise<MaterialRateType[]> =>
-  MaterialRatesResponse.parse(await request(`${BASE}/materials/rates`, { signal })).rates
-
-export const saveMaterialRates = async (input: SaveMaterialRatesBody): Promise<MaterialRateType[]> =>
+export const fetchMaterialRates = async (
+  signal?: AbortSignal
+): Promise<MaterialRateType[]> =>
   MaterialRatesResponse.parse(
-    await request(`${BASE}/materials/rates`, { method: 'PUT', body: SaveMaterialRatesRequest.parse(input) })
+    await request(`${BASE}/materials/rates`, { signal })
   ).rates
 
-export const fetchDayCloses = async (signal?: AbortSignal): Promise<DayCloseType[]> =>
-  DayCloseListResponse.parse(await request(`${BASE}/day-closes`, { signal })).closes
+export const saveMaterialRates = async (
+  input: SaveMaterialRatesBody
+): Promise<MaterialRateType[]> =>
+  MaterialRatesResponse.parse(
+    await request(`${BASE}/materials/rates`, {
+      method: 'PUT',
+      body: SaveMaterialRatesRequest.parse(input),
+    })
+  ).rates
 
-export const createDayClose = async (input: DayCloseBody): Promise<DayCloseType> =>
-  DayCloseResponse.parse(await request(`${BASE}/day-closes`, { method: 'POST', body: DayCloseRequest.parse(input) }))
-    .close
+export const fetchDayCloses = async (
+  signal?: AbortSignal
+): Promise<DayCloseType[]> =>
+  DayCloseListResponse.parse(await request(`${BASE}/day-closes`, { signal }))
+    .closes
 
-export const setPrintQueue = async (input: SetPrintQueueBody): Promise<void> => {
-  await request(`${BASE}/print-queue`, { method: 'PUT', body: SetPrintQueueRequest.parse(input) })
+export const createDayClose = async (
+  input: DayCloseBody
+): Promise<DayCloseType> =>
+  DayCloseResponse.parse(
+    await request(`${BASE}/day-closes`, {
+      method: 'POST',
+      body: DayCloseRequest.parse(input),
+    })
+  ).close
+
+export const setPrintQueue = async (
+  input: SetPrintQueueBody
+): Promise<void> => {
+  await request(`${BASE}/print-queue`, {
+    method: 'PUT',
+    body: SetPrintQueueRequest.parse(input),
+  })
 }
 
 // ---------------------------------------------------------------------------
 // As ocorrências (F234 do Aeris)
 // ---------------------------------------------------------------------------
 
-export const fetchOrderIncidents = async (orderId: string, signal?: AbortSignal): Promise<IncidentSummaryType[]> =>
-  IncidentListResponse.parse(await request(`${BASE}/orders/${orderId}/incidents`, { signal })).incidents
+export const fetchOrderIncidents = async (
+  orderId: string,
+  signal?: AbortSignal
+): Promise<IncidentSummaryType[]> =>
+  IncidentListResponse.parse(
+    await request(`${BASE}/orders/${orderId}/incidents`, { signal })
+  ).incidents
 
 export const fetchIncidents = async (
   query: { statuses?: string; sectors?: string },
   signal?: AbortSignal
 ): Promise<IncidentSummaryType[]> =>
-  IncidentListResponse.parse(await request(`${BASE}/incidents${qs(query)}`, { signal })).incidents
+  IncidentListResponse.parse(
+    await request(`${BASE}/incidents${qs(query)}`, { signal })
+  ).incidents
 
-export const createIncident = async (orderId: string, input: CreateIncidentBody): Promise<IncidentSummaryType> =>
+export const createIncident = async (
+  orderId: string,
+  input: CreateIncidentBody
+): Promise<IncidentSummaryType> =>
   IncidentResponse.parse(
-    await request(`${BASE}/orders/${orderId}/incidents`, { method: 'POST', body: CreateIncidentRequest.parse(input) })
+    await request(`${BASE}/orders/${orderId}/incidents`, {
+      method: 'POST',
+      body: CreateIncidentRequest.parse(input),
+    })
   ).incident
 
-export const resolveIncident = async (id: string, version: number, resolution: string | null): Promise<IncidentSummaryType> =>
+export const resolveIncident = async (
+  id: string,
+  version: number,
+  resolution: string | null
+): Promise<IncidentSummaryType> =>
   IncidentResponse.parse(
     await request(`${BASE}/incidents/${id}/resolve`, {
       method: 'POST',
@@ -333,34 +444,67 @@ export const resolveIncident = async (id: string, version: number, resolution: s
 // ---------------------------------------------------------------------------
 
 /** A página pública: sem login, só o token. */
-export const fetchPublicIntake = async (token: string, signal?: AbortSignal): Promise<PublicIntakeResponseType> =>
-  PublicIntakeResponse.parse(await request(`${BASE}/public/intakes/${token}`, { signal }))
-
-export const submitPublicIntake = async (token: string, input: IntakeSubmissionBody) =>
-  PublicIntakeSubmitResponse.parse(
-    await request(`${BASE}/public/intakes/${token}`, { method: 'POST', body: IntakeSubmissionSchema.parse(input) })
+export const fetchPublicIntake = async (
+  token: string,
+  signal?: AbortSignal
+): Promise<PublicIntakeResponseType> =>
+  PublicIntakeResponse.parse(
+    await request(`${BASE}/public/intakes/${token}`, { signal })
   )
 
-export const fetchIntakes = async (statuses: string | undefined, signal?: AbortSignal): Promise<IntakeSummaryType[]> =>
-  IntakeListResponse.parse(await request(`${BASE}/intakes${qs({ statuses })}`, { signal })).intakes
+export const submitPublicIntake = async (
+  token: string,
+  input: IntakeSubmissionBody
+) =>
+  PublicIntakeSubmitResponse.parse(
+    await request(`${BASE}/public/intakes/${token}`, {
+      method: 'POST',
+      body: IntakeSubmissionSchema.parse(input),
+    })
+  )
 
-export const fetchIntake = async (id: string, signal?: AbortSignal): Promise<IntakeDetailResponseType> =>
+export const fetchIntakes = async (
+  statuses: string | undefined,
+  signal?: AbortSignal
+): Promise<IntakeSummaryType[]> =>
+  IntakeListResponse.parse(
+    await request(`${BASE}/intakes${qs({ statuses })}`, { signal })
+  ).intakes
+
+export const fetchIntake = async (
+  id: string,
+  signal?: AbortSignal
+): Promise<IntakeDetailResponseType> =>
   IntakeDetailResponse.parse(await request(`${BASE}/intakes/${id}`, { signal }))
 
-export const createIntake = async (input: CreateIntakeBody): Promise<IntakeSummaryType> =>
+export const createIntake = async (
+  input: CreateIntakeBody
+): Promise<IntakeSummaryType> =>
   IntakeResponse.parse(
-    await request(`${BASE}/intakes`, { method: 'POST', body: CreateIntakeRequest.parse(input) })
+    await request(`${BASE}/intakes`, {
+      method: 'POST',
+      body: CreateIntakeRequest.parse(input),
+    })
   ).intake
 
-export const cancelIntake = async (id: string, version: number): Promise<IntakeSummaryType> =>
+export const cancelIntake = async (
+  id: string,
+  version: number
+): Promise<IntakeSummaryType> =>
   IntakeResponse.parse(
-    await request(`${BASE}/intakes/${id}/cancel`, { method: 'POST', body: IntakeVersionRequest.parse({ version }) })
+    await request(`${BASE}/intakes/${id}/cancel`, {
+      method: 'POST',
+      body: IntakeVersionRequest.parse({ version }),
+    })
   ).intake
 
 /** A conferência vira pedido: o cadastro do cliente novo, o pedido e a ficha. */
 export const convertIntake = async (id: string, version: number) =>
   ConvertIntakeResponse.parse(
-    await request(`${BASE}/intakes/${id}/convert`, { method: 'POST', body: IntakeVersionRequest.parse({ version }) })
+    await request(`${BASE}/intakes/${id}/convert`, {
+      method: 'POST',
+      body: IntakeVersionRequest.parse({ version }),
+    })
   )
 
 /** Os pedidos do cliente, abertos e entregues, do mais novo para o mais velho (F229). */
@@ -368,15 +512,25 @@ export const fetchCustomerHistory = async (
   partyId: string,
   signal?: AbortSignal
 ): Promise<ProductionOrderSummaryType[]> =>
-  CustomerProductionHistoryResponse.parse(await request(`${BASE}/customers/${partyId}/orders`, { signal }))
-    .orders
+  CustomerProductionHistoryResponse.parse(
+    await request(`${BASE}/customers/${partyId}/orders`, { signal })
+  ).orders
 
-export const saveArt = async (id: string, input: SaveArtBody): Promise<SaveArtResponseType> =>
+export const saveArt = async (
+  id: string,
+  input: SaveArtBody
+): Promise<SaveArtResponseType> =>
   SaveArtResponse.parse(
-    await request(`${BASE}/orders/${id}/art`, { method: 'PUT', body: SaveArtRequest.parse(input) })
+    await request(`${BASE}/orders/${id}/art`, {
+      method: 'PUT',
+      body: SaveArtRequest.parse(input),
+    })
   )
 
-export const replacePrinters = async (id: string, printerIds: string[]): Promise<void> => {
+export const replacePrinters = async (
+  id: string,
+  printerIds: string[]
+): Promise<void> => {
   await request(`${BASE}/orders/${id}/printers`, {
     method: 'PUT',
     body: ReplacePrintersRequest.parse({ printerIds }),
@@ -411,23 +565,34 @@ export const uploadAttachment = async (
 ): Promise<ProductionAttachmentSummaryType[]> => {
   const form = new FormData()
   form.append('file', file)
-  return z
-    .array(ProductionAttachmentSummary)
-    .parse(await request(`${BASE}/orders/${id}/attachments`, { method: 'POST', body: form }))
+  return z.array(ProductionAttachmentSummary).parse(
+    await request(`${BASE}/orders/${id}/attachments`, {
+      method: 'POST',
+      body: form,
+    })
+  )
 }
 
-export const deleteAttachment = async (id: string, attachmentId: string): Promise<void> => {
-  await request(`${BASE}/orders/${id}/attachments/${attachmentId}`, { method: 'DELETE' })
+export const deleteAttachment = async (
+  id: string,
+  attachmentId: string
+): Promise<void> => {
+  await request(`${BASE}/orders/${id}/attachments/${attachmentId}`, {
+    method: 'DELETE',
+  })
 }
 
 export const fetchPrinters = async (
   status?: 'active' | 'archived',
   signal?: AbortSignal
 ): Promise<UniformPrinterSummaryType[]> =>
-  UniformPrinterListResponse.parse(await request(`${BASE}/printers${qs({ status })}`, { signal }))
-    .printers
+  UniformPrinterListResponse.parse(
+    await request(`${BASE}/printers${qs({ status })}`, { signal })
+  ).printers
 
-export const createPrinter = async (name: string): Promise<UniformPrinterSummaryType> =>
+export const createPrinter = async (
+  name: string
+): Promise<UniformPrinterSummaryType> =>
   UniformPrinterSummary.parse(
     await request(`${BASE}/printers`, { method: 'POST', body: { name } })
   )
@@ -440,54 +605,67 @@ export const updatePrinter = async (
     await request(`${BASE}/printers/${id}`, { method: 'PATCH', body: input })
   )
 
-export const fetchViewer = async (signal?: AbortSignal): Promise<UniformViewerResponseType> =>
+export const fetchViewer = async (
+  signal?: AbortSignal
+): Promise<UniformViewerResponseType> =>
   UniformViewerResponse.parse(await request(`${BASE}/me`, { signal }))
 
-export const fetchMembers = async (signal?: AbortSignal): Promise<UniformMemberSummaryType[]> =>
-  UniformMemberListResponse.parse(await request(`${BASE}/members`, { signal })).members
+export const fetchMembers = async (
+  signal?: AbortSignal
+): Promise<UniformMemberSummaryType[]> =>
+  UniformMemberListResponse.parse(await request(`${BASE}/members`, { signal }))
+    .members
 
 export const replaceMemberFunctions = async (
   userId: string,
   functions: ('atendimento' | 'arte' | 'producao')[]
 ): Promise<void> => {
-  await request(`${BASE}/members/${userId}/functions`, { method: 'PUT', body: { functions } })
+  await request(`${BASE}/members/${userId}/functions`, {
+    method: 'PUT',
+    body: { functions },
+  })
 }
 
 // ---------------------------------------------------------------------------
 // A tabela da loja: o tecido, o descontinuado e as cobranças (F258 do Aeris)
 // ---------------------------------------------------------------------------
 
-export const fetchUniformCatalog = async (signal?: AbortSignal): Promise<UniformCatalogResponseType> =>
-  UniformCatalogResponse.parse(await request(`${BASE}/catalog`, { signal }))
-
-export const saveUniformProduct = async (id: string, input: UpdateUniformProductBody): Promise<void> => {
-  await request(`${BASE}/catalog/products/${id}`, { method: 'PUT', body: UpdateUniformProductRequest.parse(input) })
-}
-
-export const saveUniformFabric = async (fabric: string, discontinued: boolean): Promise<void> => {
-  await request(`${BASE}/catalog/fabrics/${fabric}`, {
-    method: 'PUT',
-    body: UpdateUniformFabricRequest.parse({ discontinued }),
-  })
-}
-
 // ---------------------------------------------------------------------------
 // A tabela de medidas (F259 do Aeris)
 // ---------------------------------------------------------------------------
 
-export const fetchSizeCharts = async (signal?: AbortSignal): Promise<SizeChartType[]> =>
-  SizeChartListResponse.parse(await request(`${BASE}/size-charts`, { signal })).charts
+export const fetchSizeCharts = async (
+  signal?: AbortSignal
+): Promise<SizeChartType[]> =>
+  SizeChartListResponse.parse(await request(`${BASE}/size-charts`, { signal }))
+    .charts
 
-export const createSizeChart = async (input: CreateSizeChartBody): Promise<SizeChartType> =>
+export const createSizeChart = async (
+  input: CreateSizeChartBody
+): Promise<SizeChartType> =>
   SizeChartResponse.parse(
-    await request(`${BASE}/size-charts`, { method: 'POST', body: CreateSizeChartRequest.parse(input) })
+    await request(`${BASE}/size-charts`, {
+      method: 'POST',
+      body: CreateSizeChartRequest.parse(input),
+    })
   ).chart
 
-export const updateSizeChart = async (id: string, input: UpdateSizeChartBody): Promise<SizeChartType> =>
+export const updateSizeChart = async (
+  id: string,
+  input: UpdateSizeChartBody
+): Promise<SizeChartType> =>
   SizeChartResponse.parse(
-    await request(`${BASE}/size-charts/${id}`, { method: 'PUT', body: UpdateSizeChartRequest.parse(input) })
+    await request(`${BASE}/size-charts/${id}`, {
+      method: 'PUT',
+      body: UpdateSizeChartRequest.parse(input),
+    })
   ).chart
 
-export const deleteSizeChart = async (id: string, version: number): Promise<void> => {
-  await request(`${BASE}/size-charts/${id}${qs({ version })}`, { method: 'DELETE' })
+export const deleteSizeChart = async (
+  id: string,
+  version: number
+): Promise<void> => {
+  await request(`${BASE}/size-charts/${id}${qs({ version })}`, {
+    method: 'DELETE',
+  })
 }

@@ -1,5 +1,13 @@
 import { clsx } from 'clsx'
-import { AlertTriangle, CalendarClock, ChevronRight, Layers, Printer, Scissors, Shirt } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarClock,
+  ChevronRight,
+  Layers,
+  Printer,
+  Scissors,
+  Shirt,
+} from 'lucide-react'
 import { Link } from 'react-router'
 
 import { Avatar, Badge } from '@/components/ui'
@@ -7,7 +15,6 @@ import { useAccess } from '@/lib/access'
 import { day, daysSince, daysUntil, int, money } from '@/lib/format'
 import {
   ART_STATUS_META,
-  FABRIC_LABELS,
   PAYMENT_MARK_META,
   STAGES,
   STAGE_META,
@@ -19,9 +26,17 @@ import {
   type Stage,
 } from '@/lib/uniforms'
 
-export const DispatchChip = ({ order }: { order: Pick<Order, 'dispatchDate' | 'late'> }) => {
+export const DispatchChip = ({
+  order,
+}: {
+  order: Pick<Order, 'dispatchDate' | 'late'>
+}) => {
   if (!order.dispatchDate)
-    return <span className="text-[11px] font-semibold text-muted">Sem data de despacho</span>
+    return (
+      <span className="text-[11px] font-semibold text-muted">
+        Sem data de despacho
+      </span>
+    )
   const left = daysUntil(order.dispatchDate)
   const text = order.late
     ? `Atrasado ${String(Math.max(1, -left))}d`
@@ -72,7 +87,8 @@ export const OrderCard = ({
   const printers = part?.printers ?? order.printers
   // Quem está costurando esta leva (F231).
   const sewers = order.sewing.filter(
-    (ref) => ref.status === 'em-andamento' && ref.batchNumber === (part?.number ?? 1)
+    (ref) =>
+      ref.status === 'em-andamento' && ref.batchNumber === (part?.number ?? 1)
   )
   const { seeMoney } = useAccess()
 
@@ -90,7 +106,9 @@ export const OrderCard = ({
         draggable && 'cursor-grab active:cursor-grabbing'
       )}
     >
-      {order.late && <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-red-600" />}
+      {order.late && (
+        <span className="absolute inset-y-3 left-0 w-1 rounded-r bg-red-600" />
+      )}
       <Link to={`/pedidos/${order.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
           <span className="display text-lg">{orderRef(order)}</span>
@@ -99,57 +117,85 @@ export const OrderCard = ({
               <Layers className="h-3 w-3" aria-hidden /> {partLabel(part)}
             </span>
           ) : (
-            seeMoney && <span className="text-xs font-bold text-muted">{money(order.totalAmount)}</span>
+            seeMoney && (
+              <span className="text-xs font-bold text-muted">
+                {money(order.totalAmount)}
+              </span>
+            )
           )}
         </div>
-        <p className="mt-0.5 line-clamp-2 text-sm leading-snug font-bold">{order.customerName}</p>
-        {order.customerCity && <p className="text-[11px] text-muted">{order.customerCity}</p>}
+        <p className="mt-0.5 line-clamp-2 text-sm leading-snug font-bold">
+          {order.customerName}
+        </p>
+        {order.customerCity && (
+          <p className="text-[11px] text-muted">{order.customerCity}</p>
+        )}
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           <DispatchChip order={order} />
           {order.openIncidents > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white" title="Ocorrências abertas: refazer ou problema">
-              <AlertTriangle className="h-3 w-3" aria-hidden /> {order.openIncidents}
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white"
+              title="Ocorrências abertas: refazer ou problema"
+            >
+              <AlertTriangle className="h-3 w-3" aria-hidden />{' '}
+              {order.openIncidents}
             </span>
           )}
         </div>
-        {split && <p className="mt-2 text-xs font-semibold text-ink/80">{piecesText(part.pieces)}</p>}
+        {split && (
+          <p className="mt-2 text-xs font-semibold text-ink/80">
+            {piecesText(part.pieces)}
+          </p>
+        )}
 
         {!compact && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <Badge tone="neutral">
-            <Shirt className="h-3 w-3" aria-hidden /> {int(part?.total ?? order.pieces)} pç
-            {split && ` de ${int(order.pieces)}`}
-          </Badge>
-          {stage === 'arte' && (
-            <Badge tone={ART_STATUS_META[order.artStatus].tone}>
-              {ART_STATUS_META[order.artStatus].label}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Badge tone="neutral">
+              <Shirt className="h-3 w-3" aria-hidden />{' '}
+              {int(part?.total ?? order.pieces)} pç
+              {split && ` de ${int(order.pieces)}`}
             </Badge>
-          )}
-          {order.fabric && <Badge tone="neutral">{FABRIC_LABELS[order.fabric]}</Badge>}
-          {seeMoney && order.paymentMark !== 'total' && (
-            <Badge tone={PAYMENT_MARK_META[order.paymentMark].tone}>
-              {PAYMENT_MARK_META[order.paymentMark].label}
-            </Badge>
-          )}
-          {sewers.map((ref) => (
-            <Badge key={ref.jobId} tone="warning">
-              <Scissors className="h-3 w-3" aria-hidden /> {ref.seamstressName}
-            </Badge>
-          ))}
-          {printers.map((printer) => (
-            <Badge key={printer.id} tone="info">
-              <Printer className="h-3 w-3" aria-hidden /> {printer.name}
-            </Badge>
-          ))}
-        </div>
+            {stage === 'arte' && (
+              <Badge tone={ART_STATUS_META[order.artStatus].tone}>
+                {ART_STATUS_META[order.artStatus].label}
+              </Badge>
+            )}
+            {order.fabricName && (
+              <Badge tone="neutral">{order.fabricName}</Badge>
+            )}
+            {seeMoney && order.paymentMark !== 'total' && (
+              <Badge tone={PAYMENT_MARK_META[order.paymentMark].tone}>
+                {PAYMENT_MARK_META[order.paymentMark].label}
+              </Badge>
+            )}
+            {sewers.map((ref) => (
+              <Badge key={ref.jobId} tone="warning">
+                <Scissors className="h-3 w-3" aria-hidden />{' '}
+                {ref.seamstressName}
+              </Badge>
+            ))}
+            {printers.map((printer) => (
+              <Badge key={printer.id} tone="info">
+                <Printer className="h-3 w-3" aria-hidden /> {printer.name}
+              </Badge>
+            ))}
+          </div>
         )}
       </Link>
 
-      <div className={clsx('flex items-center justify-between gap-2 border-t border-line', compact ? 'mt-2 pt-2' : 'mt-3 pt-2.5')}>
+      <div
+        className={clsx(
+          'flex items-center justify-between gap-2 border-t border-line',
+          compact ? 'mt-2 pt-2' : 'mt-3 pt-2.5'
+        )}
+      >
         <div className="flex items-center gap-1.5">
           {order.designerName && <Avatar name={order.designerName} />}
-          <span className="text-[11px] font-semibold text-muted" title="Dias nesta etapa">
+          <span
+            className="text-[11px] font-semibold text-muted"
+            title="Dias nesta etapa"
+          >
             {stuck === 0 ? 'hoje nesta etapa' : `${String(stuck)}d nesta etapa`}
           </span>
         </div>
