@@ -138,6 +138,7 @@ const session = {
     'catalog.read',
     'sales.write',
     'party.read',
+    'finance.read',
     'identity.user.read',
   ],
   features: ['uniformes'],
