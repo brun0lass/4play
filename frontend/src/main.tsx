@@ -17,6 +17,7 @@ import { CostureirasPage } from '@/pages/Costureiras'
 import { LinksPage } from '@/pages/Links'
 import { OcorrenciasPage } from '@/pages/Ocorrencias'
 import { ProdutosPage } from '@/pages/Produtos'
+import { TabelaLojaPage } from '@/pages/TabelaLoja'
 import { FichaImpressaoPage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
 import { LoginPage } from '@/pages/Login'
@@ -109,6 +110,7 @@ const App = () => (
       <Route path="financeiro" element={<Guard allow={(a) => a.finance}><FinanceiroPage /></Guard>} />
       <Route path="clientes" element={<Guard allow={(a) => a.customers}><ClientesPage /></Guard>} />
       <Route path="produtos" element={<Guard allow={(a) => a.products}><ProdutosPage /></Guard>} />
+      <Route path="tabela" element={<Guard allow={(a) => a.priceTable}><TabelaLojaPage /></Guard>} />
       <Route path="estoque" element={<Guard allow={(a) => a.stock}><EstoquePage /></Guard>} />
       <Route path="costureiras" element={<Guard allow={(a) => a.seamstresses}><CostureirasPage /></Guard>} />
       <Route path="links" element={<Guard allow={(a) => a.createOrder}><LinksPage /></Guard>} />

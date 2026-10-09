@@ -101,6 +101,18 @@ import {
   type UniformViewerResponseType,
   type UpdateProductionSheetBody,
   UpdateProductionSheetRequest,
+  CreateSizeChartRequest,
+  SizeChartListResponse,
+  SizeChartResponse,
+  UniformCatalogResponse,
+  UpdateSizeChartRequest,
+  UpdateUniformFabricRequest,
+  UpdateUniformProductRequest,
+  type CreateSizeChartBody,
+  type SizeChartType,
+  type UniformCatalogResponseType,
+  type UpdateSizeChartBody,
+  type UpdateUniformProductBody,
 } from '@/contracts/aeris/uniforms.ts'
 import { z } from 'zod'
 
@@ -439,4 +451,43 @@ export const replaceMemberFunctions = async (
   functions: ('atendimento' | 'arte' | 'producao')[]
 ): Promise<void> => {
   await request(`${BASE}/members/${userId}/functions`, { method: 'PUT', body: { functions } })
+}
+
+// ---------------------------------------------------------------------------
+// A tabela da loja: o tecido, o descontinuado e as cobranças (F258 do Aeris)
+// ---------------------------------------------------------------------------
+
+export const fetchUniformCatalog = async (signal?: AbortSignal): Promise<UniformCatalogResponseType> =>
+  UniformCatalogResponse.parse(await request(`${BASE}/catalog`, { signal }))
+
+export const saveUniformProduct = async (id: string, input: UpdateUniformProductBody): Promise<void> => {
+  await request(`${BASE}/catalog/products/${id}`, { method: 'PUT', body: UpdateUniformProductRequest.parse(input) })
+}
+
+export const saveUniformFabric = async (fabric: string, discontinued: boolean): Promise<void> => {
+  await request(`${BASE}/catalog/fabrics/${fabric}`, {
+    method: 'PUT',
+    body: UpdateUniformFabricRequest.parse({ discontinued }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// A tabela de medidas (F259 do Aeris)
+// ---------------------------------------------------------------------------
+
+export const fetchSizeCharts = async (signal?: AbortSignal): Promise<SizeChartType[]> =>
+  SizeChartListResponse.parse(await request(`${BASE}/size-charts`, { signal })).charts
+
+export const createSizeChart = async (input: CreateSizeChartBody): Promise<SizeChartType> =>
+  SizeChartResponse.parse(
+    await request(`${BASE}/size-charts`, { method: 'POST', body: CreateSizeChartRequest.parse(input) })
+  ).chart
+
+export const updateSizeChart = async (id: string, input: UpdateSizeChartBody): Promise<SizeChartType> =>
+  SizeChartResponse.parse(
+    await request(`${BASE}/size-charts/${id}`, { method: 'PUT', body: UpdateSizeChartRequest.parse(input) })
+  ).chart
+
+export const deleteSizeChart = async (id: string, version: number): Promise<void> => {
+  await request(`${BASE}/size-charts/${id}${qs({ version })}`, { method: 'DELETE' })
 }

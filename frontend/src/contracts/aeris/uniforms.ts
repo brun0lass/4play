@@ -1092,10 +1092,50 @@ export const IntakeSubmissionSchema = z.object({
     .default(null),
   /** O tecido que o cliente quer; nulo é "não sei, a loja ajuda". */
   fabric: UniformFabricSchema.nullable().default(null),
+  /** Sem o logo da loja: a cobrança `sem-logo` por peça (F258). */
+  noLogo: z.boolean().default(false),
+  /** Quer aprovar a arte antes do pedido: a cobrança `arte` (F258). */
+  earlyArt: z.boolean().default(false),
 })
 
 export type IntakeSubmissionBody = z.input<typeof IntakeSubmissionSchema>
 export type IntakeSubmissionType = z.infer<typeof IntakeSubmissionSchema>
+
+/** Uma faixa da tabela de preço: o preço a partir desta quantidade (F258). */
+export const PriceTierSchema = z.object({
+  fabric: UniformFabricSchema.nullable(),
+  minQuantity: z.number().int(),
+  unitPrice: z.string(),
+})
+
+export type PriceTierType = z.infer<typeof PriceTierSchema>
+
+/** A tabela de medidas como o cliente vê no link (F259). */
+export const PublicSizeChartSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  note: z.string().nullable(),
+  sections: z.array(
+    z.object({
+      title: z.string().nullable(),
+      rows: z.array(
+        z.object({
+          size: z.string(),
+          width: z.string().nullable(),
+          height: z.string().nullable(),
+        })
+      ),
+    })
+  ),
+})
+
+export type PublicSizeChartType = z.infer<typeof PublicSizeChartSchema>
+
+/** Uma cobrança do pedido no link: o nome e o preço (por peça, ou fixo). */
+const ExtraOffer = z.object({
+  name: z.string(),
+  unitPrice: z.string().nullable(),
+})
 
 /** A página pública do link: o que o cliente vê. */
 export const PublicIntakeResponse = z.object({
@@ -1115,8 +1155,32 @@ export const PublicIntakeResponse = z.object({
       name: z.string(),
       /** Nulo quando a atendente escolheu não mostrar o preço. */
       unitPrice: z.string().nullable(),
+      /**
+       * Os tecidos em que a peça existe (F258); nulo é "qualquer um, pelo
+       * mesmo preço".
+       */
+      fabrics: z.array(UniformFabricSchema).nullable(),
+      /**
+       * As faixas da tabela: o preço a partir de cada quantidade, por tecido
+       * (nulo é a variação padrão — o "não sei"). Vazio quando o preço não
+       * aparece.
+       */
+      tiers: z.array(PriceTierSchema),
+      /** As tabelas de medidas da peça (F259), em `sizeCharts`. */
+      sizeChartIds: z.array(z.string()),
     })
   ),
+  /** As tabelas de medidas das peças do link (F259). */
+  sizeCharts: z.array(PublicSizeChartSchema),
+  /**
+   * As cobranças do pedido (F258). Nula é "esta loja não cobra isso pelo
+   * link"; o preço é nulo quando o link não mostra preço.
+   */
+  extras: z.object({
+    personalization: ExtraOffer.nullable(),
+    noLogo: ExtraOffer.nullable(),
+    earlyArt: ExtraOffer.nullable(),
+  }),
   sizes: z.array(UniformSizeSchema),
   /** O prazo de produção do link, em dias depois do envio (F233). */
   leadDays: z.number().int(),
@@ -1143,8 +1207,13 @@ export const CreateIntakeRequest = z
     phone: optionalText(30),
     email: optionalText(200),
     showPrices: z.boolean().default(false),
-    /** As peças que o cliente pode escolher. Vazio: todas as ativas. */
+    /**
+     * As peças que o cliente pode escolher. Vazio: as ativas que não estão
+     * descontinuadas (F258); escolhida, a descontinuada também entra.
+     */
     productIds: z.array(z.uuid()).max(100).default([]),
+    /** Os tecidos do link. Vazio: os que não estão descontinuados (F258). */
+    fabrics: z.array(UniformFabricSchema).max(3).default([]),
     expiresInDays: z.number().int().min(1).max(60).default(7),
     /** O prazo de produção: o despacho sem evento é o envio mais estes dias (F233). */
     leadDays: z.number().int().min(1).max(180).default(30),
@@ -1174,6 +1243,8 @@ export const IntakeSummary = z.object({
   showPrices: z.boolean(),
   leadDays: z.number().int(),
   products: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Os tecidos escolhidos; vazio é "os não descontinuados" (F258). */
+  fabrics: z.array(UniformFabricSchema),
   message: z.string().nullable(),
   expiresAt: z.string(),
   createdAt: z.string(),
@@ -1245,6 +1316,8 @@ export const IntakeDetailResponse = z.object({
         .object({ date: z.string(), name: z.string().nullable() })
         .nullable(),
       fabric: UniformFabricSchema.nullable(),
+      noLogo: z.boolean(),
+      earlyArt: z.boolean(),
       /** O despacho que o link calcula (F233); a atendente muda na ficha. */
       dispatchDate: z.string().nullable(),
       /** Evento com menos de uma semana: prazo curto. */
@@ -1634,3 +1707,157 @@ export const SetPrintQueueRequest = z.object({
 })
 
 export type SetPrintQueueBody = z.input<typeof SetPrintQueueRequest>
+
+// ---------------------------------------------------------------------------
+// A tabela de preços da loja: o tecido, o descontinuado e as cobranças (F258)
+// ---------------------------------------------------------------------------
+
+export const UNIFORM_PRODUCT_KIND_VALUES = [
+  'peca',
+  'personalizacao',
+  'sem-logo',
+  'arte',
+] as const
+
+export const UniformProductKindSchema = z.enum(UNIFORM_PRODUCT_KIND_VALUES)
+
+export const UniformCatalogProductSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: UniformProductKindSchema,
+  discontinued: z.boolean(),
+  variants: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().nullable(),
+      sku: z.string(),
+      isDefault: z.boolean(),
+      fabric: UniformFabricSchema.nullable(),
+    })
+  ),
+  /** As tabelas de medidas da peça (F259). */
+  sizeChartIds: z.array(z.string()),
+})
+
+export type UniformCatalogProductType = z.infer<
+  typeof UniformCatalogProductSchema
+>
+
+export const UniformCatalogResponse = z.object({
+  products: z.array(UniformCatalogProductSchema),
+  fabrics: z.array(
+    z.object({ fabric: UniformFabricSchema, discontinued: z.boolean() })
+  ),
+})
+
+export type UniformCatalogResponseType = z.infer<typeof UniformCatalogResponse>
+
+/** O produto todo: o tipo, o descontinuado e o tecido de cada variação. */
+export const UpdateUniformProductRequest = z.object({
+  kind: UniformProductKindSchema,
+  discontinued: z.boolean(),
+  fabrics: z
+    .array(
+      z.object({
+        variantId: z.uuid(),
+        fabric: UniformFabricSchema.nullable(),
+      })
+    )
+    .max(50)
+    .default([]),
+  /** As tabelas de medidas da peça (F259); ausente deixa como está. */
+  sizeChartIds: z.array(z.uuid()).max(20).optional(),
+})
+
+export type UpdateUniformProductBody = z.input<
+  typeof UpdateUniformProductRequest
+>
+
+export const UpdateUniformFabricRequest = z.object({
+  discontinued: z.boolean(),
+})
+
+export const UniformFabricParams = z.object({ fabric: UniformFabricSchema })
+
+// ---------------------------------------------------------------------------
+// A tabela de medidas (F259)
+// ---------------------------------------------------------------------------
+
+/** Centímetros: "52", "52,5" ou "52.5"; gravado com ponto. */
+const Measure = z
+  .string()
+  .trim()
+  .regex(/^\d{1,4}([.,]\d{1,2})?$/, 'Use centímetros: 52 ou 52,5.')
+  .transform((value) => value.replace(',', '.'))
+
+export const SizeChartRowSchema = z.object({
+  /** O tamanho como a tabela escreve: "PP", "10", "1" (a bandeira). */
+  size: z.string().trim().min(1, 'Diga o tamanho.').max(10),
+  width: Measure.nullable(),
+  height: Measure.nullable(),
+})
+
+export const SizeChartSectionSchema = z.object({
+  /** "Infantil", "Adulto"; nulo na tabela de uma parte só. */
+  title: z
+    .string()
+    .trim()
+    .max(40)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  rows: z
+    .array(SizeChartRowSchema)
+    .min(1, 'Ponha pelo menos um tamanho.')
+    .max(30),
+})
+
+export const SizeChartSchema = PublicSizeChartSchema.extend({
+  /** As peças que mostram esta tabela. */
+  productIds: z.array(z.string()),
+  version: z.number().int(),
+})
+
+export type SizeChartType = z.infer<typeof SizeChartSchema>
+
+export const SizeChartListResponse = z.object({
+  charts: z.array(SizeChartSchema),
+})
+
+export type SizeChartListResponseType = z.infer<typeof SizeChartListResponse>
+
+export const SizeChartResponse = z.object({ chart: SizeChartSchema })
+
+const sizeChartFields = {
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Dê um nome à tabela: "Camiseta masculina".')
+    .max(60),
+  note: z
+    .string()
+    .trim()
+    .max(300)
+    .nullable()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  sections: z
+    .array(SizeChartSectionSchema)
+    .min(1, 'Ponha pelo menos uma parte com tamanhos.')
+    .max(5),
+}
+
+export const CreateSizeChartRequest = z.object(sizeChartFields)
+
+export type CreateSizeChartBody = z.input<typeof CreateSizeChartRequest>
+
+export const UpdateSizeChartRequest = z.object({
+  ...sizeChartFields,
+  version: z.number().int().positive(),
+})
+
+export type UpdateSizeChartBody = z.input<typeof UpdateSizeChartRequest>
+
+export const DeleteSizeChartRequest = z.object({
+  version: z.number().int().positive(),
+})

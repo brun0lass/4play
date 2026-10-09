@@ -142,6 +142,8 @@ export const SalesLineSummary = z.object({
    * `'0'` num servidor anterior, que é a resposta certa para quase toda linha.
    */
   returnedQuantity: z.string().default('0'),
+  /** Quanto do que voltou virou vale: esse não volta de novo (F257). */
+  returnedAsVoucherQuantity: z.string().default('0'),
 })
 
 export type SalesLineSummary = z.infer<typeof SalesLineSummary>

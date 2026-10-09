@@ -96,6 +96,13 @@ export const PriceResponderPreviewResponse = z.object({
   body: z.string().nullable(),
   model: z.array(z.string()),
   stockIgnored: z.boolean(),
+  /**
+   * A mensagem cita peça, mas o robô fica quieto de propósito (F244): já tem
+   * preço (o cliente está pedindo), é pós-venda, ou é vaga ("tela do iPhone").
+   */
+  silence: z.enum(['price', 'after_sale', 'vague']).nullable(),
+  /** As palavras que o robô deixou de lado ("amg", "valores"). */
+  ignored: z.array(z.string()),
   sections: z.array(
     z.object({
       title: z.string(),
@@ -154,6 +161,8 @@ export const ResponderLogResponse = z.object({
       conversationId: z.string(),
       query: z.string(),
       outcome: ResponderLogOutcomeSchema,
+      /** O robô ficou quieto de propósito (F244). */
+      silence: z.enum(['price', 'after_sale', 'vague']).nullable(),
       itemCount: z.number().int(),
       replyBody: z.string().nullable(),
       createdAt: z.string(),

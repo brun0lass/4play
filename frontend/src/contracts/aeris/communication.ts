@@ -304,6 +304,7 @@ export const MessageOriginSchema = z.enum([
   'campaign',
   'followup',
   'system',
+  'automation',
 ])
 
 export const ConversationSummarySchema = z.object({

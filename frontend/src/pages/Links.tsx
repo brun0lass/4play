@@ -5,9 +5,8 @@ import { Check, ClipboardCheck, Copy, ExternalLink, Link2, MessageCircle, Plus, 
 import { useDeferredValue, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { listProducts } from '@/api/catalog'
 import { fetchCustomers } from '@/api/store'
-import { cancelIntake, convertIntake, createIntake } from '@/api/uniforms'
+import { cancelIntake, convertIntake, createIntake, fetchUniformCatalog } from '@/api/uniforms'
 import { useToast } from '@/components/Toast'
 import { Badge, Button, Empty, ErrorBox, Modal, PageHeader, Spinner } from '@/components/ui'
 import { day, int } from '@/lib/format'
@@ -16,6 +15,10 @@ import { keys, useIntake, useIntakes } from '@/lib/queries'
 import { FABRIC_LABELS, orderRef } from '@/lib/uniforms'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success' | 'lime'
+type Fabric = IntakeSummaryType['fabrics'][number]
+
+const sameSet = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((value) => right.includes(value))
 
 const STATUS_META: Record<IntakeSummaryType['status'], { label: string; tone: Tone }> = {
   aberto: { label: 'Esperando o cliente', tone: 'info' },
@@ -211,6 +214,7 @@ const CreateDialog = ({
   const [showPrices, setShowPrices] = useState(false)
   const [restrict, setRestrict] = useState(false)
   const [productIds, setProductIds] = useState<string[]>([])
+  const [fabrics, setFabrics] = useState<Fabric[] | null>(null)
   const [days, setDays] = useState(7)
   const [leadDays, setLeadDays] = useState(30)
   const [message, setMessage] = useState('')
@@ -224,6 +228,7 @@ const CreateDialog = ({
     setShowPrices(false)
     setRestrict(false)
     setProductIds([])
+    setFabrics(null)
     setDays(7)
     setLeadDays(30)
     setMessage('')
@@ -235,12 +240,17 @@ const CreateDialog = ({
     enabled: open && deferred.length >= 2 && customer === null,
     placeholderData: keepPreviousData,
   })
-  const products = useQuery({
-    queryKey: ['products', 'intake'],
-    queryFn: ({ signal }) => listProducts({ status: 'active', pageSize: 100, page: 1, sort: 'name', direction: 'asc' }, signal),
-    enabled: open && restrict,
+  // A tabela da loja (F258 do Aeris): as peças com o descontinuado, e os tecidos.
+  const catalog = useQuery({
+    queryKey: ['uniform-catalog'],
+    queryFn: ({ signal }) => fetchUniformCatalog(signal),
+    enabled: open,
     staleTime: 60_000,
   })
+  const pieces = catalog.data?.products.filter((product) => product.kind === 'peca') ?? []
+  const defaultFabrics = catalog.data?.fabrics.filter((entry) => !entry.discontinued).map((entry) => entry.fabric) ?? []
+  const chosenFabrics = fabrics ?? defaultFabrics
+  const offeredFabrics = catalog.data?.fabrics.filter((entry) => pieces.some((product) => product.variants.some((variant) => variant.fabric === entry.fabric))) ?? []
 
   const create = useMutation({
     mutationFn: () =>
@@ -250,6 +260,8 @@ const CreateDialog = ({
         email: customer ? null : email.trim() || null,
         showPrices,
         productIds: restrict ? productIds : [],
+        // Os tecidos de sempre (os não descontinuados) vão vazios: o link segue a tabela da loja.
+        fabrics: fabrics === null || sameSet(fabrics, defaultFabrics) ? [] : fabrics,
         expiresInDays: days,
         leadDays,
         message: message.trim() || null,
@@ -260,7 +272,10 @@ const CreateDialog = ({
     },
   })
 
-  const ready = (customer !== null || phone.replace(/\D/g, '').length >= 10 || email.includes('@')) && (!restrict || productIds.length > 0)
+  const ready =
+    (customer !== null || phone.replace(/\D/g, '').length >= 10 || email.includes('@')) &&
+    (!restrict || productIds.length > 0) &&
+    (offeredFabrics.length === 0 || chosenFabrics.length > 0)
 
   return (
     <Modal
@@ -327,10 +342,20 @@ const CreateDialog = ({
             </span>
           </label>
           <label className="flex items-start gap-2 rounded-2xl border border-line p-3 text-sm">
-            <input type="checkbox" checked={restrict} onChange={(e) => setRestrict(e.target.checked)} className="mt-1" />
+            <input
+              type="checkbox"
+              checked={restrict}
+              onChange={(e) => {
+                setRestrict(e.target.checked)
+                // Começa com as peças da tabela; a descontinuada fica desmarcada (liga quem precisa).
+                if (e.target.checked && productIds.length === 0)
+                  setProductIds(pieces.filter((product) => !product.discontinued).map((product) => product.id))
+              }}
+              className="mt-1"
+            />
             <span>
-              <strong>Limitar as peças</strong>
-              <span className="block text-xs text-muted">Sem marcar, ele escolhe entre todas as peças ativas.</span>
+              <strong>Escolher as peças</strong>
+              <span className="block text-xs text-muted">Sem marcar, ele escolhe entre as peças da tabela (menos as descontinuadas).</span>
             </span>
           </label>
         </div>
@@ -338,9 +363,9 @@ const CreateDialog = ({
         {restrict && (
           <div>
             <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">Peças que ele pode escolher</p>
-            {products.isPending && <Spinner />}
+            {catalog.isPending && <Spinner />}
             <div className="grid max-h-60 gap-1.5 overflow-y-auto sm:grid-cols-2">
-              {products.data?.items.map((product) => {
+              {pieces.map((product) => {
                 const on = productIds.includes(product.id)
                 return (
                   <button
@@ -350,10 +375,34 @@ const CreateDialog = ({
                     className={clsx('rounded-xl border-2 px-3 py-2 text-left text-sm font-semibold', on ? 'border-ink bg-lime' : 'border-line')}
                   >
                     {product.name}
+                    {product.discontinued && <span className="ml-1 text-[11px] font-bold text-amber-800">· descontinuada</span>}
                   </button>
                 )
               })}
             </div>
+          </div>
+        )}
+
+        {offeredFabrics.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">Tecidos que ele pode escolher</p>
+            <div className="flex flex-wrap gap-2">
+              {offeredFabrics.map((entry) => {
+                const on = chosenFabrics.includes(entry.fabric)
+                return (
+                  <button
+                    key={entry.fabric}
+                    type="button"
+                    onClick={() => setFabrics(on ? chosenFabrics.filter((f) => f !== entry.fabric) : [...chosenFabrics, entry.fabric])}
+                    className={clsx('rounded-full border-2 px-3 py-1.5 text-xs font-extrabold', on ? 'border-ink bg-lime' : 'border-line')}
+                  >
+                    {FABRIC_LABELS[entry.fabric]}
+                    {entry.discontinued && <span className="ml-1 font-bold text-amber-800">· descontinuado</span>}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1 text-xs text-muted">O descontinuado só aparece para o cliente se você marcar aqui.</p>
           </div>
         )}
 
@@ -479,8 +528,9 @@ const ReviewDialog = ({ id, onClose }: { id: string | null; onClose: () => void 
           )}
 
           {submission.items.map((item) => {
-            const named = item.rows.filter((row) => row.name !== null)
-            const plain = item.rows.filter((row) => row.name === null)
+            // Só o número também é personalizado (F258 do Aeris).
+            const named = item.rows.filter((row) => row.name !== null || row.number !== null)
+            const plain = item.rows.filter((row) => row.name === null && row.number === null)
             const total = item.rows.reduce((sum, row) => sum + row.quantity, 0)
             return (
               <section key={item.productId} className="rounded-2xl border border-line p-4">
@@ -500,7 +550,7 @@ const ReviewDialog = ({ id, onClose }: { id: string | null; onClose: () => void 
                     <tbody>
                       {named.map((row, index) => (
                         <tr key={index} className="border-t border-line">
-                          <td className="py-1">{row.name}</td>
+                          <td className="py-1">{row.name ?? '—'}</td>
                           <td>{row.number ?? '—'}</td>
                           <td>{row.size}</td>
                           <td className="text-right">{row.quantity}</td>
@@ -529,6 +579,8 @@ const ReviewDialog = ({ id, onClose }: { id: string | null; onClose: () => void 
             <p className="mt-1">
               Tecido: <strong>{submission.fabric === null ? 'não sabe — a loja ajuda' : FABRIC_LABELS[submission.fabric]}</strong>
             </p>
+            {submission.noLogo && <p className="mt-1 font-bold">Sem o logo da 4Play (o acréscimo entra no pedido).</p>}
+            {submission.earlyArt && <p className="mt-1 font-bold">Quer aprovar a arte antes do pedido: cobrar a arte e descontar no pedido.</p>}
           </section>
           {submission.notes && <p className="rounded-2xl bg-paper p-3"><strong>Observação:</strong> {submission.notes}</p>}
           <p className="text-xs text-muted">

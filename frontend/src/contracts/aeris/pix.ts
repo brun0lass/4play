@@ -47,7 +47,11 @@ export const CreatePixChargeRequest = z.object({
     name: z.string().trim().min(1).max(50),
     /** CPF ou CNPJ; a rota confere os dígitos. */
     document: z.string().trim().min(11).max(18),
-    email: z.email().max(50),
+    /**
+     * A Monedd exige um e-mail do pagador, e o vendedor quase nunca tem o do
+     * cliente. Nulo, vai o e-mail da conta Monedd da loja (06/10).
+     */
+    email: z.email().max(50).nullable().default(null),
   }),
   description: z.string().trim().max(100).nullable().default(null),
 })

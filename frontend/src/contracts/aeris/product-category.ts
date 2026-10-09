@@ -18,6 +18,9 @@ export const ProductCategoryStatusSchema = z.enum(['active', 'archived'])
 export const ProductCategorySummary = z.object({
   id: z.string(),
   name: z.string(),
+  /** A categoria de cima (F243): nula numa de cima. Um nível só. */
+  parentId: z.string().nullable().default(null),
+  parentName: z.string().nullable().default(null),
   status: ProductCategoryStatusSchema,
   /**
    * Quantos produtos estão nesta categoria hoje.
@@ -49,6 +52,8 @@ export const CreateProductCategoryRequest = z.object({
     .trim()
     .min(1, 'Dê um nome à categoria.')
     .max(120, 'Use no máximo 120 caracteres.'),
+  /** Para criar uma subcategoria (F243). */
+  parentId: z.uuid().nullable().optional(),
 })
 
 export type CreateProductCategoryBody = z.infer<
@@ -122,4 +127,42 @@ export const CategorizeByNameResponse = z.object({
 
 export type CategorizeByNameResponseType = z.infer<
   typeof CategorizeByNameResponse
+>
+
+/**
+ * As categorias por planilha (F243): `codigo;categoria;subcategoria`.
+ *
+ * Só preenche produto SEM categoria, e cria a categoria e a subcategoria que
+ * faltam. `dryRun` é a prévia: o mesmo caminho, sem gravar.
+ */
+export const ImportProductCategoriesRequest = z.object({
+  rows: z
+    .array(
+      z.object({
+        codigo: z.string().trim().min(1).max(60),
+        categoria: z.string().trim().min(1).max(120),
+        subcategoria: z.string().trim().max(120).nullable().default(null),
+      })
+    )
+    .min(1, 'A planilha não tem nenhuma linha.')
+    .max(10_000, 'No máximo 10.000 linhas por vez.'),
+  dryRun: z.boolean().default(false),
+})
+
+export type ImportProductCategoriesBody = z.input<
+  typeof ImportProductCategoriesRequest
+>
+
+export const ImportProductCategoriesResponse = z.object({
+  categoriesCreated: z.array(z.string()),
+  subcategoriesCreated: z.array(z.string()),
+  marked: z.number().int().nonnegative(),
+  alreadyCategorized: z.number().int().nonnegative(),
+  unknownCodes: z.array(z.string()),
+  unknownCount: z.number().int().nonnegative(),
+  applied: z.boolean(),
+})
+
+export type ImportProductCategoriesResponseType = z.infer<
+  typeof ImportProductCategoriesResponse
 >

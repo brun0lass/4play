@@ -267,6 +267,12 @@ export const ProductSummary = z.object({
    */
   awaitingStockSince: z.string().nullable(),
   /**
+   * Desde quando está arquivado até ter estoque (F247). Nulo é o normal;
+   * preenchido, some da vitrine e do balcão até o primeiro saldo positivo ou
+   * "Mostrar de novo".
+   */
+  shelvedSince: z.string().nullable(),
+  /**
    * The optimistic-concurrency token, sent so the client can hand it back on
    * update (ADR-0014). Exposing it is deliberate: a client that cannot see it
    * cannot participate in the check, and the alternative is last-write-wins.
@@ -345,6 +351,16 @@ const QUANTITY_AMOUNT = z
   .trim()
   .regex(/^-?\d{1,12}(\.\d{1,6})?$/, 'A quantidade deve ser um número')
 
+/** O arquivado até ter estoque na lista (F247): tirar, ou só eles. */
+export const ShelvedFilterSchema = z.enum(['exclude', 'only'])
+
+export type ShelvedFilter = z.infer<typeof ShelvedFilterSchema>
+
+/** O que pode faltar no cadastro, para o filtro "Falta…" (F247). */
+export const MissingFieldSchema = z.enum(['photo', 'category', 'price'])
+
+export type MissingField = z.infer<typeof MissingFieldSchema>
+
 export const ProductListQuery = z.object({
   search: z.string().trim().max(120).optional(),
   /**
@@ -361,6 +377,28 @@ export const ProductListQuery = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /**
+   * O arquivado até ter estoque (F247): `exclude` tira, `only` mostra só eles.
+   *
+   * Ausente é "tanto faz", e é de propósito: o produto continua ativo, e as
+   * Compras, o Estoque e a nota de compra PRECISAM achá-lo — é por eles que
+   * ele volta. Quem esconde pede: a lista do dia a dia, o seletor da venda.
+   */
+  shelved: ShelvedFilterSchema.optional(),
+  /**
+   * O que falta no cadastro (F247), separado por vírgula: `photo`, `category`,
+   * `price`. Cada um estreita: "photo,category" é sem foto E sem categoria.
+   * "Sem preço" é na tabela de preço da tela (`priceListId`, ou a padrão).
+   */
+  missing: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value === undefined || value.trim() === ''
+        ? []
+        : value.split(',').map((part) => part.trim())
+    )
+    .pipe(z.array(MissingFieldSchema)),
   /**
    * Os filtros de coluna (F152).
    *
@@ -468,6 +506,8 @@ export type ProductListQuery = z.input<typeof ProductListQuery>
 export type ProductListRequest = {
   applicationModelId?: string | undefined
   awaitingStock?: boolean | undefined
+  shelved?: ShelvedFilter | undefined
+  missing?: readonly MissingField[] | undefined
   search?: string | undefined
   searchMode?: SearchMode | undefined
   status?: 'active' | 'archived' | undefined
@@ -939,6 +979,9 @@ export const ProductFilterSchema = z.object({
   status: CatalogStatusSchema.optional(),
   /** F133: a ação em massa age sobre o mesmo conjunto que a lista mostra. */
   awaitingStock: z.boolean().optional(),
+  /** F247: idem — o arquivado até ter estoque e o que falta no cadastro. */
+  shelved: ShelvedFilterSchema.optional(),
+  missing: z.array(MissingFieldSchema).max(3).optional(),
   applicationModelId: z.string().optional(),
   /*
    * Os filtros de coluna (F152) entram AQUI TAMBÉM, e não é cópia por desencargo.
@@ -1033,6 +1076,37 @@ export const BulkStockTrackingResponse = z.object({
 export type BulkStockTrackingResponse = z.infer<
   typeof BulkStockTrackingResponse
 >
+
+/**
+ * Arquivar até ter estoque, ou mostrar de novo, um conjunto (F247).
+ *
+ * O mesmo jeito de nomear o conjunto da F070: o filtro da tela, mais as
+ * exceções ou "estes e só estes". O invariante também é o mesmo — a ação
+ * nunca alcança um produto que a lista não mostraria.
+ */
+export const BulkShelfRequest = z.object({
+  filter: ProductFilterSchema,
+  excludeIds: z.array(z.string()).max(500).default([]),
+  includeIds: z.array(z.string()).max(500).optional(),
+})
+
+export type BulkShelfRequest = z.input<typeof BulkShelfRequest>
+
+export type BulkShelfBody = z.output<typeof BulkShelfRequest>
+
+/**
+ * Quantos mudaram, e quantos do conjunto ficaram de fora porque TÊM estoque.
+ *
+ * `kept` só existe no arquivar: o filtro da tela olha uma filial, e o servidor
+ * confere todas — o produto com saldo em outra loja não some de lá. A tela diz
+ * quantos foram poupados, em vez de deixar a pessoa achar que arquivou tudo.
+ */
+export const BulkShelfResponse = z.object({
+  changed: z.number().int().nonnegative(),
+  kept: z.number().int().nonnegative(),
+})
+
+export type BulkShelfResponse = z.infer<typeof BulkShelfResponse>
 
 /**
  * Os códigos que o formulário de Novo produto mostra ao abrir (F133).

@@ -1,25 +1,55 @@
 import type { PublicIntakeResponseType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { CheckCircle2, ClipboardPaste, Loader2, Minus, Plus, Send, Shirt, Trash2 } from 'lucide-react'
+import { CheckCircle2, ClipboardPaste, Loader2, Minus, Plus, Ruler, Send, Shirt, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 
 import { fetchPublicIntake, submitPublicIntake } from '@/api/uniforms'
 import { Logo } from '@/components/Logo'
-import { Button, ErrorBox, Spinner } from '@/components/ui'
+import { SizeChartTable } from '@/components/catalog/SizeChartTable'
+import { Button, ErrorBox, Modal, Spinner } from '@/components/ui'
 import { cepDigits, formatCep, lookupCep } from '@/lib/cep'
 import { day, int, money } from '@/lib/format'
 import { ApiError, errorMessage } from '@/lib/http'
 
 type Size = PublicIntakeResponseType['sizes'][number]
 type Fabric = PublicIntakeResponseType['fabrics'][number]
+type Product = PublicIntakeResponseType['products'][number]
+type Tier = Product['tiers'][number]
 
 const FABRIC_NAMES: Record<Fabric, string> = {
   elastano: 'Elastano',
   furadinho: 'Furadinho',
   'cem-por-cento': '100% poliéster',
 }
+
+/**
+ * As faixas da peça no tecido escolhido (F258 do Aeris). A peça que vale o
+ * mesmo em qualquer tecido, e o "não sei", usam as da variação padrão.
+ */
+const tiersOf = (product: Product, fabric: Fabric | null): Tier[] => {
+  const key = product.fabrics === null || fabric === null ? null : fabric
+  return product.tiers.filter((tier) => tier.fabric === key)
+}
+
+/** O preço da peça para esta quantidade: a última faixa que ela alcança. */
+const priceAt = (tiers: readonly Tier[], quantity: number): number | null => {
+  let price: number | null = null
+  for (const tier of tiers) if (Math.max(quantity, 1) >= tier.minQuantity) price = Number(tier.unitPrice)
+  return price
+}
+
+/** "1–10", "11–50", "151+": a faixa como a tabela da loja escreve. */
+const tierLabel = (tiers: readonly Tier[], index: number): string => {
+  const from = Math.max(tiers[index]?.minQuantity ?? 1, 1)
+  const next = tiers[index + 1]
+  return next === undefined ? `${String(from)}+` : `${String(from)}–${String(next.minQuantity - 1)}`
+}
+
+/** A peça é feita neste tecido? */
+const madeIn = (product: Product, fabric: Fabric | null): boolean =>
+  product.fabrics === null || fabric === null || product.fabrics.includes(fabric)
 
 /** `AAAA-MM-DD` mais (ou menos) dias, como o Aeris calcula (`addDays`). */
 const shiftDay = (day: string, days: number): string =>
@@ -105,6 +135,9 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
   const [eventDate, setEventDate] = useState('')
   const [eventName, setEventName] = useState('')
   const [fabric, setFabric] = useState<Fabric | null>(null)
+  const [noLogo, setNoLogo] = useState(false)
+  const [earlyArt, setEarlyArt] = useState(false)
+  const [measuring, setMeasuring] = useState<Product | null>(null)
   const [customer, setCustomer] = useState({
     kind: 'person' as 'person' | 'company',
     name: '',
@@ -158,14 +191,26 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
     () =>
       chosen.map((product) => {
         const item = items[product.id]
-        const pieces = item ? rowsOf(item).reduce((sum, row) => sum + row.quantity, 0) : 0
-        return { product, pieces, value: product.unitPrice === null ? null : pieces * Number(product.unitPrice) }
+        const rows = item ? rowsOf(item) : []
+        const pieces = rows.reduce((sum, row) => sum + row.quantity, 0)
+        // A faixa é pela quantidade desta peça, no tecido escolhido (F258).
+        const unit = priceAt(tiersOf(product, fabric), pieces) ?? (product.unitPrice === null ? null : Number(product.unitPrice))
+        const personalized = rows.filter((row) => row.name !== null || row.number !== null).reduce((sum, row) => sum + row.quantity, 0)
+        return { product, pieces, personalized, value: unit === null ? null : pieces * unit }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, chosen.length]
+    [items, chosen.length, fabric]
   )
   const pieces = totals.reduce((sum, entry) => sum + entry.pieces, 0)
-  const value = data.showPrices ? totals.reduce((sum, entry) => sum + (entry.value ?? 0), 0) : null
+  const personalizedPieces = totals.reduce((sum, entry) => sum + entry.personalized, 0)
+  // As cobranças do pedido (F258): nome e número por peça personalizada, sem logo por peça.
+  const personalizationPrice = data.extras.personalization?.unitPrice ?? null
+  const noLogoPrice = data.extras.noLogo?.unitPrice ?? null
+  const personalizationValue = personalizationPrice === null ? 0 : personalizedPieces * Number(personalizationPrice)
+  const noLogoValue = noLogo && noLogoPrice !== null ? pieces * Number(noLogoPrice) : 0
+  const piecesValue = totals.reduce((sum, entry) => sum + (entry.value ?? 0), 0)
+  const value = data.showPrices ? piecesValue + personalizationValue + noLogoValue : null
+  const notMade = chosen.filter((product) => !madeIn(product, fabric))
   const incomplete = chosen.flatMap((product) =>
     (items[product.id]?.named ?? []).filter((row) => (row.name.trim() !== '' || row.number.trim() !== '') && row.size === '').map(() => product.name)
   )
@@ -200,6 +245,8 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
         notes: notes.trim() || null,
         event: isEvent === true ? { date: eventDate, name: eventName.trim() || null } : null,
         fabric,
+        noLogo,
+        earlyArt,
       })
     },
     onSuccess: () => {
@@ -295,32 +342,83 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
         </section>
       )}
 
+      {data.fabrics.length > 0 && (
+        <section className="card space-y-3 p-5">
+          <div>
+            <h2 className="text-sm font-extrabold tracking-wider uppercase">Tecido</h2>
+            {data.showPrices && <p className="mt-1 text-xs text-muted">O preço de cada peça muda com o tecido.</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[...data.fabrics.map((value) => [value, FABRIC_NAMES[value]] as const), [null, 'Não sei — a loja ajuda'] as const].map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setFabric(value)}
+                className={clsx('rounded-full border-2 px-3 py-1.5 text-xs font-extrabold', fabric === value ? 'border-ink bg-lime' : 'border-line')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-3">
         <h2 className="text-sm font-extrabold tracking-wider uppercase">As peças</h2>
         {data.products.length === 0 && <p className="text-sm text-muted">Nenhuma peça disponível neste link. Fale com quem te atendeu.</p>}
         {data.products.map((product) => {
           const item = items[product.id]
+          const made = madeIn(product, fabric)
+          const tiers = tiersOf(product, fabric)
+          const quantity = totals.find((entry) => entry.product.id === product.id)?.pieces ?? 0
+          const current = tiers.reduce((at, tier, index) => (Math.max(quantity, 1) >= tier.minQuantity ? index : at), 0)
           return (
-            <article key={product.id} className={clsx('card p-4', item && 'ring-2 ring-ink')}>
+            <article key={product.id} className={clsx('card p-4', item && 'ring-2 ring-ink', !made && !item && 'opacity-60')}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink text-lime">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink text-lime">
                     <Shirt className="h-5 w-5" />
                   </span>
                   <div>
                     <p className="font-extrabold">{product.name}</p>
-                    {product.unitPrice !== null && <p className="text-xs font-semibold text-muted">{money(product.unitPrice)} a peça</p>}
+                    {tiers.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {tiers.map((tier, index) => (
+                          <span
+                            key={tier.minQuantity}
+                            className={clsx(
+                              'rounded-full px-2 py-0.5 text-[11px] font-bold',
+                              item && index === current ? 'bg-lime text-ink' : 'bg-paper text-muted'
+                            )}
+                          >
+                            {tierLabel(tiers, index)} pç · {money(tier.unitPrice)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      made && product.unitPrice !== null && <p className="text-xs font-semibold text-muted">{money(product.unitPrice)} a peça</p>
+                    )}
+                    {!made && fabric !== null && (
+                      <p className="mt-1 text-xs font-bold text-amber-800">Não é feita em {FABRIC_NAMES[fabric].toLowerCase()}.</p>
+                    )}
                   </div>
                 </div>
-                {item ? (
-                  <Button size="sm" variant="ghost" icon={<Trash2 className="h-4 w-4" />} onClick={() => setItems((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== product.id)))}>
-                    Tirar
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="lime" icon={<Plus className="h-4 w-4" />} onClick={() => setItems((all) => ({ ...all, [product.id]: { named: [blankRow()], bySize: {} } }))}>
-                    Quero esta
-                  </Button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {product.sizeChartIds.length > 0 && (
+                    <Button size="sm" variant="outline" icon={<Ruler className="h-4 w-4" />} onClick={() => setMeasuring(product)}>
+                      Medidas
+                    </Button>
+                  )}
+                  {item ? (
+                    <Button size="sm" variant="ghost" icon={<Trash2 className="h-4 w-4" />} onClick={() => setItems((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== product.id)))}>
+                      Tirar
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="lime" disabled={!made} icon={<Plus className="h-4 w-4" />} onClick={() => setItems((all) => ({ ...all, [product.id]: { named: [blankRow()], bySize: {} } }))}>
+                      Quero esta
+                    </Button>
+                  )}
+                </div>
               </div>
               {item && (
                 <ItemEditor
@@ -333,6 +431,37 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           )
         })}
       </section>
+
+      {(data.extras.personalization || data.extras.noLogo || data.extras.earlyArt) && (
+        <section className="card space-y-3 p-5">
+          <h2 className="text-sm font-extrabold tracking-wider uppercase">Personalização e arte</h2>
+          {data.extras.personalization && (
+            <p className="text-sm">
+              <strong>Nome e número</strong> na peça
+              {personalizationPrice !== null && `: ${money(personalizationPrice)} por peça`} — entra na conta sozinho quando você
+              preenche o nome ou o número.
+            </p>
+          )}
+          {data.extras.noLogo && (
+            <label className="flex items-start gap-3 rounded-2xl border-2 border-line p-3 text-sm">
+              <input type="checkbox" className="mt-0.5 accent-ink" checked={noLogo} onChange={(e) => setNoLogo(e.target.checked)} />
+              <span>
+                <strong>Sem o logo da 4Play</strong>
+                {noLogoPrice !== null && <> — acréscimo de {money(noLogoPrice)} por peça</>}
+              </span>
+            </label>
+          )}
+          {data.extras.earlyArt && (
+            <label className="flex items-start gap-3 rounded-2xl border-2 border-line p-3 text-sm">
+              <input type="checkbox" className="mt-0.5 accent-ink" checked={earlyArt} onChange={(e) => setEarlyArt(e.target.checked)} />
+              <span>
+                <strong>Quero aprovar a arte antes do pedido</strong>
+                {data.extras.earlyArt.unitPrice !== null && <> — {money(data.extras.earlyArt.unitPrice)}, descontados do pedido</>}
+              </span>
+            </label>
+          )}
+        </section>
+      )}
 
       <section className="card space-y-4 p-5">
         <h2 className="text-sm font-extrabold tracking-wider uppercase">Para quando?</h2>
@@ -372,22 +501,6 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           </p>
         )}
         {eventPast && <p className="text-sm font-semibold text-red-700">Essa data já passou.</p>}
-
-        <div>
-          <p className="label">Tecido</p>
-          <div className="flex flex-wrap gap-2">
-            {[...data.fabrics.map((value) => [value, FABRIC_NAMES[value]] as const), [null, 'Não sei — a loja ajuda'] as const].map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setFabric(value)}
-                className={clsx('rounded-full border-2 px-3 py-1.5 text-xs font-extrabold', fabric === value ? 'border-ink bg-lime' : 'border-line')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
       </section>
 
       <section className="card p-5">
@@ -402,13 +515,22 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           <div className="min-w-0">
             <p className="display text-2xl sm:text-3xl">{int(pieces)} peças</p>
             {value !== null && pieces > 0 && (
-              <p className="text-xs text-white/70 sm:text-sm">Cerca de {money(value.toFixed(2))} — o valor final vem na conferência.</p>
+              <>
+                <p className="text-xs text-white/70 sm:text-sm">Cerca de {money(value.toFixed(2))} — o valor final vem na conferência.</p>
+                {(personalizationValue > 0 || noLogoValue > 0) && (
+                  <p className="text-[11px] text-white/60">
+                    Peças {money(piecesValue.toFixed(2))}
+                    {personalizationValue > 0 && ` · nome e número (${int(personalizedPieces)}) ${money(personalizationValue.toFixed(2))}`}
+                    {noLogoValue > 0 && ` · sem logo ${money(noLogoValue.toFixed(2))}`}
+                  </p>
+                )}
+              </>
             )}
           </div>
           <Button
             variant="lime"
             icon={send.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            disabled={pieces === 0 || registrationMissing || whenMissing || incomplete.length > 0 || send.isPending}
+            disabled={pieces === 0 || registrationMissing || whenMissing || incomplete.length > 0 || notMade.length > 0 || send.isPending}
             onClick={() => {
               if (window.confirm('Enviar o pedido? Depois de enviado, só quem te atendeu consegue mudar.')) send.mutate()
             }}
@@ -421,12 +543,27 @@ const IntakeForm = ({ token, data, onSent }: { token: string; data: PublicIntake
           <p className="mt-2 text-xs font-semibold text-lime">Diga para quando: é para um evento ou não.</p>
         )}
         {incomplete.length > 0 && <p className="mt-2 text-xs font-semibold text-lime">Falta o tamanho em alguma linha de {incomplete[0]}.</p>}
+        {notMade.length > 0 && fabric !== null && (
+          <p className="mt-2 text-xs font-semibold text-lime">
+            {notMade[0]?.name} não é feita em {FABRIC_NAMES[fabric].toLowerCase()}: troque o tecido ou tire a peça.
+          </p>
+        )}
         {send.isError && (
           <div className="mt-3">
             <ErrorBox message={send.error instanceof ApiError ? send.error.message : errorMessage(send.error)} />
           </div>
         )}
       </section>
+
+      <Modal open={measuring !== null} title={measuring ? `Medidas — ${measuring.name}` : 'Medidas'} onClose={() => setMeasuring(null)} wide>
+        <div className="space-y-6">
+          {data.sizeCharts
+            .filter((chart) => measuring?.sizeChartIds.includes(chart.id))
+            .map((chart) => (
+              <SizeChartTable key={chart.id} chart={chart} />
+            ))}
+        </div>
+      </Modal>
     </div>
   )
 }

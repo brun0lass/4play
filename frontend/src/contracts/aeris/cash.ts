@@ -254,6 +254,13 @@ export const RecordCashMovementRequest = z.object({
   direction: CashMovementDirectionSchema.optional(),
   amount: positiveAmountField,
   note: optionalNote,
+  /**
+   * A senha do gerente digitada na sessão do caixa (F249, ADR-0026).
+   *
+   * Só a sangria usa: quem não tem `pos.supervise` manda a autorização de
+   * quem tem, para este caixa e este valor. Uma autorização, uma sangria.
+   */
+  authorisationId: z.uuid().optional(),
 })
 
 export type RecordCashMovementRequest = z.input<
