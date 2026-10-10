@@ -263,11 +263,26 @@ export const ProductionOrderLine = z.object({
 export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
 
 /** Uma quantidade de uma peça — "100 Camisa" (F230). */
+/**
+ * De quem é a peça personalizada (F263): cada linha de personalizado é a sua
+ * célula. `key` identifica a pessoa na peça e no tamanho (nome e número
+ * normalizados); `name` vazio é o só-número.
+ */
+export const PieceOwnerSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  number: z.string(),
+})
+
+export type PieceOwnerType = z.infer<typeof PieceOwnerSchema>
+
 export const ProductionPieceCount = z.object({
   piece: z.string(),
   /** O tamanho da célula (F239). Nulo na leva antiga, que não dizia. */
   size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
   quantity: z.number().int(),
+  /** O personalizado (F263); nulo é peça da grade. */
+  person: PieceOwnerSchema.nullable().default(null),
 })
 
 export type ProductionPieceCountType = z.infer<typeof ProductionPieceCount>
@@ -635,10 +650,13 @@ export const SplitBatchRequest = z.object({
         /** O tamanho (F239). Nulo: a peça, saindo na ordem dos tamanhos. */
         size: z.enum(UNIFORM_SIZE_VALUES).nullable().default(null),
         quantity: z.number().int().min(1).max(100_000),
+        /** A pessoa do personalizado (`person.key`, F263); só com o tamanho. */
+        person: z.string().min(1).max(120).nullable().default(null),
       })
     )
     .min(1, 'Escolha quantas peças vão para a leva nova.')
-    .max(50),
+    // Cada personalizado é uma célula (F263): um time inteiro cabe.
+    .max(500),
   printerIds: z.array(z.uuid()).max(20).default([]),
   force: z.boolean().default(false),
 })
@@ -1384,6 +1402,8 @@ export const SectorCellSchema = z.object({
   size: z.enum(UNIFORM_SIZE_VALUES).nullable(),
   quantity: z.number().int(),
   done: z.number().int(),
+  /** O personalizado, conferido nome por nome (F263); nulo é peça da grade. */
+  person: PieceOwnerSchema.nullable().default(null),
 })
 
 export type SectorCellType = z.infer<typeof SectorCellSchema>
@@ -1443,7 +1463,8 @@ export const SetSectorDoneRequest = z.object({
   cells: z
     .array(
       z.object({
-        key: z.string().min(1).max(120),
+        // Peça, tamanho e, no personalizado, a pessoa (F263).
+        key: z.string().min(1).max(200),
         done: z.number().int().min(0).max(100_000),
       })
     )

@@ -18,6 +18,7 @@ import {
   fetchOrder,
   fetchPrinters,
   fetchQueue,
+  fetchSizeCharts,
   fetchViewer,
 } from '@/api/uniforms'
 import { useAuth } from '@/auth/AuthProvider'
@@ -75,6 +76,19 @@ export const useViewer = () => {
     enabled: can('uniforms.read'),
   })
 }
+
+/**
+ * As peças da loja: as mesmas de "Peças e medidas" — cada tabela de medidas é
+ * uma peça. A grade, os personalizados e a tabela da costureira escolhem daqui.
+ */
+export const usePieceNames = () =>
+  useQuery({
+    queryKey: ['size-charts'],
+    queryFn: ({ signal }) => fetchSizeCharts(signal),
+    staleTime: 5 * 60_000,
+    // O nome da peça na ficha vai até 40 letras; a tabela aceita 60.
+    select: (charts) => [...new Set(charts.map((chart) => chart.name.trim().slice(0, 40)))],
+  })
 
 export const useMembers = () =>
   useQuery({ queryKey: keys.members, queryFn: ({ signal }) => fetchMembers(signal), staleTime: 5 * 60_000 })

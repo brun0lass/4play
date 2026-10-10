@@ -46,6 +46,12 @@ export const STAGES: readonly Stage[] = [
   'pronto',
 ]
 
+/**
+ * O nome do personalizado que só tem número — o mesmo `UNNAMED_PERSON` do
+ * Aeris. O Aeris exige um nome na linha; a tela mostra o campo vazio.
+ */
+export const UNNAMED_PERSON = '—'
+
 export const SIZES: readonly Size[] = [
   'PP',
   'P',
@@ -288,13 +294,24 @@ export type Part = {
 export const piecesTotal = (pieces: readonly PieceCount[]): number =>
   pieces.reduce((sum, count) => sum + count.quantity, 0)
 
-/** A célula como chave — a mesma regra do Aeris (`cellKey`): "camisa|M". */
-export const cellKey = (count: Pick<PieceCount, 'piece' | 'size'>): string =>
-  `${pieceKey(count.piece)}|${count.size ?? ''}`
+/**
+ * A célula como chave — a mesma regra do Aeris (`cellKey`): "camisa|M"; no
+ * personalizado, com a pessoa: "camisa|M|joão#10" (F263).
+ */
+export const cellKey = (count: Pick<PieceCount, 'piece' | 'size'> & { person?: PieceCount['person'] }): string =>
+  count.person
+    ? `${pieceKey(count.piece)}|${count.size ?? ''}|${count.person.key}`
+    : `${pieceKey(count.piece)}|${count.size ?? ''}`
+
+/** "JOÃO 10", "10" no só-número, "STAFF" sem número — quem é o personalizado. */
+export const personLabel = (person: NonNullable<PieceCount['person']>): string =>
+  [person.name, person.number].filter(Boolean).join(' ') || 'Sem nome'
 
 /** "Camisa M", ou só "Camisa" quando a leva antiga não sabe o tamanho. */
-export const cellLabel = (count: Pick<PieceCount, 'piece' | 'size'>): string =>
-  count.size === null ? count.piece : `${count.piece} ${count.size}`
+export const cellLabel = (count: Pick<PieceCount, 'piece' | 'size'> & { person?: PieceCount['person'] }): string => {
+  const base = count.size === null ? count.piece : `${count.piece} ${count.size}`
+  return count.person ? `${base} · ${personLabel(count.person)}` : base
+}
 
 /** "10 Camisa (1 P · 9 M) · 5 Shorts (M)": por peça, e os tamanhos dela. */
 export const piecesText = (pieces: readonly PieceCount[]): string => {

@@ -1,2 +1,2 @@
-Copiado de aerisone/packages/contracts/src no commit 2e909bd em 2026-10-09T19:50:41.746Z.
+Copiado de aerisone/packages/contracts/src no commit 829a0d4 em 2026-10-10T09:11:11.826Z.
 NÃO edite à mão: rode `npm run sync:contracts`.

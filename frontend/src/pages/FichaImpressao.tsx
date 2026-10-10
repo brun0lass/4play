@@ -264,11 +264,17 @@ export const FichaImpressaoPage = () => {
 
         <div className="flex flex-wrap items-start gap-6">
           <div>
+            {/*
+              Grade vazia: a tabela em branco é para o cliente preencher à mão.
+              Com os personalizados já preenchidos, ela só ocupa a folha.
+            */}
             {blocks.length === 0 ? (
+              personalization.length > 0 ? null : (
               <GradeTable
                 block={{ name: 'Modelo', rows: [], sizes: [...ADULT_SIZES] }}
                 blankRows={6}
               />
+              )
             ) : (
               blocks.map((b) => (
                 <GradeTable

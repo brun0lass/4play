@@ -11,9 +11,10 @@ import { Badge, Button, Empty, ErrorBox, Modal, PageHeader, Spinner } from '@/co
 import { useAccess } from '@/lib/access'
 import { int, money } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
-import { keys, useSeamstressJobs, useSeamstresses } from '@/lib/queries'
+import { keys, usePieceNames, useSeamstressJobs, useSeamstresses } from '@/lib/queries'
 
 /** As peças que a 4Play faz — as mesmas sugestões da grade do Aeris. */
+/** Sugestões enquanto a loja não cadastrou as peças em "Peças e medidas". */
 const PIECES = ['Camisa', 'Regata', 'Shorts', 'Shorts com bolso', 'Longa', 'Manguito', 'Sunga', 'Top', 'Babylook', 'Polo']
 
 const TERMS = [
@@ -136,6 +137,8 @@ const SeamstressForm = ({ value, onClose }: { value: SeamstressSummaryType | 'ne
   const [term, setTerm] = useState('15')
   const [notes, setNotes] = useState('')
   const [prices, setPrices] = useState<PriceRow[]>([])
+  const catalog = usePieceNames()
+  const suggestions = catalog.data && catalog.data.length > 0 ? catalog.data : PIECES
 
   useEffect(() => {
     if (value === null) return
@@ -274,7 +277,7 @@ const SeamstressForm = ({ value, onClose }: { value: SeamstressSummaryType | 'ne
           <p className="mb-1 text-xs font-extrabold tracking-wide uppercase">Tabela dela</p>
           <p className="mb-2 text-xs text-muted">Quanto ela cobra por peça de cada tipo. Na hora de mandar a costura dá para combinar outro valor.</p>
           <datalist id="pecas-costura">
-            {PIECES.map((piece) => <option key={piece} value={piece} />)}
+            {suggestions.map((piece) => <option key={piece} value={piece} />)}
           </datalist>
           <div className="space-y-2">
             {prices.map((row, index) => (

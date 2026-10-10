@@ -27,10 +27,11 @@ export const TabelaLojaPage = () => {
   const { can } = useAuth()
   return (
     <div>
-      <PageHeader kicker="Medidas de cada modelo" title="Tabela de medidas">
+      <PageHeader kicker="As peças da loja e as medidas delas" title="Peças e medidas">
         <p className="mt-2 text-sm text-muted">
-          Cadastre e revise as medidas. Em Produtos, escolha as tabelas que o
-          cliente vê para cada peça.
+          Cada peça daqui aparece para escolher na grade e nos personalizados.
+          Em Produtos, marque as medidas que o cliente vê no link. Apagar uma
+          peça não mexe nos pedidos que já a usam.
         </p>
       </PageHeader>
       <ChartsTab manage={can('uniforms.manage')} />
@@ -71,14 +72,14 @@ const ChartsTab = ({ manage }: { manage: boolean }) => {
           icon={<Plus className="h-4 w-4" />}
           onClick={() => setEditing('new')}
         >
-          Nova tabela de medidas
+          Nova peça
         </Button>
       )}
       {charts.data.length === 0 && (
-        <Empty title="Nenhuma tabela de medidas">
+        <Empty title="Nenhuma peça cadastrada">
           <p>
-            Cadastre a medida de cada modelo; depois escolha, em cada peça,
-            quais o cliente vê no link.
+            Cadastre cada peça e, se quiser, as medidas; depois escolha, em
+            cada produto, quais medidas o cliente vê no link.
           </p>
         </Empty>
       )}
@@ -89,8 +90,8 @@ const ChartsTab = ({ manage }: { manage: boolean }) => {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted">
                 {chart.productIds.length === 0
-                  ? 'Nenhuma peça mostra esta tabela.'
-                  : `${String(chart.productIds.length)} peça(s) mostram.`}
+                  ? 'Nenhum produto mostra estas medidas.'
+                  : `${String(chart.productIds.length)} produto(s) mostram as medidas.`}
               </span>
               {manage && (
                 <>
@@ -110,7 +111,7 @@ const ChartsTab = ({ manage }: { manage: boolean }) => {
                     onClick={() => {
                       if (
                         window.confirm(
-                          `Apagar a tabela "${chart.name}"? As peças deixam de mostrá-la.`
+                          `Apagar a peça "${chart.name}"? Ela sai da lista de escolha e os produtos deixam de mostrar as medidas. Os pedidos que já a usam continuam iguais.`
                         )
                       )
                         remove.mutate(chart)
@@ -244,7 +245,7 @@ const ChartEditor = ({
       open={chart !== null}
       wide
       title={
-        chart === 'new' ? 'Nova tabela de medidas' : 'Editar tabela de medidas'
+        chart === 'new' ? 'Nova peça' : 'Editar peça'
       }
       onClose={() => {
         save.reset()
@@ -270,11 +271,11 @@ const ChartEditor = ({
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="label">Nome do modelo</span>
+            <span className="label">Nome da peça</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={60}
+              maxLength={40}
               className="field"
               placeholder="Camiseta masculina"
             />

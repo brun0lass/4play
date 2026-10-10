@@ -2,9 +2,12 @@ import type { ProductionOrderResponseType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import { Headset } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 import { fetchFabrics, storeKeys } from '@/api/uniform-store'
+import { changeOrderSalesperson } from '@/api/orders'
 import { saveSheet } from '@/api/uniforms'
+import { useAuth } from '@/auth/AuthProvider'
 import {
   SaveBar,
   Section,
@@ -12,8 +15,11 @@ import {
   useFichaSection,
 } from '@/components/ficha/Section'
 import { useToast } from '@/components/Toast'
+import { Button, ErrorBox } from '@/components/ui'
 import { useAccess } from '@/lib/access'
-import { keys } from '@/lib/queries'
+import { errorMessage } from '@/lib/http'
+import { useSalesDocument } from '@/lib/order-lines'
+import { keys, useMembers } from '@/lib/queries'
 import {
   LOGISTICS_LABELS,
   PAYMENT_MARK_META,
@@ -98,7 +104,8 @@ export const SheetForm = ({
 
   return (
     <Section title="Atendimento" icon={<Headset className="h-3.5 w-3.5" />}>
-      <div className="grid grid-cols-2 gap-3">
+      <SalespersonField order={order} />
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="dispatch">
             Despacho
@@ -280,5 +287,95 @@ export const SheetForm = ({
         }
       />
     </Section>
+  )
+}
+
+/**
+ * O vendedor do pedido. Não é da ficha: é do pedido de vendas do Aeris, que
+ * tem a versão dele — por isso grava sozinho, fora do "Gravar" do bloco.
+ *
+ * Num pedido já confirmado, só quem altera pedido (`sales.amend`: gerente,
+ * admin, dono) troca; o Aeris guarda o antes e o depois na auditoria.
+ */
+const SalespersonField = ({ order }: { order: Order }) => {
+  const { can } = useAuth()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const members = useMembers()
+  const doc = useSalesDocument(order.id)
+  const current = order.salespersonUserId ?? ''
+  const [choice, setChoice] = useState(current)
+  useEffect(() => setChoice(current), [current])
+
+  const canChange =
+    doc.data !== undefined &&
+    (doc.data.status === 'draft' || can('sales.amend'))
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      changeOrderSalesperson(order.id, {
+        version: doc.data!.version,
+        salespersonUserId: choice || null,
+        reason: 'Vendedor trocado na ficha do pedido',
+      }),
+    onSuccess: () => toast('Vendedor trocado.'),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['sales-document', order.id] })
+      void queryClient.invalidateQueries({ queryKey: keys.order(order.id) })
+      void queryClient.invalidateQueries({ queryKey: keys.queueAll })
+    },
+  })
+
+  const known = members.data?.some((m) => m.userId === current) ?? false
+  const changed = choice !== current
+
+  return (
+    <div>
+      <label className="label" htmlFor="salesperson">
+        Vendedor
+      </label>
+      <div className="flex gap-2">
+        <select
+          id="salesperson"
+          className="field"
+          disabled={!canChange || mutation.isPending}
+          value={choice}
+          onChange={(e) => {
+            mutation.reset()
+            setChoice(e.target.value)
+          }}
+        >
+          <option value="">Ninguém</option>
+          {current && !known && (
+            <option value={current}>{order.salespersonName ?? 'Vendedor atual'}</option>
+          )}
+          {members.data?.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.displayName}
+            </option>
+          ))}
+        </select>
+        {changed && (
+          <>
+            <Button variant="ghost" size="sm" disabled={mutation.isPending} onClick={() => setChoice(current)}>
+              Desfazer
+            </Button>
+            <Button variant="lime" size="sm" busy={mutation.isPending} onClick={() => mutation.mutate()}>
+              Trocar
+            </Button>
+          </>
+        )}
+      </div>
+      {doc.data && !canChange && (
+        <p className="mt-1 text-[11px] font-semibold text-muted">
+          Só o gerente, o admin ou o dono trocam o vendedor de um pedido confirmado.
+        </p>
+      )}
+      {mutation.isError && (
+        <div className="mt-2">
+          <ErrorBox message={errorMessage(mutation.error)} />
+        </div>
+      )}
+    </div>
   )
 }

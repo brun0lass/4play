@@ -88,7 +88,7 @@ export const SplitBatchDialog = ({ part, onClose }: { part: Part | null; onClose
         sourceBatchId: part.batch?.id ?? null,
         from,
         to,
-        pieces: chosen.map((count) => ({ piece: count.piece, size: count.size, quantity: quantityOf(cellKey(count)) })),
+        pieces: chosen.map((count) => ({ piece: count.piece, size: count.size, quantity: quantityOf(cellKey(count)), person: count.person?.key ?? null })),
         printerIds,
         force,
       })

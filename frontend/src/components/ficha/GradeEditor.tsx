@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 
 import { saveGrade } from '@/api/uniforms'
 import { SaveBar, Section, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { PieceSelect } from '@/components/PieceSelect'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui'
 import { int } from '@/lib/format'
@@ -132,13 +133,12 @@ export const GradeEditor = ({
                   />
                 </td>
                 <td className="p-0.5">
-                  <input
-                    className="field h-9 w-24 px-2 text-xs"
-                    placeholder="Camisa"
-                    maxLength={40}
+                  <PieceSelect
+                    className="h-9 w-44 px-2 text-xs"
+                    placeholder="Peça"
                     disabled={disabled}
                     value={row.piece}
-                    onChange={(e) => update(index, { piece: e.target.value })}
+                    onChange={(piece) => update(index, { piece })}
                   />
                 </td>
                 {sizes.map((size) => (

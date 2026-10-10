@@ -87,6 +87,18 @@ export const SaveBar = ({
 }
 
 /**
+ * JSON com as chaves em ordem: `{ M: '2', G: '1' }` e `{ G: '1', M: '2' }` são
+ * o mesmo rascunho. Sem isso, a linha digitada numa ordem e devolvida pelo
+ * servidor em outra deixava o bloco "não gravado" depois de gravar.
+ */
+const stableJson = (value: unknown): string =>
+  JSON.stringify(value, (_, item: unknown) =>
+    item !== null && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : item
+  )
+
+/**
  * O rascunho de um bloco da ficha.
  *
  * Quando o servidor manda uma versão nova (a fila se atualiza sozinha), o
@@ -94,20 +106,20 @@ export const SaveBar = ({
  * não pode sumir debaixo dela.
  */
 export const useDraft = <T,>(initial: T) => {
-  const initialKey = JSON.stringify(initial)
+  const initialKey = stableJson(initial)
   const [draft, setDraft] = useState<T>(initial)
   const base = useRef(initialKey)
   useEffect(() => {
     if (base.current === initialKey) return
     setDraft((current) =>
-      JSON.stringify(current) === base.current ? (JSON.parse(initialKey) as T) : current
+      stableJson(current) === base.current ? (JSON.parse(initialKey) as T) : current
     )
     base.current = initialKey
   }, [initialKey])
   return {
     draft,
     setDraft,
-    dirty: JSON.stringify(draft) !== initialKey,
+    dirty: stableJson(draft) !== initialKey,
     reset: () => setDraft(JSON.parse(initialKey) as T),
   }
 }

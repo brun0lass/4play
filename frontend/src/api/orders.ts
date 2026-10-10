@@ -94,3 +94,24 @@ export const updateOrderLines = async (
       body: UpdateSalesDocumentRequest.parse(input),
     })
   ).document
+
+/**
+ * Troca o vendedor do pedido (F137 do Aeris). Num pedido confirmado o Aeris
+ * pede o motivo e o gerente (`sales.amend`), e recusa quando o pedido já
+ * entrou numa comissão fechada.
+ */
+export const changeOrderSalesperson = async (
+  id: string,
+  input: { version: number; salespersonUserId: string | null; reason: string }
+) =>
+  SalesDocumentResponse.parse(
+    await request(`/api/v1/sales/documents/${id}`, {
+      method: 'PATCH',
+      body: UpdateSalesDocumentRequest.parse({
+        version: input.version,
+        salespersonUserId: input.salespersonUserId,
+        salespersonChangeReason: input.reason,
+        reason: input.reason,
+      }),
+    })
+  )

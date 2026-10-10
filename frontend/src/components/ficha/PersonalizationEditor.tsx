@@ -5,22 +5,35 @@ import { useState } from 'react'
 
 import { savePersonalization } from '@/api/uniforms'
 import { SaveBar, Section, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { PieceSelect } from '@/components/PieceSelect'
 import { useToast } from '@/components/Toast'
 import { Button, Modal } from '@/components/ui'
 import { int } from '@/lib/format'
 import { keys } from '@/lib/queries'
-import { SIZES, type Size } from '@/lib/uniforms'
+import { SIZES, UNNAMED_PERSON, type Size } from '@/lib/uniforms'
 
 type Row = { name: string; number: string; piece: string; size: Size; quantity: string }
 
 const toRows = (rows: readonly PersonalizationType[]): Row[] =>
-  rows.map((row) => ({ ...row, quantity: String(row.quantity) }))
+  // Os campos na ordem de `Row`: o rascunho compara por JSON, e a linha nova
+  // (Atleta, Colar lista) é montada nessa ordem — senão a seção nunca fica gravada.
+  rows.map((row) => ({
+    name: row.name === UNNAMED_PERSON ? '' : row.name,
+    number: row.number,
+    piece: row.piece,
+    size: row.size,
+    quantity: String(row.quantity),
+  }))
+
+/** A linha vale com nome OU número: "só o número 10" também é personalizado. */
+const filled = (row: Pick<Row, 'name' | 'number'>) => row.name.trim() !== '' || row.number.trim() !== ''
 
 const isSize = (value: string): value is Size => (SIZES as readonly string[]).includes(value)
 
 /**
  * "Colar da planilha": uma linha por atleta, colunas separadas por tab, `;`
- * ou `,` — Nome, Número, Tamanho e, se tiver, Quantidade e Peça.
+ * ou `,` — Nome, Número, Tamanho e, se tiver, Quantidade e Peça. O nome pode
+ * ficar em branco quando só vai número (";10;G").
  */
 const parsePaste = (text: string, piece: string): { rows: Row[]; skipped: number } => {
   let skipped = 0
@@ -32,11 +45,11 @@ const parsePaste = (text: string, piece: string): { rows: Row[]; skipped: number
       const parts = line.split(/\t|;|,/).map((part) => part.trim())
       const [name = '', number = '', sizeRaw = '', quantity = '1', rowPiece] = parts
       const size = sizeRaw.toUpperCase()
-      if (!name || !isSize(size)) {
+      if (!filled({ name, number }) || !isSize(size)) {
         skipped += 1
         return []
       }
-      return [{ name, number, size, quantity: quantity.replace(/\D/g, '') || '1', piece: rowPiece ?? piece }]
+      return [{ name, number, piece: rowPiece ?? piece, size, quantity: quantity.replace(/\D/g, '') || '1' }]
     })
   return { rows, skipped }
 }
@@ -58,16 +71,17 @@ export const PersonalizationEditor = ({
   const { draft: rows, setDraft: setRows, dirty, reset } = useDraft<Row[]>(toRows(saved))
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
-  const [pastePiece, setPastePiece] = useState('Camisa')
+  const [pastePiece, setPastePiece] = useState('')
 
   const toast = useToast()
   const doSave = (sheetVersion: number) =>
       savePersonalization(orderId, {
         version: sheetVersion,
         rows: rows
-          .filter((row) => row.name.trim())
+          .filter(filled)
           .map((row) => ({
-            name: row.name.trim(),
+            // Só número: o Aeris guarda o nome como "—", como faz o link do cliente.
+            name: row.name.trim() || UNNAMED_PERSON,
             number: row.number.trim(),
             piece: row.piece.trim(),
             size: row.size,
@@ -99,7 +113,7 @@ export const PersonalizationEditor = ({
       aside={<span className="rounded-full bg-ink px-3 py-1 text-xs font-extrabold text-lime">{int(total)} peças</span>}
     >
       {rows.length === 0 ? (
-        <p className="py-2 text-sm text-muted">Nenhuma peça com nome e número.</p>
+        <p className="py-2 text-sm text-muted">Nenhuma peça com nome ou número.</p>
       ) : (
         <div className="scroll-thin -mx-5 max-h-[28rem] overflow-auto px-5">
           <table className="w-full min-w-[560px] text-sm">
@@ -108,7 +122,7 @@ export const PersonalizationEditor = ({
                 <th className="w-8 pb-2 text-left">#</th>
                 <th className="pb-2 text-left">Nome</th>
                 <th className="w-20 pb-2 text-left">Número</th>
-                <th className="w-32 pb-2 text-left">Peça</th>
+                <th className="w-44 pb-2 text-left">Peça</th>
                 <th className="w-24 pb-2 text-left">Tamanho</th>
                 <th className="w-16 pb-2 text-left">Qtd</th>
                 {!disabled && <th className="w-8" />}
@@ -119,13 +133,13 @@ export const PersonalizationEditor = ({
                 <tr key={index}>
                   <td className="pr-1 text-xs font-bold text-muted">{index + 1}</td>
                   <td className="p-0.5">
-                    <input className="field h-9 px-2 text-xs font-bold uppercase" maxLength={80} disabled={disabled} value={row.name} onChange={(e) => update(index, { name: e.target.value })} />
+                    <input className="field h-9 px-2 text-xs font-bold uppercase" maxLength={80} disabled={disabled} placeholder={row.number.trim() ? 'Só número' : ''} value={row.name} onChange={(e) => update(index, { name: e.target.value })} />
                   </td>
                   <td className="p-0.5">
                     <input className="field h-9 px-2 text-center text-xs font-extrabold" maxLength={10} disabled={disabled} value={row.number} onChange={(e) => update(index, { number: e.target.value })} />
                   </td>
                   <td className="p-0.5">
-                    <input className="field h-9 px-2 text-xs" maxLength={40} disabled={disabled} value={row.piece} onChange={(e) => update(index, { piece: e.target.value })} />
+                    <PieceSelect className="h-9 px-2 text-xs" disabled={disabled} placeholder="Peça" value={row.piece} onChange={(piece) => update(index, { piece })} />
                   </td>
                   <td className="p-0.5">
                     <select className="field h-9 px-2 text-xs font-bold" disabled={disabled} value={row.size} onChange={(e) => update(index, { size: e.target.value as Size })}>
@@ -158,7 +172,7 @@ export const PersonalizationEditor = ({
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { name: '', number: '', piece: current.at(-1)?.piece ?? 'Camisa', size: current.at(-1)?.size ?? 'M', quantity: '1' },
+                { name: '', number: '', piece: current.at(-1)?.piece ?? '', size: current.at(-1)?.size ?? 'M', quantity: '1' },
               ])
             }
           >
@@ -209,21 +223,21 @@ export const PersonalizationEditor = ({
           Uma linha por atleta: <strong className="text-ink">Nome, Número, Tamanho</strong> (e, se quiser,
           Quantidade e Peça). Pode colar direto do Excel ou do WhatsApp.
         </p>
-        <div className="mb-3 w-48">
+        <div className="mb-3 w-64">
           <label className="label" htmlFor="pastePiece">Peça padrão</label>
-          <input id="pastePiece" className="field" value={pastePiece} onChange={(e) => setPastePiece(e.target.value)} />
+          <PieceSelect id="pastePiece" value={pastePiece} onChange={setPastePiece} />
         </div>
         <textarea
           rows={10}
           className="field font-mono text-xs"
-          placeholder={'JOÃO; 10; G\nPEDRO; 7; M\nLUCAS; 99; GG'}
+          placeholder={'JOÃO; 10; G\nPEDRO; 7; M\n; 99; GG'}
           value={pasteText}
           onChange={(e) => setPasteText(e.target.value)}
         />
         {pasteText && (
           <p className="mt-2 text-xs font-bold">
             {preview.rows.length} válida(s)
-            {preview.skipped > 0 && <span className="text-amber-700"> · {preview.skipped} ignorada(s) (sem nome ou tamanho desconhecido)</span>}
+            {preview.skipped > 0 && <span className="text-amber-700"> · {preview.skipped} ignorada(s) (sem nome nem número, ou tamanho desconhecido)</span>}
           </p>
         )}
       </Modal>

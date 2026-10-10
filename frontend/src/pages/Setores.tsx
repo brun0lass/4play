@@ -11,14 +11,14 @@ import {
   ArrowUp,
   CheckCheck,
   ListOrdered,
+  UserRoundCheck,
   Minus,
   Plus,
   Printer,
   Search,
-  Users,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
@@ -53,8 +53,10 @@ import {
   STAGE_REFUSALS,
   canMoveStage,
   canWork,
+  cellLabel,
   isFactorySector,
   orderRef,
+  personLabel,
   pieceKey,
   type FactorySector,
   type Stage,
@@ -391,9 +393,7 @@ const SectorCard = ({
   const canSend = canMoveStage(viewer, part.stage, nextStage)
   // O que a pessoa marcou e ainda não foi gravado (grava logo depois de parar de clicar).
   const [draft, setDraft] = useState<Record<string, number>>({})
-  const [typing, setTyping] = useState<Record<string, string>>({})
   const [chosenPrinters, setChosenPrinters] = useState<string[]>([])
-  const [showNames, setShowNames] = useState(false)
   const [incident, setIncident] = useState<IncidentDraft | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const pending = useRef<Record<string, number>>({})
@@ -470,13 +470,12 @@ const SectorCard = ({
     onError: refresh,
   })
 
-  const names = part.names.filter((row) =>
-    part.cells.some(
-      (cell) =>
-        pieceKey(cell.piece) === pieceKey(row.piece) &&
-        (cell.size === null || cell.size === row.size)
-    )
-  )
+  // A grade e os personalizados são peças diferentes (F263 do Aeris): a grade
+  // conta por tamanho, o personalizado é conferido nome por nome.
+  const gradeCells = part.cells.filter((cell) => cell.person === null)
+  const personCells = part.cells.filter((cell) => cell.person !== null)
+  const peopleDone = personCells.filter((cell) => doneOf(cell) >= cell.quantity).length
+  const allPeople = personCells.length > 0 && peopleDone === personCells.length
 
   return (
     <article
@@ -548,147 +547,79 @@ const SectorCard = ({
         </p>
       ) : (
         <div className="space-y-3">
-          {byPiece(part.cells).map((group) => (
+          {byPiece(gradeCells).map((group) => (
             <div key={group.piece}>
               <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
                 {group.piece}
               </p>
               <div className="flex flex-wrap gap-2">
-                {group.cells.map((cell) => {
-                  const value = doneOf(cell)
-                  const full = value >= cell.quantity
-                  return (
-                    <div
-                      key={cell.key}
-                      className={clsx(
-                        'w-[7.5rem] rounded-2xl border-2 p-2 text-center',
-                        full ? 'border-lime-600 bg-lime/30' : 'border-line'
-                      )}
-                    >
+                {group.cells.map((cell) => (
+                  <CellBox
+                    key={cell.key}
+                    cell={cell}
+                    value={doneOf(cell)}
+                    canMark={canMark}
+                    onMark={(value) => mark(cell, value)}
+                    top={
                       <p className="text-[11px] font-extrabold text-muted">
                         {cell.size ?? 'sem tamanho'}
                       </p>
-                      <p
-                        className="text-xl leading-tight font-extrabold"
-                        title="A fazer"
-                      >
-                        {int(cell.quantity - value)}
-                        <span className="text-[10px] font-bold text-muted">
-                          {' '}
-                          /{int(cell.quantity)}
-                        </span>
-                      </p>
-                      <div className="mt-1 border-t border-dashed border-line pt-1">
-                        <p className="text-[10px] font-bold text-muted uppercase">
-                          Feitas
-                        </p>
-                        {canMark ? (
-                          <div className="flex items-center justify-center gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => mark(cell, value - 1)}
-                              disabled={value === 0}
-                              className="rounded-full p-1 hover:bg-black/5 disabled:opacity-30"
-                              aria-label={`Uma ${cell.piece} ${cell.size ?? ''} a menos`}
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <input
-                              value={typing[cell.key] ?? String(value)}
-                              onChange={(e) =>
-                                setTyping((all) => ({
-                                  ...all,
-                                  [cell.key]: e.target.value.replace(/\D/g, ''),
-                                }))
-                              }
-                              onFocus={(e) => e.currentTarget.select()}
-                              onBlur={() => {
-                                const typed = typing[cell.key]
-                                if (
-                                  typed !== undefined &&
-                                  Number(typed || '0') !== value
-                                )
-                                  mark(cell, Number(typed || '0'))
-                                setTyping((all) =>
-                                  Object.fromEntries(
-                                    Object.entries(all).filter(
-                                      ([key]) => key !== cell.key
-                                    )
-                                  )
-                                )
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                              }}
-                              inputMode="numeric"
-                              className="field h-7 w-11 px-1 text-center text-sm font-extrabold"
-                              aria-label={`Feitas ${cell.piece} ${cell.size ?? ''}`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => mark(cell, value + 1)}
-                              disabled={full}
-                              className="rounded-full p-1 hover:bg-black/5 disabled:opacity-30"
-                              aria-label={`Mais uma ${cell.piece} ${cell.size ?? ''}`}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-sm font-extrabold">{int(value)}</p>
-                        )}
-                        {canMark && !full && (
-                          <button
-                            type="button"
-                            onClick={() => mark(cell, cell.quantity)}
-                            className="mt-0.5 text-[10px] font-bold text-muted hover:text-ink"
-                          >
-                            Todas
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                    }
+                  />
+                ))}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {names.length > 0 && (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setShowNames((value) => !value)}
-            className="inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-ink"
-          >
-            <Users className="h-3.5 w-3.5" /> {showNames ? 'Esconder' : 'Ver'}{' '}
-            os nomes ({names.length})
-          </button>
-          {showNames && (
-            <div className="scroll-thin mt-2 max-h-56 overflow-y-auto rounded-2xl bg-paper p-2">
-              <table className="w-full text-xs">
-                <tbody>
-                  {names.map((row, index) => (
-                    <tr
-                      key={`${row.name}-${row.number}-${String(index)}`}
-                      className="border-t border-line first:border-0"
-                    >
-                      <td className="py-1 font-bold">{row.name || '—'}</td>
-                      <td className="py-1 text-center">{row.number}</td>
-                      <td className="py-1">{row.piece}</td>
-                      <td className="py-1 text-center font-bold">{row.size}</td>
-                      <td className="py-1 text-right text-muted">
-                        {row.quantity > 1 ? `${String(row.quantity)}×` : ''}
-                      </td>
-                    </tr>
+      {personCells.length > 0 && (
+        <section className={clsx('rounded-2xl border border-line bg-paper/60 p-3', gradeCells.length > 0 && 'mt-4')}>
+          <header className="mb-2 flex flex-wrap items-center gap-2">
+            <p className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wide uppercase">
+              <UserRoundCheck className="h-4 w-4" /> Personalizados
+            </p>
+            <span
+              className={clsx(
+                'rounded-full px-2.5 py-0.5 text-[11px] font-extrabold',
+                allPeople ? 'bg-lime-600 text-white' : 'bg-ink text-lime'
+              )}
+            >
+              {int(peopleDone)} de {int(personCells.length)} conferidos
+            </span>
+            {canMark && (
+              <button
+                type="button"
+                onClick={() => {
+                  for (const cell of personCells) mark(cell, allPeople ? 0 : cell.quantity)
+                }}
+                className="ml-auto text-[11px] font-bold text-muted hover:text-ink"
+              >
+                {allPeople ? 'Desmarcar todos' : 'Conferir todos'}
+              </button>
+            )}
+          </header>
+          <div className="space-y-2.5">
+            {byPiece(personCells).map((group) => (
+              <div key={group.piece}>
+                <p className="mb-1 text-[11px] font-extrabold tracking-wide text-muted uppercase">{group.piece}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.cells.map((cell) => (
+                    <CellBox
+                      key={cell.key}
+                      cell={cell}
+                      value={doneOf(cell)}
+                      canMark={canMark}
+                      onMark={(value) => mark(cell, value)}
+                      wide
+                      top={<PersonTop cell={cell} />}
+                    />
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {canSend && needsPrinter && done > 0 && (
@@ -796,5 +727,115 @@ const SectorCard = ({
         onClose={() => setIncident(null)}
       />
     </article>
+  )
+}
+
+/**
+ * Uma célula no setor (F239): o que falta fazer sobre o total e, embaixo, as
+ * feitas com − / + / digitar e "Todas". A grade e o personalizado (F263 do
+ * Aeris) usam o mesmo cartão; muda só o topo — o tamanho, ou a pessoa.
+ */
+const CellBox = ({
+  cell,
+  value,
+  canMark,
+  onMark,
+  top,
+  wide = false,
+}: {
+  cell: SectorCellType
+  value: number
+  canMark: boolean
+  onMark: (value: number) => void
+  top: ReactNode
+  wide?: boolean
+}) => {
+  const [typing, setTyping] = useState<string | null>(null)
+  const full = value >= cell.quantity
+  const what = cellLabel(cell)
+  return (
+    <div
+      className={clsx(
+        'rounded-2xl border-2 p-2 text-center',
+        wide ? 'w-[8.5rem]' : 'w-[7.5rem]',
+        full ? 'border-lime-600 bg-lime/30' : 'border-line bg-white'
+      )}
+    >
+      {top}
+      <p className="text-xl leading-tight font-extrabold" title="A fazer">
+        {int(cell.quantity - value)}
+        <span className="text-[10px] font-bold text-muted"> /{int(cell.quantity)}</span>
+      </p>
+      <div className="mt-1 border-t border-dashed border-line pt-1">
+        <p className="text-[10px] font-bold text-muted uppercase">Feitas</p>
+        {canMark ? (
+          <div className="flex items-center justify-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onMark(value - 1)}
+              disabled={value === 0}
+              className="rounded-full p-1 hover:bg-black/5 disabled:opacity-30"
+              aria-label={`Uma a menos: ${what}`}
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <input
+              value={typing ?? String(value)}
+              onChange={(e) => setTyping(e.target.value.replace(/\D/g, ''))}
+              onFocus={(e) => e.currentTarget.select()}
+              onBlur={() => {
+                if (typing !== null && Number(typing || '0') !== value) onMark(Number(typing || '0'))
+                setTyping(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+              }}
+              inputMode="numeric"
+              className="field h-7 w-11 px-1 text-center text-sm font-extrabold"
+              aria-label={`Feitas: ${what}`}
+            />
+            <button
+              type="button"
+              onClick={() => onMark(value + 1)}
+              disabled={full}
+              className="rounded-full p-1 hover:bg-black/5 disabled:opacity-30"
+              aria-label={`Mais uma: ${what}`}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm font-extrabold">{int(value)}</p>
+        )}
+        {canMark && !full && (
+          <button
+            type="button"
+            onClick={() => onMark(cell.quantity)}
+            className="mt-0.5 text-[10px] font-bold text-muted hover:text-ink"
+          >
+            Todas
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** O topo do cartão do personalizado: o tamanho num selo, o número e o nome. */
+const PersonTop = ({ cell }: { cell: SectorCellType }) => {
+  const person = cell.person!
+  return (
+    <div className="mb-1 flex flex-col items-center gap-0.5">
+      <span className="rounded-md bg-ink px-1.5 py-0.5 text-[10px] leading-none font-extrabold text-lime">
+        {cell.size ?? '—'}
+      </span>
+      {person.number && <span className="text-sm leading-none font-extrabold">{person.number}</span>}
+      <span
+        className="line-clamp-2 min-h-[1.75rem] text-[11px] leading-tight font-bold break-words uppercase"
+        title={personLabel(person)}
+      >
+        {person.name || 'Só número'}
+      </span>
+    </div>
   )
 }

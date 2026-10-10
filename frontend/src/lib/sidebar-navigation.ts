@@ -127,7 +127,7 @@ export const GROUPED_NAV: NavGroup[] = [
       },
       {
         to: '/tabela',
-        label: 'Tabelas de medidas',
+        label: 'Peças e medidas',
         icon: Ruler,
         show: (a) => a.priceTable,
       },
