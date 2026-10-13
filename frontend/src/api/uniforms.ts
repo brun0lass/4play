@@ -1,6 +1,8 @@
 import {
   CreateIncidentRequest,
   IncidentListResponse,
+  ClientEventListResponse,
+  type ClientEventSummaryType,
   IncidentResponse,
   ResolveIncidentRequest,
   SectorResponse,
@@ -669,3 +671,10 @@ export const deleteSizeChart = async (
     method: 'DELETE',
   })
 }
+
+/** O diário da ficha (F279): do mais novo para o mais velho. Só quem gerencia lê. */
+export const fetchClientEvents = async (
+  query: { orderId?: string; userId?: string; kinds?: string; from?: string; limit?: number },
+  signal?: AbortSignal
+): Promise<ClientEventSummaryType[]> =>
+  ClientEventListResponse.parse(await request(`${BASE}/client-events${qs(query)}`, { signal })).events

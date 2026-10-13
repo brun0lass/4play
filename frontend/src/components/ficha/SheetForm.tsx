@@ -10,14 +10,22 @@ import { saveSheet } from '@/api/uniforms'
 import { useAuth } from '@/auth/AuthProvider'
 import {
   SaveBar,
+  DraftRecovery,
   Section,
+  tracked,
   useDraft,
   useFichaSection,
 } from '@/components/ficha/Section'
+import {
+  DeliveryAddressFields,
+  addressDraftOf,
+  addressToSave,
+  type AddressDraft,
+} from '@/components/ficha/DeliveryAddress'
 import { useToast } from '@/components/Toast'
 import { Button, ErrorBox } from '@/components/ui'
 import { useAccess } from '@/lib/access'
-import { errorMessage } from '@/lib/http'
+import { UserError, errorMessage } from '@/lib/http'
 import { useSalesDocument } from '@/lib/order-lines'
 import { keys, useMembers } from '@/lib/queries'
 import {
@@ -40,6 +48,8 @@ type Draft = {
   paymentMark: PaymentMark
   gradeChecked: boolean
   notes: string
+  /** O local de entrega (F280). */
+  address: AddressDraft
 }
 
 const fromOrder = (order: Order): Draft => ({
@@ -52,6 +62,7 @@ const fromOrder = (order: Order): Draft => ({
   paymentMark: order.paymentMark,
   gradeChecked: order.gradeChecked,
   notes: order.notes ?? '',
+  address: addressDraftOf(order.deliveryAddress),
 })
 
 /** O cabeçalho da ficha — a parte do ATENDIMENTO. */
@@ -69,11 +80,30 @@ export const SheetForm = ({
     queryKey: storeKeys.fabrics,
     queryFn: ({ signal }) => fetchFabrics(signal),
   })
-  const { draft, setDraft, dirty, reset } = useDraft<Draft>(fromOrder(order))
+  const { draft, setDraft, dirty, reset, recovery } = useDraft<Draft>(fromOrder(order), {
+    orderId: order.id,
+    section: 'atendimento',
+  })
   const { seeMoney } = useAccess()
+  const { can } = useAuth()
+  // O endereço do cadastro, para começar dele (só quem lê vendas o vê).
+  const doc = useSalesDocument(can('sales.read') ? order.id : undefined)
+  const parts = doc.data?.customerContact?.addressParts ?? null
+  const customerAddress =
+    parts?.street && parts.city && parts.state
+      ? {
+          cep: parts.postalCode?.replace(/\D/g, '') || null,
+          street: parts.street,
+          number: parts.number,
+          complement: parts.complement,
+          district: parts.district,
+          city: parts.city,
+          uf: parts.state,
+        }
+      : null
 
   const toast = useToast()
-  const doSave = (version: number) =>
+  const send = tracked(order.id, 'atendimento', (version: number) =>
     saveSheet(order.id, {
       version,
       dispatchDate: draft.dispatchDate || null,
@@ -85,7 +115,16 @@ export const SheetForm = ({
       paymentMark: draft.paymentMark,
       gradeChecked: draft.gradeChecked,
       notes: draft.notes || null,
+      deliveryAddress: addressToSave(draft.address) as Exclude<ReturnType<typeof addressToSave>, 'incompleto'>,
     })
+  )
+  // Endereço pela metade não grava calado (F280): diz o que falta.
+  const doSave = (version: number) =>
+    addressToSave(draft.address) === 'incompleto'
+      ? Promise.reject(
+          new UserError('Para gravar o local de entrega, preencha a rua, a cidade e a UF (ou deixe o endereço todo em branco).')
+        )
+      : send(version)
   useFichaSection('sheet', 'Atendimento', dirty, doSave)
 
   const mutation = useMutation({
@@ -104,6 +143,7 @@ export const SheetForm = ({
 
   return (
     <Section title="Atendimento" icon={<Headset className="h-3.5 w-3.5" />}>
+      {editable && <DraftRecovery recovery={recovery} />}
       <SalespersonField order={order} />
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
@@ -254,6 +294,16 @@ export const SheetForm = ({
           />
           Grade conferida
         </label>
+      </div>
+
+      <div className="mt-3">
+        <span className="label">Local de entrega</span>
+        <DeliveryAddressFields
+          value={draft.address}
+          onChange={(address) => setDraft((current) => ({ ...current, address }))}
+          disabled={disabled}
+          customerAddress={customerAddress}
+        />
       </div>
 
       <div className="mt-3">

@@ -415,6 +415,7 @@ export type IncidentSector =
   | 'atendimento'
   | 'arte'
   | 'impressao'
+  | 'calandra'
   | 'corte'
   | 'costura'
   | 'embalagem'
@@ -424,6 +425,8 @@ export const INCIDENT_SECTORS: readonly IncidentSector[] = [
   'atendimento',
   'arte',
   'impressao',
+  // A prensa entre a impressão e o corte (F278 do Aeris).
+  'calandra',
   'corte',
   'costura',
   'embalagem',
@@ -434,6 +437,7 @@ export const SECTOR_LABELS: Record<IncidentSector, string> = {
   atendimento: 'Atendimento',
   arte: 'Arte',
   impressao: 'Impressão',
+  calandra: 'Calandra',
   corte: 'Corte',
   costura: 'Costura',
   embalagem: 'Embalagem',

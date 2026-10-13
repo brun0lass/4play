@@ -390,8 +390,14 @@ export const PosOrderRequest = z.object({
   customerPartyId: z.string().min(1),
   /** Quem vendeu. Obrigatório, como no checkout e no orçamento. */
   salespersonUserId: z.string().min(1),
-  /** Quem leva. Uma pessoa com o papel `courier` (F098). */
-  courierPartyId: z.string().min(1),
+  /**
+   * Quem leva. Uma pessoa com o papel `courier` (F098).
+   *
+   * `null` é "Entregar na rota" (F266): o pedido nasce confirmado, com a
+   * mercadoria reservada, e espera na fila até o caixa montar a saída — só a
+   * conta com a chave `entregas-rota`.
+   */
+  courierPartyId: z.string().min(1).nullable(),
   priceListId: z.string().min(1).nullable().default(null),
   discountAmount: amountString('O desconto').default('0'),
   discountPercent: percentString('O desconto percentual')

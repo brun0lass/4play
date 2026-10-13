@@ -1,19 +1,28 @@
 import { ArrowLeft, Printer } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import type { ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router'
 
+import { addressLine } from '@/components/ficha/DeliveryAddress'
 import { Logo } from '@/components/Logo'
 import { Button, ErrorBox, Spinner } from '@/components/ui'
-import type { GradeEntryType } from '@/contracts/aeris/uniforms.ts'
+import type {
+  GradeEntryType,
+  ProductionOrderResponseType,
+} from '@/contracts/aeris/uniforms.ts'
 import { errorMessage } from '@/lib/http'
 import { useAuth } from '@/auth/AuthProvider'
+import { ColorDots, colorLabel } from '@/lib/grade-color'
 import { useSalesDocument } from '@/lib/order-lines'
 import { useOrder } from '@/lib/queries'
 import { ADULT_SIZES, SIZES, type Size } from '@/lib/uniforms'
 
 /**
  * A ficha do pedido para imprimir ou mandar ao cliente — o "PEDIDO - 3226"
- * da 4Play: cabeçalho, logística marcada, a grade por modelo (com linhas em
+ * da 4Play: cabeçalho, logística marcada, a grade por cor (com linhas em
  * branco para o cliente preencher), os personalizados e as imagens da arte.
+ *
+ * Uma ficha por folha: `/pedidos/:id/imprimir` imprime uma, `/fichas?ids=`
+ * imprime várias de uma vez (marcadas na Planilha).
  */
 
 const fullDate = (day: string | null) => {
@@ -56,22 +65,63 @@ const Cell = ({
   label,
   value,
   wide,
+  span,
 }: {
   label: string
   value: string
   wide?: boolean
+  span?: number
 }) => (
   <>
     <th className="border border-ink bg-white px-2 py-1 text-left text-[11px] font-extrabold whitespace-nowrap uppercase">
       {label}:
     </th>
     <td
+      colSpan={span}
       className={`border border-ink px-2 py-1 text-center text-xs uppercase ${wide ? 'min-w-48' : 'min-w-24'}`}
     >
       {value}
     </td>
   </>
 )
+
+/**
+ * As impressoras em que o pedido saiu. Pedido dividido diz a leva de cada
+ * uma ("Leva 1: Amarela 2 · Leva 2: Preta"); sem impressora ainda, mostra as
+ * do pedido de onde ele foi repetido, que é o que a fábrica quer saber.
+ */
+const printersText = ({
+  order,
+  repeatedFrom,
+}: ProductionOrderResponseType): string => {
+  const names = (list: readonly { name: string }[]) =>
+    list.map((p) => p.name).join(', ')
+  const levas = [
+    { number: 1, printers: order.printers },
+    ...order.batches,
+  ].filter((b) => b.printers.length > 0)
+  // Todas as levas na mesma máquina: basta o nome dela.
+  if (new Set(levas.map((b) => names(b.printers))).size > 1)
+    return levas
+      .map((b) => `Leva ${String(b.number)}: ${names(b.printers)}`)
+      .join(' · ')
+  if (levas[0]) return names(levas[0].printers)
+  if (repeatedFrom && repeatedFrom.printers.length > 0)
+    return `Ainda não impresso — o pedido ${String(repeatedFrom.number ?? '')} saiu em ${names(repeatedFrom.printers)}`
+  return 'Ainda não impresso'
+}
+
+/** O título da tabela da grade: a cor (com a bolinha) ou só "Grade". */
+const BlockTitle = ({ name }: { name: string }) => {
+  const label = colorLabel(name)
+  if (!label) return <>Grade</>
+  return (
+    <span className="inline-flex items-center gap-2">
+      <ColorDots block={name} className="h-4 w-4" />
+      {label}
+    </span>
+  )
+}
 
 const GradeTable = ({
   block,
@@ -91,7 +141,7 @@ const GradeTable = ({
             colSpan={block.sizes.length + 1}
             className="border border-ink bg-sky-200 py-1.5 text-sm font-extrabold"
           >
-            {block.name || 'Modelo'}
+            <BlockTitle name={block.name} />
           </th>
         </tr>
         <tr>
@@ -148,8 +198,8 @@ const GradeTable = ({
   )
 }
 
-export const FichaImpressaoPage = () => {
-  const { id = '' } = useParams()
+/** Uma ficha, do tamanho de uma folha. */
+const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
   const detail = useOrder(id)
   const { can } = useAuth()
   // O endereço vem do pedido de vendas, que o designer e o operador não leem
@@ -166,28 +216,21 @@ export const FichaImpressaoPage = () => {
 
   const { order, grade, personalization, attachments } = detail.data
   const blocks = blocksOf(grade)
-  const address = doc.data?.customerContact?.address ?? order.customerCity ?? ''
+  // O local de entrega do pedido (F280); sem ele, o endereço do cliente.
+  const address = order.deliveryAddress
+    ? addressLine(order.deliveryAddress)
+    : (doc.data?.customerContact?.address ?? order.customerCity ?? '')
   const mark = (on: boolean) => (on ? 'X' : '')
 
   return (
-    <div className="min-h-full bg-white p-6 text-ink print:p-0">
-      <div className="no-print mb-6 flex items-center justify-between">
-        <Link
-          to={`/pedidos/${id}`}
-          className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-ink"
-        >
-          <ArrowLeft className="h-4 w-4" /> Voltar para a ficha
-        </Link>
-        <Button
-          variant="lime"
-          icon={<Printer className="h-4 w-4" />}
-          onClick={() => window.print()}
-        >
-          Imprimir / salvar PDF
-        </Button>
-      </div>
-
-      <div className="mx-auto max-w-[1100px]">
+    <div className="bg-white text-ink">
+      <div
+        className={
+          last
+            ? 'mx-auto max-w-[1100px]'
+            : 'mx-auto mb-12 max-w-[1100px] border-b-2 border-dashed border-line pb-12 print:mb-0 print:break-after-page print:border-0 print:pb-0'
+        }
+      >
         <h1 className="mb-2 text-center text-2xl font-black">
           PEDIDO - {order.number ?? 'RASCUNHO'}
         </h1>
@@ -218,6 +261,13 @@ export const FichaImpressaoPage = () => {
                 <Cell
                   label="Tecido"
                   value={order.fabricName ? order.fabricName : 'A definir'}
+                />
+              </tr>
+              <tr>
+                <Cell
+                  label="Impressoras"
+                  value={printersText(detail.data)}
+                  span={7}
                 />
               </tr>
             </tbody>
@@ -271,7 +321,7 @@ export const FichaImpressaoPage = () => {
             {blocks.length === 0 ? (
               personalization.length > 0 ? null : (
               <GradeTable
-                block={{ name: 'Modelo', rows: [], sizes: [...ADULT_SIZES] }}
+                block={{ name: '', rows: [], sizes: [...ADULT_SIZES] }}
                 blankRows={6}
               />
               )
@@ -367,6 +417,67 @@ export const FichaImpressaoPage = () => {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+const PrintBar = ({
+  back,
+  backLabel,
+  children,
+}: {
+  back: string
+  backLabel: string
+  children?: ReactNode
+}) => (
+  <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
+    <Link
+      to={back}
+      className="inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-ink"
+    >
+      <ArrowLeft className="h-4 w-4" /> {backLabel}
+    </Link>
+    {children}
+    <Button
+      variant="lime"
+      icon={<Printer className="h-4 w-4" />}
+      onClick={() => window.print()}
+    >
+      Imprimir / salvar PDF
+    </Button>
+  </div>
+)
+
+export const FichaImpressaoPage = () => {
+  const { id = '' } = useParams()
+  return (
+    <div className="min-h-full bg-white p-6 text-ink print:p-0">
+      <PrintBar back={`/pedidos/${id}`} backLabel="Voltar para a ficha" />
+      <FichaSheet id={id} />
+    </div>
+  )
+}
+
+/** Várias fichas de uma vez, uma por folha — o "Imprimir fichas" da Planilha. */
+export const FichasLotePage = () => {
+  const [params] = useSearchParams()
+  const ids = [...new Set((params.get('ids') ?? '').split(',').filter(Boolean))]
+  return (
+    <div className="min-h-full bg-white p-6 text-ink print:p-0">
+      <PrintBar back="/producao?vista=planilha" backLabel="Voltar para a planilha">
+        <span className="text-sm font-bold text-muted">
+          {ids.length} {ids.length === 1 ? 'ficha' : 'fichas'}, uma por folha
+        </span>
+      </PrintBar>
+      {ids.length === 0 ? (
+        <p className="p-8 text-center text-sm text-muted">
+          Nenhum pedido escolhido. Marque os pedidos na Planilha.
+        </p>
+      ) : (
+        ids.map((id, i) => (
+          <FichaSheet key={id} id={id} last={i === ids.length - 1} />
+        ))
+      )}
     </div>
   )
 }

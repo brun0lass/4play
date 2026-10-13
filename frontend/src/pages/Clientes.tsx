@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, History, Mail, MapPin, Phone, Search, UserPl
 import { useDeferredValue, useState } from 'react'
 
 import { fetchCustomers } from '@/api/store'
+import { CustomerDialog } from '@/components/CustomerDialog'
 import { CustomerHistory } from '@/components/CustomerHistory'
 import { NewCustomerDialog } from '@/components/NewCustomerDialog'
 import { Badge, Button, Empty, ErrorBox, Modal, PageHeader, Spinner } from '@/components/ui'
@@ -19,6 +20,8 @@ export const ClientesPage = () => {
   const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
   const [viewing, setViewing] = useState<{ id: string; name: string } | null>(null)
+  // A ficha do cliente: abre ao clicar no cartão.
+  const [opened, setOpened] = useState<string | null>(null)
   const { can } = useAuth()
   const deferred = useDeferredValue(search.trim())
 
@@ -70,7 +73,8 @@ export const ClientesPage = () => {
           </Button>
         </Empty>
       )}
-      <NewCustomerDialog open={creating} initialName={deferred} onClose={() => setCreating(false)} />
+      <NewCustomerDialog open={creating} initialName={deferred} onClose={() => setCreating(false)} onCreated={(party) => setOpened(party.id)} />
+      <CustomerDialog partyId={opened} onClose={() => setOpened(null)} />
       <Modal
         open={viewing !== null}
         wide
@@ -88,7 +92,20 @@ export const ClientesPage = () => {
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {customers.data.items.map((party) => (
-              <article key={party.id} className="card p-4 transition hover:border-ink/30">
+              <article
+                key={party.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir o cadastro de ${party.tradeName ?? party.legalName}`}
+                onClick={() => setOpened(party.id)}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault()
+                    setOpened(party.id)
+                  }
+                }}
+                className="card cursor-pointer p-4 transition hover:border-ink/30 hover:shadow-sm"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-extrabold">{party.tradeName ?? party.legalName}</p>
@@ -104,7 +121,7 @@ export const ClientesPage = () => {
                     </p>
                   )}
                   {party.mainPhone && (
-                    <a href={whatsapp(party.mainPhone)} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 hover:underline">
+                    <a href={whatsapp(party.mainPhone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 hover:underline">
                       <Phone className="h-3.5 w-3.5 text-muted" /> {party.mainPhone}
                     </a>
                   )}
@@ -125,7 +142,10 @@ export const ClientesPage = () => {
                 {can('uniforms.read') && (
                   <button
                     type="button"
-                    onClick={() => setViewing({ id: party.id, name: party.tradeName ?? party.legalName })}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setViewing({ id: party.id, name: party.tradeName ?? party.legalName })
+                    }}
                     className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-bold hover:border-ink/30"
                   >
                     <History className="h-3.5 w-3.5" /> Pedidos e máquinas

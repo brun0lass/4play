@@ -392,6 +392,16 @@ const CancelDialog = ({
   )
 }
 
+/**
+ * O Aeris pede um motivo de 3 letras ou mais para mudar um pedido confirmado
+ * (F147). Na 4Play ele é opcional: em branco vai um texto padrão.
+ */
+const amendmentReason = (typed: string): string => {
+  const text = typed.trim()
+  if (text.length >= 3) return text
+  return text ? `Itens do pedido editados: ${text}` : 'Itens do pedido editados'
+}
+
 type EditLine = {
   key: string
   variantId: string
@@ -421,10 +431,12 @@ const EditDialog = ({
   const { can } = useAuth()
   const [rows, setRows] = useState<EditLine[]>([])
   const [adding, setAdding] = useState(false)
+  const [reason, setReason] = useState('')
 
   useEffect(() => {
     if (!open) return
     setAdding(false)
+    setReason('')
     setRows(
       lines.map((l) => ({
         key: crypto.randomUUID(),
@@ -446,6 +458,7 @@ const EditDialog = ({
     mutationFn: () =>
       updateOrderLines(orderId, {
         version,
+        reason: amendmentReason(reason),
         lines: rows.map((r) => ({
           variantId: r.variantId,
           description: r.description,
@@ -516,6 +529,11 @@ const EditDialog = ({
         <div className="flex items-center justify-between rounded-2xl bg-ink px-4 py-3 text-white">
           <span className="text-sm font-bold">{int(pieces)} peças</span>
           <span className="display text-2xl text-lime">{money(total.toFixed(2))}</span>
+        </div>
+        <div>
+          <label className="label" htmlFor="edit-reason">Motivo da alteração (opcional)</label>
+          <input id="edit-reason" maxLength={400} className="field" placeholder="Ex.: cliente pediu mais 10 conjuntos" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <p className="mt-1 text-[11px] text-muted">Fica no histórico do pedido com o seu nome, o dia e a hora.</p>
         </div>
         {m.isError && <ErrorBox message={errorMessage(m.error)} />}
       </div>

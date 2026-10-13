@@ -334,6 +334,8 @@ export const ConversationSummarySchema = z.object({
   contactWaId: z.string().nullable(),
   /** O LID do contato, quando conhecido (F192). Não é telefone. */
   contactLid: z.string().nullable().default(null),
+  /** `group`: um grupo do WhatsApp acompanhado (F268). */
+  contactKind: z.enum(['person', 'group']).default('person'),
   contactProfileName: z.string().nullable(),
   contactPartyId: z.string().nullable(),
   /**
@@ -454,6 +456,9 @@ export const MessageSummarySchema = z.object({
   errorCode: z.string().nullable(),
   origin: MessageOriginSchema,
   senderEmployeeId: z.string().nullable(),
+  /** Num grupo (F268): quem escreveu. */
+  participantName: z.string().nullable().default(null),
+  participantPhone: z.string().nullable().default(null),
   pricingModel: z.string().nullable(),
   pricingType: z.string().nullable(),
   pricingCategory: z.string().nullable(),
@@ -1673,3 +1678,43 @@ export const AssignBulkResponse = z.object({
   missing: z.number().int(),
 })
 export type AssignBulkResponse = z.infer<typeof AssignBulkResponse>
+
+// ---------------------------------------------------------------------------
+// Os grupos dos lojistas (F268)
+// ---------------------------------------------------------------------------
+
+/** Um grupo do número: o que o aparelho está e o que o Aeris acompanha. */
+export const ChannelGroupSchema = z.object({
+  /** Os dígitos antes de `@g.us`. */
+  groupJid: z.string(),
+  name: z.string(),
+  /** Nulo quando o aparelho não está mais no grupo (só o Aeris lembra dele). */
+  participants: z.number().int().nullable(),
+  /** O contato do grupo no Aeris; nulo se nunca foi acompanhado. */
+  contactId: z.string().nullable(),
+  followed: z.boolean(),
+  partyId: z.string().nullable(),
+  partyName: z.string().nullable(),
+})
+export type ChannelGroup = z.infer<typeof ChannelGroupSchema>
+
+export const ChannelGroupListResponse = z.object({
+  groups: z.array(ChannelGroupSchema),
+})
+export type ChannelGroupListResponse = z.infer<typeof ChannelGroupListResponse>
+
+export const ChannelGroupFollowRequest = z.object({
+  groupJid: z.string().regex(/^[0-9]{6,40}$/),
+  name: z.string().trim().min(1).max(200),
+  partyId: z.uuid().nullable().default(null),
+})
+export type ChannelGroupFollowRequest = z.input<
+  typeof ChannelGroupFollowRequest
+>
+
+export const ChannelGroupUpdateRequest = z.object({
+  partyId: z.uuid().nullable(),
+})
+export type ChannelGroupUpdateRequest = z.input<
+  typeof ChannelGroupUpdateRequest
+>

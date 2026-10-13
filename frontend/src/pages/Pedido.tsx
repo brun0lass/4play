@@ -11,6 +11,7 @@ import { ArtMock } from '@/components/ficha/ArtMock'
 import { FichaContext, Section, useFichaRegistry } from '@/components/ficha/Section'
 import { Attachments } from '@/components/ficha/Attachments'
 import { GradeEditor } from '@/components/ficha/GradeEditor'
+import { OrderItems } from '@/components/ficha/OrderItems'
 import { PersonalizationEditor } from '@/components/ficha/PersonalizationEditor'
 import { SheetForm } from '@/components/ficha/SheetForm'
 import { LevasPanel } from '@/components/order/Levas'
@@ -47,7 +48,7 @@ export const PedidoPage = () => {
   const mover = useStageMover()
   const [confirmRepeat, setConfirmRepeat] = useState(false)
   const [jumpTo, setJumpTo] = useState<Stage | null>(null)
-  const registry = useFichaRegistry()
+  const registry = useFichaRegistry(id)
   const toast = useToast()
   const access = useAccess()
   const [params, setParams] = useSearchParams()
@@ -73,7 +74,7 @@ export const PedidoPage = () => {
   const leave = (to: string) => {
     if (
       registry.dirty.length > 0 &&
-      !window.confirm('Há alterações não gravadas nesta ficha. Sair mesmo assim e perder o que foi digitado?')
+      !window.confirm('Há alterações não gravadas nesta ficha. Sair sem gravar? O que foi digitado fica guardado neste computador e dá para recuperar ao voltar ao pedido.')
     )
       return
     void navigate(to)
@@ -274,6 +275,11 @@ export const PedidoPage = () => {
           </div>
 
           <div role="tabpanel" hidden={tab !== 'grade'} className="space-y-6">
+            <OrderItems
+              order={order}
+              gradePieces={grade.reduce((sum, entry) => sum + entry.quantity, 0)}
+              personalizedPieces={personalization.reduce((sum, row) => sum + row.quantity, 0)}
+            />
             <GradeEditor
               orderId={order.id}
               version={order.sheetVersion}

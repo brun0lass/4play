@@ -6,6 +6,7 @@ import {
   DepositSalesDocumentRequest,
   DispatchSalesDocumentRequest,
   PickupSalesDocumentRequest,
+  SalesDocumentHistoryResponse,
   SalesDocumentResponse,
   TransitionSalesDocumentRequest,
   UpdateSalesDocumentRequest,
@@ -71,11 +72,15 @@ export const cancelOrder = async (
     })
   ).document
 
-/** Trocar os itens (quantidade, preço, produto) de um pedido que ainda não saiu. */
+/**
+ * Trocar os itens (quantidade, preço, produto) de um pedido que ainda não saiu.
+ * O Aeris guarda o motivo no histórico e o exige no pedido confirmado (F147).
+ */
 export const updateOrderLines = async (
   id: string,
   input: {
     version: number
+    reason?: string
     lines: {
       variantId: string
       description: string
@@ -115,3 +120,11 @@ export const changeOrderSalesperson = async (
       }),
     })
   )
+
+/**
+ * O histórico do pedido de vendas (F147 do Aeris): quem mudou os itens, o
+ * total, o cliente ou o vendedor, quando e por quê. A linha do tempo da ficha
+ * mostra as alterações daqui.
+ */
+export const fetchSalesHistory = async (id: string, signal?: AbortSignal) =>
+  SalesDocumentHistoryResponse.parse(await request(`/api/v1/sales/documents/${id}/history`, { signal })).revisions

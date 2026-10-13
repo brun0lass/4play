@@ -40,6 +40,32 @@
     outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
+
+  /*
+   * O Tailwind 4 tirou a "mãozinha" dos botões (fica a seta, como no
+   * navegador). Aqui ela volta para tudo que se clica — e o desabilitado
+   * mostra que não dá.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  a[href],
+  summary,
+  select:not(:disabled),
+  label:has(input[type='checkbox']:not(:disabled)),
+  label:has(input[type='radio']:not(:disabled)),
+  label:has(input[type='color']:not(:disabled)),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='color']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='date']:not(:disabled)::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {

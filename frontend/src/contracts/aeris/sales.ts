@@ -442,6 +442,14 @@ export const SalesDocumentListQuery = z.object({
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
   /**
+   * Esconde o pedido que espera na fila da rota (F266): "Esperando retirada"
+   * lista pedidos confirmados, e o da fila não é retirada.
+   */
+  hideRouteQueue: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /**
    * Só o que foi pago com esta forma (F238): no balcão, ou no acerto do
    * motoboy. Exige `payment.read`, como a coluna "Pagamento".
    */
@@ -488,6 +496,8 @@ export type SalesDocumentListRequest = {
   exchangeable?: boolean | undefined
   /** Esconde o orçamento que já virou pedido ou venda (F162). */
   hideConverted?: boolean | undefined
+  /** Sem os pedidos da fila da rota de entrega (F266). */
+  hideRouteQueue?: boolean | undefined
   /** Só o que foi pago com esta forma (F238). */
   paymentMethodId?: string | undefined
   search?: string | undefined

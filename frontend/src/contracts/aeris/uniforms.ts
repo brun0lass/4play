@@ -307,6 +307,34 @@ export const ProductionBatchSchema = z.object({
 
 export type ProductionBatchType = z.infer<typeof ProductionBatchSchema>
 
+/**
+ * Texto opcional do endereço. Sem `transform`: o esquema também descreve a
+ * resposta, e o JSON Schema não representa transformação — o servidor grava
+ * o texto em branco como nulo.
+ */
+const addressText = (max: number) =>
+  z.string().trim().max(max).nullable().default(null)
+
+/**
+ * O local de entrega do pedido (F280): do pedido, não do cliente — o time
+ * que joga fora recebe lá. O CEP vai só com os dígitos.
+ */
+export const DeliveryAddressSchema = z.object({
+  cep: z
+    .string()
+    .regex(/^\d{8}$/, 'CEP com 8 números.')
+    .nullable()
+    .default(null),
+  street: z.string().trim().min(1, 'Diga a rua.').max(200),
+  number: addressText(20),
+  complement: addressText(120),
+  district: addressText(120),
+  city: z.string().trim().min(1, 'Diga a cidade.').max(120),
+  uf: z.string().regex(/^[A-Z]{2}$/, 'UF com duas letras.'),
+})
+
+export type DeliveryAddressType = z.infer<typeof DeliveryAddressSchema>
+
 export const ProductionOrderSummary = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
@@ -334,6 +362,8 @@ export const ProductionOrderSummary = z.object({
   logistics: z.array(UniformLogisticsSchema),
   eventDate: z.string().nullable(),
   eventNote: z.string().nullable(),
+  /** O local de entrega (F280); nulo é "não informado". */
+  deliveryAddress: DeliveryAddressSchema.nullable().default(null),
   /** Anotação, não dinheiro. O sinal recebido de verdade é `paidAmount` (F173). */
   paymentMark: UniformPaymentMarkSchema,
   /** O andamento da arte (F171). */
@@ -572,6 +602,8 @@ export const UpdateProductionSheetRequest = z.object({
   paymentMark: UniformPaymentMarkSchema,
   gradeChecked: z.boolean(),
   notes: nullableText(2_000),
+  /** O local de entrega (F280). Ausente não mexe; nulo apaga. */
+  deliveryAddress: DeliveryAddressSchema.nullable().optional(),
 })
 
 export type UpdateProductionSheetBody = z.input<
@@ -1382,6 +1414,8 @@ export const INCIDENT_SECTOR_VALUES = [
   'atendimento',
   'arte',
   'impressao',
+  // A prensa entre a impressão e o corte (F278).
+  'calandra',
   'corte',
   'costura',
   'embalagem',
@@ -2201,3 +2235,85 @@ export type UpdateSizeChartBody = z.input<typeof UpdateSizeChartRequest>
 export const DeleteSizeChartRequest = z.object({
   version: z.number().int().positive(),
 })
+
+// ---------------------------------------------------------------------------
+// O diário da ficha (F279)
+// ---------------------------------------------------------------------------
+
+/** O que a tela da ficha registra para diagnóstico. */
+export const CLIENT_EVENT_KIND_VALUES = [
+  'editou',
+  'gravou',
+  'erro-ao-gravar',
+  'linha-bloqueada',
+  'saiu-sem-gravar',
+  'rascunho-recuperado',
+  'rascunho-descartado',
+] as const
+
+export const ClientEventKindSchema = z.enum(CLIENT_EVENT_KIND_VALUES)
+
+/** Um detalhe pequeno e plano: "status": 409, "linhas": 3, "bloco": "grade". */
+const ClientEventDetail = z
+  .record(
+    z.string().max(40),
+    z.union([z.string().max(300), z.number(), z.boolean(), z.null()])
+  )
+  .refine((value) => Object.keys(value).length <= 20, 'Detalhe grande demais.')
+
+export const ClientEventInput = z.object({
+  kind: ClientEventKindSchema,
+  orderId: z.uuid().nullable().default(null),
+  section: z.string().trim().max(40).nullable().default(null),
+  detail: ClientEventDetail.default({}),
+  /** A hora do navegador. */
+  occurredAt: z.iso.datetime({ offset: true }),
+})
+
+export type ClientEventInputType = z.input<typeof ClientEventInput>
+
+/** Os eventos vão em lote: a tela junta alguns segundos e manda de uma vez. */
+export const RecordClientEventsRequest = z.object({
+  events: z.array(ClientEventInput).min(1).max(50),
+})
+
+export type RecordClientEventsBody = z.input<typeof RecordClientEventsRequest>
+
+export const RecordClientEventsResponse = z.object({
+  accepted: z.number().int(),
+})
+
+export const ClientEventListQuery = z.object({
+  orderId: z.uuid().optional(),
+  userId: z.uuid().optional(),
+  kinds: csv(ClientEventKindSchema),
+  /** AAAA-MM-DD, no fuso da loja. */
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.')
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+})
+
+export const ClientEventSummary = z.object({
+  id: z.string(),
+  kind: ClientEventKindSchema,
+  orderId: z.string().nullable(),
+  orderNumber: z.number().int().nullable(),
+  customerName: z.string().nullable(),
+  section: z.string().nullable(),
+  detail: z.record(z.string(), z.unknown()),
+  occurredAt: z.string(),
+  receivedAt: z.string(),
+  userId: z.string(),
+  userName: z.string(),
+  userAgent: z.string().nullable(),
+})
+
+export type ClientEventSummaryType = z.infer<typeof ClientEventSummary>
+
+export const ClientEventListResponse = z.object({
+  events: z.array(ClientEventSummary),
+})
+
+export type ClientEventListResponseType = z.infer<typeof ClientEventListResponse>

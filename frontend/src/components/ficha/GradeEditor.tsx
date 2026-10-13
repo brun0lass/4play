@@ -1,29 +1,36 @@
 import type { GradeEntryType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { clsx } from 'clsx'
 import { Copy, Grid3x3, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { saveGrade } from '@/api/uniforms'
-import { SaveBar, Section, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { DraftRecovery, SaveBar, Section, tracked, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { ColorPicker } from '@/components/ficha/ColorPicker'
 import { PieceSelect } from '@/components/PieceSelect'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui'
+import { logEvent } from '@/lib/diary'
 import { int } from '@/lib/format'
+import { UserError } from '@/lib/http'
+import { NO_COLOR, colorBlock } from '@/lib/grade-color'
 import { keys } from '@/lib/queries'
 import { ADULT_SIZES, SIZES, type Size } from '@/lib/uniforms'
 
 /**
- * A grade como a planilha da fábrica: uma linha por peça (modelo + peça), uma
+ * A grade como a planilha da fábrica: uma linha por peça (cor + peça), uma
  * coluna por tamanho. O Aeris grava uma linha por tamanho; a ida e a volta
- * estão aqui embaixo.
+ * estão aqui embaixo. A cor é opcional e vai no `block` (lib/grade-color).
  */
 
+/** `block` é o texto das cores (lib/grade-color); vazio é sem cor. */
 type Row = { block: string; piece: string; q: Partial<Record<Size, string>> }
 
 const toRows = (entries: readonly GradeEntryType[]): Row[] => {
   const rows = new Map<number, Row>()
   for (const entry of [...entries].sort((a, b) => a.position - b.position)) {
-    const row = rows.get(entry.position) ?? { block: entry.block, piece: entry.piece, q: {} }
+    const block = entry.block.trim() === NO_COLOR ? '' : entry.block
+    const row = rows.get(entry.position) ?? { block, piece: entry.piece, q: {} }
     row.q[entry.size] = String(entry.quantity)
     rows.set(entry.position, row)
   }
@@ -39,14 +46,14 @@ const toEntries = (rows: readonly Row[]): GradeEntryType[] =>
   rows.flatMap((row, position) =>
     SIZES.flatMap((size) => {
       const quantity = qty(row.q[size])
-      if (quantity === 0 || !row.block.trim() || !row.piece.trim()) return []
-      return [{ block: row.block.trim(), piece: row.piece.trim(), size, quantity, position }]
+      if (quantity === 0 || !row.piece.trim()) return []
+      return [{ block: colorBlock(row.block), piece: row.piece.trim(), size, quantity, position }]
     })
   )
 
 const rowTotal = (row: Row) => SIZES.reduce((sum, size) => sum + qty(row.q[size]), 0)
 
-const EMPTY_ROW = (block = ''): Row => ({ block, piece: '', q: {} })
+const EMPTY_ROW = (from?: Row): Row => ({ block: from?.block ?? '', piece: '', q: {} })
 
 export const GradeEditor = ({
   orderId,
@@ -62,7 +69,10 @@ export const GradeEditor = ({
   readOnlyReason: string | null
 }) => {
   const queryClient = useQueryClient()
-  const { draft: rows, setDraft: setRows, dirty, reset } = useDraft<Row[]>(toRows(grade))
+  const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(toRows(grade), {
+    orderId,
+    section: 'grade',
+  })
   const [allSizes, setAllSizes] = useState(false)
 
   const sizes = useMemo(() => {
@@ -72,7 +82,26 @@ export const GradeEditor = ({
   }, [rows, allSizes])
 
   const toast = useToast()
-  const doSave = (sheetVersion: number) => saveGrade(orderId, { version: sheetVersion, entries: toEntries(rows) })
+  const send = tracked(
+    orderId,
+    'grade',
+    (sheetVersion: number) => saveGrade(orderId, { version: sheetVersion, entries: toEntries(rows) }),
+    () => ({ linhas: rows.length, pecas: rows.reduce((sum, row) => sum + rowTotal(row), 0) })
+  )
+  // Linha com quantidade e sem peça não é mais descartada calada (F279): o
+  // gravar para e diz qual é. Sem cor, grava.
+  const doSave = (sheetVersion: number) => {
+    const missing = rows.flatMap((row, index) => (rowTotal(row) > 0 && !row.piece.trim() ? [index + 1] : []))
+    if (missing.length > 0) {
+      logEvent('linha-bloqueada', { orderId, section: 'grade', detail: { linhas: missing.join(', ') } })
+      return Promise.reject(
+        new UserError(
+          `${missing.length === 1 ? 'A linha' : 'As linhas'} ${missing.join(', ')} da grade ${missing.length === 1 ? 'tem' : 'têm'} quantidade mas não ${missing.length === 1 ? 'tem' : 'têm'} peça. Escolha a peça (ou apague a linha) e grave de novo.`
+        )
+      )
+    }
+    return send(sheetVersion)
+  }
   useFichaSection('grade', 'Grade', dirty, doSave)
 
   const mutation = useMutation({
@@ -87,7 +116,6 @@ export const GradeEditor = ({
   const update = (index: number, patch: Partial<Row>) =>
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)))
 
-  const incomplete = rows.filter((row) => rowTotal(row) > 0 && (!row.block.trim() || !row.piece.trim())).length
   const total = rows.reduce((sum, row) => sum + rowTotal(row), 0)
   const bySize = (size: Size) => rows.reduce((sum, row) => sum + qty(row.q[size]), 0)
   const disabled = !editable
@@ -96,6 +124,7 @@ export const GradeEditor = ({
     <Section
       title="Grade"
       icon={<Grid3x3 className="h-3.5 w-3.5" />}
+      collapsible={{ key: 'grade' }}
       aside={
         <div className="flex items-center gap-3">
           <label className="inline-flex items-center gap-1.5 text-xs font-bold text-muted">
@@ -106,11 +135,12 @@ export const GradeEditor = ({
         </div>
       }
     >
+      {editable && <DraftRecovery recovery={recovery} />}
       <div className="scroll-thin -mx-5 overflow-x-auto px-5">
         <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="text-[10px] font-extrabold tracking-wider text-muted uppercase">
-              <th className="px-1 pb-2 text-left">Modelo</th>
+              <th className="px-1 pb-2 text-left">Cor</th>
               <th className="px-1 pb-2 text-left">Peça</th>
               {sizes.map((size) => (
                 <th key={size} className="w-12 px-0.5 pb-2 text-center">{size}</th>
@@ -123,18 +153,11 @@ export const GradeEditor = ({
             {rows.map((row, index) => (
               <tr key={index}>
                 <td className="p-0.5">
-                  <input
-                    className="field h-9 w-36 px-2 text-xs"
-                    placeholder="Camisa e Shorts Masc"
-                    maxLength={60}
-                    disabled={disabled}
-                    value={row.block}
-                    onChange={(e) => update(index, { block: e.target.value })}
-                  />
+                  <ColorPicker disabled={disabled} value={row.block} onChange={(block) => update(index, { block })} />
                 </td>
                 <td className="p-0.5">
                   <PieceSelect
-                    className="h-9 w-44 px-2 text-xs"
+                    className={clsx('h-9 w-44 px-2 text-xs', rowTotal(row) > 0 && !row.piece.trim() && 'border-red-500 bg-red-50')}
                     placeholder="Peça"
                     disabled={disabled}
                     value={row.piece}
@@ -200,17 +223,12 @@ export const GradeEditor = ({
           size="sm"
           className="mt-3"
           icon={<Plus className="h-4 w-4" />}
-          onClick={() => setRows((current) => [...current, EMPTY_ROW(current.at(-1)?.block ?? '')])}
+          onClick={() => setRows((current) => [...current, EMPTY_ROW(current.at(-1))])}
         >
           Linha
         </Button>
       )}
 
-      {incomplete > 0 && (
-        <p className="mt-3 text-xs font-bold text-amber-700">
-          {incomplete} linha(s) com quantidade mas sem modelo ou peça — elas não são gravadas.
-        </p>
-      )}
 
       <SaveBar
         dirty={dirty}

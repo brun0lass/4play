@@ -93,16 +93,36 @@ export type RenameProductCategoryBody = z.infer<
  * regra de prefixo, e uma segunda passada não pode desfazer a correção que
  * alguém fez ontem.
  */
+/**
+ * Uma regra do "Classificar pelo nome" (F272): o texto, se o nome começa com
+ * ele ou o contém, a categoria, e se troca também quem já tem outra.
+ *
+ * `prefix` é o nome antigo de `pattern` (F163): um cliente desatualizado ainda
+ * manda assim, e continua funcionando.
+ */
+export const CATEGORIZE_MATCHES = ['prefix', 'contains'] as const
+
+export const CategorizeRuleSchema = z.preprocess(
+  (value) =>
+    typeof value === 'object' &&
+    value !== null &&
+    !('pattern' in value) &&
+    'prefix' in value
+      ? { ...value, pattern: value.prefix }
+      : value,
+  z.object({
+    pattern: z.string().trim().min(1, 'Escreva o texto do nome.').max(60),
+    match: z.enum(CATEGORIZE_MATCHES).default('prefix'),
+    categoryId: z.string().min(1),
+    overwrite: z.boolean().default(false),
+  })
+)
+
+export type CategorizeRuleInput = z.input<typeof CategorizeRuleSchema>
+export type CategorizeRuleType = z.output<typeof CategorizeRuleSchema>
+
 export const CategorizeByNameRequest = z.object({
-  rules: z
-    .array(
-      z.object({
-        prefix: z.string().trim().min(1, 'Escreva o começo do nome.').max(60),
-        categoryId: z.string().min(1),
-      })
-    )
-    .min(1)
-    .max(20),
+  rules: z.array(CategorizeRuleSchema).min(1).max(30),
   /** Só conta, não grava. É o que a tela chama de prévia. */
   dryRun: z.boolean().default(false),
 })
@@ -112,17 +132,39 @@ export type CategorizeByNameBody = z.input<typeof CategorizeByNameRequest>
 export const CategorizeByNameResponse = z.object({
   rules: z.array(
     z.object({
-      prefix: z.string(),
+      pattern: z.string(),
+      match: z.enum(CATEGORIZE_MATCHES),
+      overwrite: z.boolean(),
       categoryId: z.string(),
       categoryName: z.string(),
-      /** Quantos produtos sem categoria começam com este prefixo. */
+      /** Quantos produtos a regra marca: os sem categoria e os que trocam. */
       matched: z.number().int().nonnegative(),
+      /** Desses, quantos já estavam noutra categoria (só com `overwrite`). */
+      changed: z.number().int().nonnegative(),
     })
   ),
   /** Quantos produtos continuam sem categoria depois destas regras. */
   remaining: z.number().int().nonnegative(),
   /** Quantos foram gravados — zero na prévia. */
   updated: z.number().int().nonnegative(),
+})
+
+/** As regras gravadas da conta, na ordem (F272). */
+export const NameRulesResponse = z.object({
+  rules: z.array(
+    z.object({
+      pattern: z.string(),
+      match: z.enum(CATEGORIZE_MATCHES),
+      categoryId: z.string(),
+      overwrite: z.boolean(),
+    })
+  ),
+})
+
+export type NameRulesResponseType = z.infer<typeof NameRulesResponse>
+
+export const SaveNameRulesRequest = z.object({
+  rules: z.array(CategorizeRuleSchema).max(30),
 })
 
 export type CategorizeByNameResponseType = z.infer<

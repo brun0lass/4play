@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { Columns3, Printer } from 'lucide-react'
+import { Columns3, FileStack, Printer } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
@@ -380,6 +380,8 @@ export const Planilha = () => {
   const [month, setMonth] = useState('')
   const [printCols, setPrintCols] = useState<string[]>(readPrint)
   const [choosing, setChoosing] = useState(false)
+  // Os pedidos marcados para imprimir as fichas de uma vez.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const mover = useStageMover()
   const { seeMoney } = useAccess()
   const columns = COLUMNS.filter((c) => seeMoney || !c.money)
@@ -395,6 +397,20 @@ export const Planilha = () => {
   // Os itens vêm na própria fila (F220): uma chamada só, e sem preço para
   // quem não vê dinheiro.
   const items = queue.data?.items ?? []
+  // Só conta o que está na lista: trocar o filtro não imprime pedido escondido.
+  const pickedIds = items.filter((o) => picked.has(o.id)).map((o) => o.id)
+  const allPicked = items.length > 0 && pickedIds.length === items.length
+  const togglePick = (id: string) =>
+    setPicked((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const printFichas = () => {
+    const ids = pickedIds.length > 0 ? pickedIds : items.map((o) => o.id)
+    if (ids.length > 0) void navigate(`/fichas?ids=${ids.join(',')}`)
+  }
 
   const togglePrint = (key: string) => {
     const next = printCols.includes(key)
@@ -440,6 +456,26 @@ export const Planilha = () => {
         >
           Imprimir
         </Button>
+        <Button
+          variant="outline"
+          icon={<FileStack className="h-4 w-4" />}
+          disabled={items.length === 0}
+          title="Uma ficha por folha. Marque os pedidos na primeira coluna, ou imprima todas as da lista."
+          onClick={printFichas}
+        >
+          {pickedIds.length > 0
+            ? `Imprimir fichas (${String(pickedIds.length)})`
+            : `Imprimir todas as fichas (${String(items.length)})`}
+        </Button>
+        {pickedIds.length > 0 && (
+          <button
+            type="button"
+            className="text-xs font-bold text-muted hover:text-ink"
+            onClick={() => setPicked(new Set())}
+          >
+            Desmarcar
+          </button>
+        )}
         {mover.lastError && (
           <span className="text-xs font-bold text-red-600">
             {mover.lastError}
@@ -477,6 +513,20 @@ export const Planilha = () => {
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-paper text-[10px] font-extrabold tracking-wide print:bg-transparent">
+                  <th className="no-print w-8 border border-line px-1 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer align-middle accent-ink"
+                      aria-label="Marcar todos os pedidos para imprimir as fichas"
+                      title="Marcar todos para imprimir as fichas"
+                      checked={allPicked}
+                      onChange={() =>
+                        setPicked(
+                          allPicked ? new Set() : new Set(items.map((o) => o.id))
+                        )
+                      }
+                    />
+                  </th>
                   {columns.map((c) => (
                     <th
                       key={c.key}
@@ -505,9 +555,22 @@ export const Planilha = () => {
                     onClick={() => void navigate(`/pedidos/${o.id}`)}
                     className={clsx(
                       'cursor-pointer hover:bg-lime-50 print:break-inside-avoid',
-                      o.late && 'bg-red-50/50'
+                      o.late && 'bg-red-50/50',
+                      picked.has(o.id) && 'bg-lime-50'
                     )}
                   >
+                    <td
+                      className="no-print border border-line px-1 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer align-middle accent-ink"
+                        aria-label={`Marcar o pedido ${String(o.number ?? '')} para imprimir a ficha`}
+                        checked={picked.has(o.id)}
+                        onChange={() => togglePick(o.id)}
+                      />
+                    </td>
                     {columns.map((c) => (
                       <td
                         key={c.key}
@@ -564,7 +627,7 @@ export const Planilha = () => {
                 {items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={columns.length + 1}
+                      colSpan={columns.length + 2}
                       className="p-8 text-center text-sm text-muted"
                     >
                       Nenhum pedido neste filtro.

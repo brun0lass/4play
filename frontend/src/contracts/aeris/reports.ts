@@ -423,3 +423,127 @@ export const ReturnedPiecesResponse = z.object({
 })
 
 export type ReturnedPiecesResponseType = z.infer<typeof ReturnedPiecesResponse>
+
+/* --- As vendas do período, peça por peça (F271) --------------------------- */
+
+/**
+ * O relatório que o Eduardo pediu para a nota da cliente:
+ *
+ * > "a menina me pediu o relatório das compras que uma cliente fez de alguns
+ * > dias, informando cada peça, cada venda e com valor total — pra ela fazer a
+ * > nota lá no GDOOR"
+ *
+ * E, no áudio seguinte, o consolidado: "tipo semanal, só com valor total, como
+ * a gente tira no GDOOR". São duas rotas: a lista (cada venda com as peças) e o
+ * resumo por dia. A semana é soma de dias, feita na tela.
+ *
+ * O que conta como venda é o mesmo dos outros relatórios (`soldDocuments`):
+ * a cancelada não entra.
+ */
+
+/** O teto da lista. Passou, a resposta diz `truncated` e a tela pede menos dias. */
+export const SALES_REPORT_MAX_SALES = 3000
+
+const isTimeZone = (value: string): boolean => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const SalesReportQuery = z
+  .object({
+    from: z.iso.datetime({ offset: true }),
+    /** Fim EXCLUSIVO, como todo período do produto. */
+    to: z.iso.datetime({ offset: true }),
+    branchId: z.uuid().optional(),
+    /** Só as compras deste cliente. */
+    customerId: z.uuid().optional(),
+    /** Em que dia caiu a venda das 23:30 — só o resumo por dia usa. */
+    timeZone: z
+      .string()
+      .trim()
+      .max(64)
+      .refine(isTimeZone, 'Fuso horário desconhecido.')
+      .default('America/Sao_Paulo'),
+  })
+  .refine(ordered, startsBeforeItEnds)
+  .refine(fits, withinCeiling)
+
+export type SalesReportQuery = z.input<typeof SalesReportQuery>
+export type SalesReportParams = z.output<typeof SalesReportQuery>
+
+export const SalesReportLineSchema = z.object({
+  description: z.string(),
+  sku: z.string().nullable(),
+  unit: z.string(),
+  quantity: decimal,
+  unitPrice: decimal,
+  /** O desconto da linha mais o rateio do desconto da venda. */
+  discount: decimal,
+  total: decimal,
+})
+
+export const SalesReportSaleSchema = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  issuedAt: z.string(),
+  customerName: z.string(),
+  customerDocument: z.string().nullable(),
+  salespersonName: z.string().nullable(),
+  branchName: z.string(),
+  subtotal: decimal,
+  discount: decimal,
+  total: decimal,
+  /** "Pix", "Dinheiro"… pelo nome que a loja deu à forma. */
+  payments: z.array(z.object({ name: z.string(), amount: decimal })),
+  lines: z.array(SalesReportLineSchema),
+})
+
+export type SalesReportSale = z.infer<typeof SalesReportSaleSchema>
+export type SalesReportLine = z.infer<typeof SalesReportLineSchema>
+
+export const SalesReportResponse = z.object({
+  period: z.object({ from: z.string(), to: z.string() }),
+  branchId: z.string().nullable(),
+  customerId: z.string().nullable(),
+  sales: z.array(SalesReportSaleSchema),
+  /** Do período inteiro — mesmo quando a lista foi cortada. */
+  totals: z.object({
+    sales: z.number().int().nonnegative(),
+    subtotal: decimal,
+    discount: decimal,
+    total: decimal,
+  }),
+  truncated: z.boolean(),
+})
+
+export type SalesReportResponseType = z.infer<typeof SalesReportResponse>
+
+export const SalesByDayResponse = z.object({
+  period: z.object({ from: z.string(), to: z.string() }),
+  branchId: z.string().nullable(),
+  customerId: z.string().nullable(),
+  /** Só os dias com venda, em ordem. `day` é `AAAA-MM-DD` no fuso pedido. */
+  days: z.array(
+    z.object({
+      day: z.string(),
+      sales: z.number().int().nonnegative(),
+      subtotal: decimal,
+      discount: decimal,
+      total: decimal,
+    })
+  ),
+  /** O que entrou por forma de pagamento, das vendas do período. */
+  payments: z.array(z.object({ name: z.string(), amount: decimal })),
+  totals: z.object({
+    sales: z.number().int().nonnegative(),
+    subtotal: decimal,
+    discount: decimal,
+    total: decimal,
+  }),
+})
+
+export type SalesByDayResponseType = z.infer<typeof SalesByDayResponse>

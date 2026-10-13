@@ -22,10 +22,11 @@ import { EstoquePage } from '@/pages/RolosEstoque'
 import { CostureirasPage } from '@/pages/Costureiras'
 import { LinksPage } from '@/pages/Links'
 import { OcorrenciasPage } from '@/pages/Ocorrencias'
+import { DiarioPage } from '@/pages/Diario'
 import { ProdutosPage } from '@/pages/ProdutosLoja'
 import { TecidosPage, PersonalizacoesPage } from '@/pages/CadastrosUniformes'
 import { TabelaLojaPage } from '@/pages/TabelaLoja'
-import { FichaImpressaoPage } from '@/pages/FichaImpressao'
+import { FichaImpressaoPage, FichasLotePage } from '@/pages/FichaImpressao'
 import { FinanceiroPage } from '@/pages/Financeiro'
 import { LoginPage } from '@/pages/Login'
 import { LinkPedidoPage } from '@/pages/LinkPedido'
@@ -104,6 +105,15 @@ const App = () => (
       element={
         <RequireSession>
           <FichaImpressaoPage />
+        </RequireSession>
+      }
+    />
+    {/* Várias fichas de uma vez, marcadas na Planilha. */}
+    <Route
+      path="/fichas"
+      element={
+        <RequireSession>
+          <FichasLotePage />
         </RequireSession>
       }
     />
@@ -210,6 +220,14 @@ const App = () => (
         }
       />
       <Route path="ocorrencias" element={<OcorrenciasPage />} />
+      <Route
+        path="diario"
+        element={
+          <Guard allow={(a) => a.isManager}>
+            <DiarioPage />
+          </Guard>
+        }
+      />
       <Route
         path="equipe"
         element={

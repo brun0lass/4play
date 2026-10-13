@@ -70,6 +70,12 @@ export const StorefrontProductsQuery = z.object({
    */
   precoMin: StorefrontPriceSchema.optional(),
   precoMax: StorefrontPriceSchema.optional(),
+  /**
+   * `menu`: a vitrine geral ("Todos", "Recomendados"), sem os produtos das
+   * categorias que a loja tirou do menu (F270) — a peça fica na Pesquisa por
+   * Peça. Só vale sem `categoria`.
+   */
+  vitrine: z.enum(['menu']).optional(),
 })
 
 export const StorefrontProduct = z.object({
@@ -118,10 +124,66 @@ const StorefrontCategory = z.object({
  * A contagem da de cima inclui as filhas, e `?categoria=<id da de cima>` as
  * traz também. Categoria sem produto ativo não vem.
  */
+/**
+ * Os ícones do menu (F270): nomes que o site conhece e desenha (lucide). Lista
+ * fechada de propósito — um nome que o site não conhece viraria um quadrado.
+ */
+export const STOREFRONT_MENU_ICONS = [
+  'smartphone',
+  'cable',
+  'plug',
+  'battery',
+  'monitor',
+  'mouse',
+  'keyboard',
+  'printer',
+  'headphones',
+  'mic',
+  'speaker',
+  'radio',
+  'car',
+  'home',
+  'lamp',
+  'wrench',
+  'flashlight',
+  'lock',
+  'gamepad',
+  'tv',
+  'camera',
+  'router',
+  'book',
+  'pencil',
+  'backpack',
+  'sparkles',
+  'blocks',
+  'watch',
+  'phone',
+  'cup',
+  'gift',
+  'shirt',
+  'umbrella',
+  'zap',
+  'package',
+] as const
+
+export type StorefrontMenuIcon = (typeof STOREFRONT_MENU_ICONS)[number]
+
+/**
+ * O menu (F270): `menu: false` é a categoria que a loja tirou do menu (as de
+ * peça) — continua aqui porque a Pesquisa por Peça acha o id pelo nome. A
+ * ordem da lista é a ordem do menu.
+ */
+const StorefrontMenuFields = z.object({
+  menu: z.boolean().default(true),
+  icone: z.string().nullable().default(null),
+})
+
 export const StorefrontCategoriesResponse = z.object({
   data: z.array(
-    StorefrontCategory.extend({
-      subcategorias: z.array(StorefrontCategory).default([]),
+    StorefrontCategory.extend(StorefrontMenuFields.shape).extend({
+      subcategorias: z
+        .array(StorefrontCategory.extend(StorefrontMenuFields.shape))
+        .default([]),
     })
   ),
 })
@@ -536,4 +598,147 @@ export const StorefrontMetricsResponse = z.object({
 
 export type StorefrontMetricsResponse = z.infer<
   typeof StorefrontMetricsResponse
+>
+
+/* ------------------------------------------------------------------ */
+/* O banner da loja (F269)                                             */
+/* ------------------------------------------------------------------ */
+
+/** O que o site lê: só o que está no ar agora, na ordem do carrossel. */
+export const StorefrontPublicBannersResponse = z.object({
+  data: z.array(
+    z.object({
+      id: z.string(),
+      titulo: z.string(),
+      imagemDesktop: z.string(),
+      /** Nula: o site usa a do computador também no celular. */
+      imagemCelular: z.string().nullable(),
+      link: z.string().nullable(),
+    })
+  ),
+})
+
+export type StorefrontPublicBannersResponse = z.infer<
+  typeof StorefrontPublicBannersResponse
+>
+
+const BannerImageSchema = z.object({
+  url: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+  byteSize: z.number().int(),
+})
+
+export const StorefrontBannerSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  linkUrl: z.string().nullable(),
+  startsAt: z.string().nullable(),
+  endsAt: z.string().nullable(),
+  active: z.boolean(),
+  position: z.number().int(),
+  desktop: BannerImageSchema.nullable(),
+  mobile: BannerImageSchema.nullable(),
+  /** No ar agora: ligado, dentro do período e com a imagem do computador. */
+  live: z.boolean(),
+  version: z.number().int(),
+})
+
+export type StorefrontBannerView = z.infer<typeof StorefrontBannerSchema>
+
+export const StorefrontBannerListResponse = z.object({
+  banners: z.array(StorefrontBannerSchema),
+})
+
+export const StorefrontBannerResponse = z.object({
+  banner: StorefrontBannerSchema,
+})
+
+const BANNER_LINK = z
+  .string()
+  .trim()
+  .max(500)
+  .regex(
+    /^(\/[^/]|https:\/\/)/,
+    'Use um caminho da loja (/shop/…) ou um endereço https://.'
+  )
+
+const BannerFieldsSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  linkUrl: BANNER_LINK.nullable().default(null),
+  startsAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  endsAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  active: z.boolean().default(true),
+})
+
+const periodInOrder = (value: {
+  startsAt: string | null
+  endsAt: string | null
+}): boolean =>
+  value.startsAt === null ||
+  value.endsAt === null ||
+  new Date(value.startsAt) < new Date(value.endsAt)
+
+const PERIOD_MESSAGE = {
+  message: 'O fim tem de ser depois do início.',
+  path: ['endsAt'],
+}
+
+export const CreateStorefrontBannerRequest = BannerFieldsSchema.refine(
+  periodInOrder,
+  PERIOD_MESSAGE
+)
+
+export type CreateStorefrontBannerRequest = z.input<
+  typeof CreateStorefrontBannerRequest
+>
+
+export const UpdateStorefrontBannerRequest = BannerFieldsSchema.extend({
+  version: z.number().int().positive(),
+}).refine(periodInOrder, PERIOD_MESSAGE)
+
+export type UpdateStorefrontBannerRequest = z.input<
+  typeof UpdateStorefrontBannerRequest
+>
+
+export const ReorderStorefrontBannersRequest = z.object({
+  ids: z.array(z.uuid()).max(50),
+})
+
+/* ------------------------------------------------------------------ */
+/* O menu de categorias (F270)                                         */
+/* ------------------------------------------------------------------ */
+
+const MenuLeafSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  products: z.number().int(),
+  inMenu: z.boolean(),
+  position: z.number().int().nullable(),
+  icon: z.string().nullable(),
+})
+
+export const StorefrontMenuResponse = z.object({
+  categories: z.array(
+    MenuLeafSchema.extend({ children: z.array(MenuLeafSchema) })
+  ),
+})
+
+export type StorefrontMenuResponse = z.infer<typeof StorefrontMenuResponse>
+
+export const SaveStorefrontMenuRequest = z.object({
+  items: z
+    .array(
+      z.object({
+        categoryId: z.uuid(),
+        inMenu: z.boolean(),
+        position: z.number().int().min(0).max(10_000).nullable(),
+        icon: z.enum(STOREFRONT_MENU_ICONS).nullable(),
+      })
+    )
+    .max(2000),
+})
+
+export type SaveStorefrontMenuRequest = z.input<
+  typeof SaveStorefrontMenuRequest
 >

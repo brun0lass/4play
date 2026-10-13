@@ -4,11 +4,13 @@ import { ClipboardPaste, Plus, Trash2, UserRoundPen } from 'lucide-react'
 import { useState } from 'react'
 
 import { savePersonalization } from '@/api/uniforms'
-import { SaveBar, Section, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { DraftRecovery, SaveBar, Section, tracked, useDraft, useFichaSection } from '@/components/ficha/Section'
 import { PieceSelect } from '@/components/PieceSelect'
 import { useToast } from '@/components/Toast'
 import { Button, Modal } from '@/components/ui'
+import { logEvent } from '@/lib/diary'
 import { int } from '@/lib/format'
+import { UserError } from '@/lib/http'
 import { keys } from '@/lib/queries'
 import { SIZES, UNNAMED_PERSON, type Size } from '@/lib/uniforms'
 
@@ -68,13 +70,19 @@ export const PersonalizationEditor = ({
   readOnlyReason: string | null
 }) => {
   const queryClient = useQueryClient()
-  const { draft: rows, setDraft: setRows, dirty, reset } = useDraft<Row[]>(toRows(saved))
+  const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(toRows(saved), {
+    orderId,
+    section: 'personalizados',
+  })
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePiece, setPastePiece] = useState('')
 
   const toast = useToast()
-  const doSave = (sheetVersion: number) =>
+  const send = tracked(
+    orderId,
+    'personalizados',
+    (sheetVersion: number) =>
       savePersonalization(orderId, {
         version: sheetVersion,
         rows: rows
@@ -87,7 +95,23 @@ export const PersonalizationEditor = ({
             size: row.size,
             quantity: Math.max(1, Number(row.quantity) || 1),
           })),
-      })
+      }),
+    () => ({ linhas: rows.filter(filled).length })
+  )
+  // Linha com peça mas sem nome nem número era descartada calada (F279): o
+  // gravar para e diz qual é. A linha toda em branco (Atleta sem nada) sai.
+  const doSave = (sheetVersion: number) => {
+    const missing = rows.flatMap((row, index) => (!filled(row) && row.piece.trim() !== '' ? [index + 1] : []))
+    if (missing.length > 0) {
+      logEvent('linha-bloqueada', { orderId, section: 'personalizados', detail: { linhas: missing.join(', ') } })
+      return Promise.reject(
+        new UserError(
+          `${missing.length === 1 ? 'A linha' : 'As linhas'} ${missing.join(', ')} dos personalizados ${missing.length === 1 ? 'tem' : 'têm'} peça mas não ${missing.length === 1 ? 'tem' : 'têm'} nome nem número. Preencha (ou apague a linha) e grave de novo.`
+        )
+      )
+    }
+    return send(sheetVersion)
+  }
   useFichaSection('personalization', 'Personalizados', dirty, doSave)
 
   const mutation = useMutation({
@@ -110,8 +134,10 @@ export const PersonalizationEditor = ({
     <Section
       title="Personalizados"
       icon={<UserRoundPen className="h-3.5 w-3.5" />}
+      collapsible={{ key: 'personalizados' }}
       aside={<span className="rounded-full bg-ink px-3 py-1 text-xs font-extrabold text-lime">{int(total)} peças</span>}
     >
+      {editable && <DraftRecovery recovery={recovery} />}
       {rows.length === 0 ? (
         <p className="py-2 text-sm text-muted">Nenhuma peça com nome ou número.</p>
       ) : (

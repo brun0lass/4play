@@ -81,15 +81,31 @@ export type SaveAssistantSettingsRequest = z.infer<
 export const AssistantLink = z.object({
   id: z.uuid(),
   userId: z.uuid(),
+  /** Quem usa o número: o nome dado a ele (F276) ou, sem nome, o da conta. */
   userName: z.string().nullable(),
+  /** O nome dado a este número (F276); nulo: vale o da conta. */
+  personName: z.string().nullable().default(null),
+  /** O nome da pessoa da conta, dona do número. */
+  accountName: z.string().nullable().default(null),
   /** Mascarado: "(31) 9•••-•347". */
   phone: z.string().nullable(),
   receivesDigest: z.boolean(),
+  /** O dono liberou este número do limite por hora (F276). */
+  hourlyUnlimited: z.boolean().default(false),
   linkedAt: z.string(),
   lastMessageAt: z.string().nullable(),
 })
 
 export type AssistantLink = z.infer<typeof AssistantLink>
+
+/** O dono libera um número do limite por hora (F276). */
+export const UpdateAssistantLinkRequest = z.object({
+  hourlyUnlimited: z.boolean(),
+})
+
+export type UpdateAssistantLinkRequest = z.infer<
+  typeof UpdateAssistantLinkRequest
+>
 
 export const AssistantLinksResponse = z.object({
   links: z.array(AssistantLink),
@@ -99,6 +115,11 @@ export const MyAssistantWhatsappResponse = z.object({
   /** O assistente está ligado e tem número. */
   available: z.boolean(),
   assistantPhone: z.string().nullable(),
+  /** Os números ligados da pessoa, do mais antigo ao mais novo (F273). */
+  links: z.array(AssistantLink).default([]),
+  /** Quantos números a pessoa pode ligar (F273). */
+  maxLinks: z.number().int().positive().default(1),
+  /** O primeiro de `links` — para a tela de antes da F273. */
   link: AssistantLink.nullable(),
   /** Os horários do resumo do dia, para a pessoa saber quando chega (F255). */
   digestTimes: z.array(z.string()),
@@ -119,9 +140,39 @@ export type AssistantLinkCodeResponse = z.infer<
   typeof AssistantLinkCodeResponse
 >
 
-export const UpdateMyAssistantWhatsappRequest = z.object({
-  receivesDigest: z.boolean(),
+/** O nome de quem usa um número — a mesma regra do "Nome" do convite (F276). */
+export const AssistantPersonName = z
+  .string()
+  .trim()
+  .min(1, 'Informe o nome')
+  .max(200)
+
+/** F276: o código já leva o nome de quem vai usar o número. */
+export const CreateAssistantLinkCodeRequest = z.object({
+  personName: AssistantPersonName,
 })
+
+export type CreateAssistantLinkCodeRequest = z.infer<
+  typeof CreateAssistantLinkCodeRequest
+>
+
+export const MyAssistantLinkParams = z.object({ linkId: z.uuid() })
+
+/** Liga/desliga o resumo e/ou troca o nome de quem usa o número (F276). */
+export const UpdateMyAssistantWhatsappRequest = z
+  .object({
+    receivesDigest: z.boolean().optional(),
+    personName: AssistantPersonName.optional(),
+  })
+  .refine(
+    (body) =>
+      body.receivesDigest !== undefined || body.personName !== undefined,
+    { message: 'Nada para mudar.' }
+  )
+
+export type UpdateMyAssistantWhatsappRequest = z.infer<
+  typeof UpdateMyAssistantWhatsappRequest
+>
 
 export const AssistantExchange = z.object({
   id: z.uuid(),
