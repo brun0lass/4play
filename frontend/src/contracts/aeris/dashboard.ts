@@ -160,8 +160,22 @@ export const DashboardSalesResponse = z.object({
       quotesConverted: z.number().int().nonnegative(),
       /** Convertidos sobre criados, em porcentagem com uma casa. Nulo sem orçamento. */
       conversionRate: z.string().nullable(),
+      /** O custo do que vendeu e o lucro (faturamento − custo) — F283. */
+      cost: money.default('0.00'),
+      profit: money.default('0.00'),
+      /** Orçamentos do período ainda abertos: ainda não pagaram (F283). */
+      openQuotes: CountAmount.default({ count: 0, amount: '0.00' }),
     })
   ),
+  /** Das vendas do período, quanto ainda falta receber (motoboy, crediário) — F283. */
+  receivableFromSales: CountAmount.default({ count: 0, amount: '0.00' }),
+  /**
+   * Como as vendas do período foram pagas, por tipo (F283): balcão sem o
+   * troco + acerto do título da venda. Com `receivableFromSales`, dá o vendido.
+   */
+  paidBySales: z
+    .array(z.object({ kind: z.string(), amount: money }))
+    .default([]),
   /**
    * Os orçamentos FEITOS no período, pelo que aconteceu com cada um até agora.
    *

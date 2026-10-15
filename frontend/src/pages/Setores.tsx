@@ -10,7 +10,11 @@ import {
   ArrowRight,
   ArrowUp,
   CheckCheck,
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ListOrdered,
+  Scissors,
   UserRoundCheck,
   Minus,
   Plus,
@@ -21,7 +25,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
+import { createSewingJob, fetchOrderSewing, sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
 import { DispatchChip } from '@/components/OrderCard'
 import {
   IncidentDialog,
@@ -38,10 +42,11 @@ import {
   Spinner,
 } from '@/components/ui'
 import { day, int, todaySP } from '@/lib/format'
-import { ApiError, errorMessage } from '@/lib/http'
+import { ApiError, UserError, errorMessage } from '@/lib/http'
 import {
   keys,
   usePrinters,
+  useSeamstresses,
   useSector,
   useSectorStats,
   useViewer,
@@ -63,6 +68,28 @@ import {
 } from '@/lib/uniforms'
 
 const SECTOR_KEY = '4play.setor'
+const FOLDED_KEY = '4play.setor.recolhidos'
+
+/**
+ * Quais pedidos estão recolhidos no setor: `all` é o padrão (o "Recolher
+ * todos"/"Abrir todos") e `cards` o que a pessoa mudou um a um.
+ */
+type Folded = { all: boolean; cards: Record<string, boolean> }
+
+const readFolded = (): Folded => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? 'null') as Partial<Folded> | null
+    return {
+      all: saved?.all === true,
+      cards: saved?.cards && typeof saved.cards === 'object' ? saved.cards : {},
+    }
+  } catch {
+    return { all: false, cards: {} }
+  }
+}
+
+const partKey = (sector: FactorySector, part: SectorPartType) =>
+  `${sector}:${part.orderId}:${part.batchId ?? '1'}`
 
 const SEND_REFUSALS: Record<string, string> = {
   ...STAGE_REFUSALS,
@@ -102,6 +129,15 @@ export const SetoresPage = () => {
     return 'impressao'
   })
   const [search, setSearch] = useState('')
+  const [folded, setFolded] = useState<Folded>(readFolded)
+  const keepFolded = (next: Folded) => {
+    setFolded(next)
+    try {
+      localStorage.setItem(FOLDED_KEY, JSON.stringify(next))
+    } catch {
+      // Lembrar o que está recolhido é só conveniência.
+    }
+  }
   const all = {
     impressao: useSector('impressao'),
     corte: useSector('corte'),
@@ -183,6 +219,9 @@ export const SetoresPage = () => {
       part.customerName.toLocaleLowerCase('pt-BR').includes(term) ||
       String(part.orderNumber ?? '').includes(term.replace('#', ''))
   )
+  const isFolded = (part: SectorPartType) =>
+    folded.cards[partKey(sector, part)] ?? folded.all
+  const allFolded = parts.length > 0 && parts.every(isFolded)
 
   return (
     <div>
@@ -240,18 +279,36 @@ export const SetoresPage = () => {
         })}
       </div>
 
-      <label className="relative mb-5 block max-w-sm">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted"
-          aria-hidden
-        />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cliente ou nº do pedido"
-          className="field pl-9"
-        />
-      </label>
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <label className="relative block w-full max-w-sm">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cliente ou nº do pedido"
+            className="field pl-9"
+          />
+        </label>
+        {parts.length > 1 && (
+          <Button
+            variant="outline"
+            size="sm"
+            icon={
+              allFolded ? (
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronsDownUp className="h-3.5 w-3.5" />
+              )
+            }
+            onClick={() => keepFolded({ all: !allFolded, cards: {} })}
+          >
+            {allFolded ? 'Abrir todos' : 'Recolher todos'}
+          </Button>
+        )}
+      </div>
 
       {current.isPending && <Spinner label="Carregando o setor…" />}
       {current.isError && (
@@ -284,6 +341,13 @@ export const SetoresPage = () => {
               nextStage={current.data.nextStage}
               part={part}
               queue={queueOf(part)}
+              folded={isFolded(part)}
+              onFold={(next) =>
+                keepFolded({
+                  ...folded,
+                  cards: { ...folded.cards, [partKey(sector, part)]: next },
+                })
+              }
             />
           ))}
       </div>
@@ -302,6 +366,18 @@ const byPiece = (cells: readonly SectorCellType[]) => {
     else groups.push({ piece: cell.piece, cells: [cell] })
   }
   return groups
+}
+
+/** Quantas de cada peça: o que a costureira recebe (F231 conta por peça). */
+const piecesTotal = (entries: readonly { piece: string; quantity: number }[]) => {
+  const total = new Map<string, { piece: string; quantity: number }>()
+  for (const entry of entries) {
+    if (entry.quantity <= 0) continue
+    const key = pieceKey(entry.piece)
+    const current = total.get(key)
+    total.set(key, { piece: current?.piece ?? entry.piece, quantity: (current?.quantity ?? 0) + entry.quantity })
+  }
+  return [...total.values()]
 }
 
 /** Uma leva no setor: a grade com o feito embaixo, e mandar as feitas. */
@@ -378,11 +454,16 @@ const SectorCard = ({
   nextStage,
   part,
   queue,
+  folded,
+  onFold,
 }: {
   sector: FactorySector
   nextStage: Stage
   part: SectorPartType
   queue?: QueueControls
+  /** Recolhido: só o cabeçalho e a barra, para achar o pedido sem rolar. */
+  folded: boolean
+  onFold: (folded: boolean) => void
 }) => {
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -394,6 +475,10 @@ const SectorCard = ({
   // O que a pessoa marcou e ainda não foi gravado (grava logo depois de parar de clicar).
   const [draft, setDraft] = useState<Record<string, number>>({})
   const [chosenPrinters, setChosenPrinters] = useState<string[]>([])
+  // Do corte para a costura: para qual costureira vai (opcional).
+  const [seamstressId, setSeamstressId] = useState('')
+  const toSewing = nextStage === 'costurando'
+  const seamstresses = useSeamstresses('active')
   const [incident, setIncident] = useState<IncidentDraft | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const pending = useRef<Record<string, number>>({})
@@ -454,17 +539,30 @@ const SectorCard = ({
   const send = useMutation({
     mutationFn: async () => {
       await flush()
-      return sendSector(part.orderId, sector, {
+      // O que vai, por peça — para já ligar à costureira escolhida.
+      const going = piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: doneOf(cell) })))
+      const result = await sendSector(part.orderId, sector, {
         batchId: part.batchId,
         from: part.stage,
         printerIds: needsPrinter ? chosenPrinters : [],
       })
+      const seamstress = toSewing ? seamstresses.data?.find((s) => s.id === seamstressId) : undefined
+      if (!seamstress) return { result, sewing: null }
+      try {
+        await createSewingJob(part.orderId, { seamstressId: seamstress.id, batchId: result.batchId, pieces: going })
+        return { result, sewing: { name: seamstress.name, error: null } }
+      } catch (error) {
+        return { result, sewing: { name: seamstress.name, error: errorMessage(error) } }
+      }
     },
-    onSuccess: (result) => {
+    onSuccess: ({ result, sewing }) => {
       toast(
-        `${orderRef({ number: part.orderNumber })}: ${int(result.pieces)} ${result.pieces === 1 ? 'peça foi' : 'peças foram'} para ${STAGE_META[result.to].label}.`
+        `${orderRef({ number: part.orderNumber })}: ${int(result.pieces)} ${result.pieces === 1 ? 'peça foi' : 'peças foram'} para ${STAGE_META[result.to].label}${sewing && !sewing.error ? ` com ${sewing.name}` : ''}.`
       )
+      if (sewing?.error)
+        toast(`Foi para a costura, mas não deu para marcar ${sewing.name}: ${sewing.error} Marque na tela da Costura.`)
       setDraft({})
+      setSeamstressId('')
       refresh()
     },
     onError: refresh,
@@ -508,7 +606,9 @@ const SectorCard = ({
               </span>
             )}
             {part.seamstresses.length > 0 && (
-              <span>· Costura: {part.seamstresses.join(', ')}</span>
+              <span className="inline-flex items-center gap-1">
+                · <Scissors className="h-3 w-3" aria-hidden /> {part.seamstresses.join(', ')}
+              </span>
             )}
             {part.openIncidents > 0 && (
               <Badge tone="danger">
@@ -518,19 +618,34 @@ const SectorCard = ({
             )}
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-2xl leading-none font-extrabold">
-            {int(part.total - done)}
-            <span className="text-sm font-bold text-muted"> a fazer</span>
-          </p>
-          <p className="text-[11px] font-semibold text-muted">
-            {int(done)} de {int(part.total)} feitas
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="text-right">
+            <p className="text-2xl leading-none font-extrabold">
+              {int(part.total - done)}
+              <span className="text-sm font-bold text-muted"> a fazer</span>
+            </p>
+            <p className="text-[11px] font-semibold text-muted">
+              {int(done)} de {int(part.total)} feitas
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onFold(!folded)}
+            aria-expanded={!folded}
+            aria-label={folded ? 'Abrir o pedido' : 'Recolher o pedido'}
+            title={folded ? 'Abrir' : 'Recolher'}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-line hover:border-ink"
+          >
+            <ChevronDown
+              className={clsx('h-4 w-4 transition-transform', !folded && 'rotate-180')}
+              aria-hidden
+            />
+          </button>
         </div>
       </header>
 
       <div
-        className="mb-3 h-2 overflow-hidden rounded-full bg-black/5"
+        className={clsx('h-2 overflow-hidden rounded-full bg-black/5', !folded && 'mb-3')}
         aria-hidden
       >
         <div
@@ -541,181 +656,218 @@ const SectorCard = ({
         />
       </div>
 
-      {part.cells.length === 0 ? (
-        <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-          Este pedido não tem grade. Peça ao atendimento.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {byPiece(gradeCells).map((group) => (
-            <div key={group.piece}>
-              <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
-                {group.piece}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {group.cells.map((cell) => (
-                  <CellBox
-                    key={cell.key}
-                    cell={cell}
-                    value={doneOf(cell)}
-                    canMark={canMark}
-                    onMark={(value) => mark(cell, value)}
-                    top={
-                      <p className="text-[11px] font-extrabold text-muted">
-                        {cell.size ?? 'sem tamanho'}
-                      </p>
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {personCells.length > 0 && (
-        <section className={clsx('rounded-2xl border border-line bg-paper/60 p-3', gradeCells.length > 0 && 'mt-4')}>
-          <header className="mb-2 flex flex-wrap items-center gap-2">
-            <p className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wide uppercase">
-              <UserRoundCheck className="h-4 w-4" /> Personalizados
+      {!folded && (
+        <>
+          {part.cells.length === 0 ? (
+            <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              Este pedido não tem grade. Peça ao atendimento.
             </p>
-            <span
-              className={clsx(
-                'rounded-full px-2.5 py-0.5 text-[11px] font-extrabold',
-                allPeople ? 'bg-lime-600 text-white' : 'bg-ink text-lime'
-              )}
-            >
-              {int(peopleDone)} de {int(personCells.length)} conferidos
-            </span>
-            {canMark && (
-              <button
-                type="button"
-                onClick={() => {
-                  for (const cell of personCells) mark(cell, allPeople ? 0 : cell.quantity)
-                }}
-                className="ml-auto text-[11px] font-bold text-muted hover:text-ink"
-              >
-                {allPeople ? 'Desmarcar todos' : 'Conferir todos'}
-              </button>
-            )}
-          </header>
-          <div className="space-y-2.5">
-            {byPiece(personCells).map((group) => (
-              <div key={group.piece}>
-                <p className="mb-1 text-[11px] font-extrabold tracking-wide text-muted uppercase">{group.piece}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {group.cells.map((cell) => (
-                    <CellBox
-                      key={cell.key}
-                      cell={cell}
-                      value={doneOf(cell)}
-                      canMark={canMark}
-                      onMark={(value) => mark(cell, value)}
-                      wide
-                      top={<PersonTop cell={cell} />}
-                    />
-                  ))}
+          ) : (
+            <div className="space-y-3">
+              {byPiece(gradeCells).map((group) => (
+                <div key={group.piece}>
+                  <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
+                    {group.piece}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.cells.map((cell) => (
+                      <CellBox
+                        key={cell.key}
+                        cell={cell}
+                        value={doneOf(cell)}
+                        canMark={canMark}
+                        onMark={(value) => mark(cell, value)}
+                        top={
+                          <p className="text-[11px] font-extrabold text-muted">
+                            {cell.size ?? 'sem tamanho'}
+                          </p>
+                        }
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+              ))}
+            </div>
+          )}
 
-      {canSend && needsPrinter && done > 0 && (
-        <div className="mt-4">
-          <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
-            Em qual máquina foi impresso
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {printers.data?.map((printer) => {
-              const on = chosenPrinters.includes(printer.id)
-              return (
-                <button
-                  key={printer.id}
-                  type="button"
-                  onClick={() =>
-                    setChosenPrinters((list) =>
-                      on
-                        ? list.filter((id) => id !== printer.id)
-                        : [...list, printer.id]
-                    )
-                  }
+          {personCells.length > 0 && (
+            <section className={clsx('rounded-2xl border border-line bg-paper/60 p-3', gradeCells.length > 0 && 'mt-4')}>
+              <header className="mb-2 flex flex-wrap items-center gap-2">
+                <p className="inline-flex items-center gap-1.5 text-xs font-extrabold tracking-wide uppercase">
+                  <UserRoundCheck className="h-4 w-4" /> Personalizados
+                </p>
+                <span
                   className={clsx(
-                    'inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold',
-                    on ? 'border-ink bg-lime' : 'border-line'
+                    'rounded-full px-2.5 py-0.5 text-[11px] font-extrabold',
+                    allPeople ? 'bg-lime-600 text-white' : 'bg-ink text-lime'
                   )}
                 >
-                  <Printer className="h-3.5 w-3.5" /> {printer.name}
-                </button>
-              )
-            })}
-            {printers.data?.length === 0 && (
-              <p className="text-xs text-muted">
-                Nenhuma impressora cadastrada (Equipe e máquinas).
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+                  {int(peopleDone)} de {int(personCells.length)} conferidos
+                </span>
+                {canMark && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      for (const cell of personCells) mark(cell, allPeople ? 0 : cell.quantity)
+                    }}
+                    className="ml-auto text-[11px] font-bold text-muted hover:text-ink"
+                  >
+                    {allPeople ? 'Desmarcar todos' : 'Conferir todos'}
+                  </button>
+                )}
+              </header>
+              <div className="space-y-2.5">
+                {byPiece(personCells).map((group) => (
+                  <div key={group.piece}>
+                    <p className="mb-1 text-[11px] font-extrabold tracking-wide text-muted uppercase">{group.piece}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.cells.map((cell) => (
+                        <CellBox
+                          key={cell.key}
+                          cell={cell}
+                          value={doneOf(cell)}
+                          canMark={canMark}
+                          onMark={(value) => mark(cell, value)}
+                          wide
+                          top={<PersonTop cell={cell} />}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-      <footer className="mt-4 flex flex-wrap items-center gap-2">
-        {canSend && (
-          <Button
-            variant="lime"
-            icon={<ArrowRight className="h-4 w-4" />}
-            busy={send.isPending}
-            disabled={
-              done === 0 ||
-              save.isPending ||
-              (needsPrinter && chosenPrinters.length === 0)
-            }
-            onClick={() => send.mutate()}
-          >
-            {done === 0
-              ? `Marque as feitas para mandar para ${STAGE_META[nextStage].label}`
-              : everything
-                ? `Mandar ${part.split ? 'a leva inteira' : 'tudo'} para ${STAGE_META[nextStage].label}`
-                : `Mandar as ${int(done)} feitas para ${STAGE_META[nextStage].label}`}
-          </Button>
-        )}
-        {canMark && part.cells.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<CheckCheck className="h-3.5 w-3.5" />}
-            onClick={() => markAll(everything ? 'nada' : 'tudo')}
-          >
-            {everything ? 'Desmarcar tudo' : 'Marcar tudo feito'}
-          </Button>
-        )}
-        {canReport && (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<AlertTriangle className="h-3.5 w-3.5" />}
-            onClick={() => setIncident({ kind: 'refazer', sector, lines: {} })}
-          >
-            Ocorrência
-          </Button>
-        )}
-        {save.isPending && (
-          <span className="text-[11px] font-semibold text-muted">
-            Salvando…
-          </span>
-        )}
-      </footer>
-      {!everything && done > 0 && canSend && (
-        <p className="mt-2 text-[11px] text-muted">
-          As {int(done)} feitas viram uma leva nova em{' '}
-          {STAGE_META[nextStage].label}; as {int(part.total - done)} que faltam
-          continuam aqui.
-        </p>
-      )}
-      {(save.isError || send.isError) && (
-        <div className="mt-3">
-          <ErrorBox message={refusalText(send.error ?? save.error)} />
-        </div>
+          {canSend && needsPrinter && done > 0 && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-extrabold tracking-wide uppercase">
+                Em qual máquina foi impresso
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {printers.data?.map((printer) => {
+                  const on = chosenPrinters.includes(printer.id)
+                  return (
+                    <button
+                      key={printer.id}
+                      type="button"
+                      onClick={() =>
+                        setChosenPrinters((list) =>
+                          on
+                            ? list.filter((id) => id !== printer.id)
+                            : [...list, printer.id]
+                        )
+                      }
+                      className={clsx(
+                        'inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-extrabold',
+                        on ? 'border-ink bg-lime' : 'border-line'
+                      )}
+                    >
+                      <Printer className="h-3.5 w-3.5" /> {printer.name}
+                    </button>
+                  )
+                })}
+                {printers.data?.length === 0 && (
+                  <p className="text-xs text-muted">
+                    Nenhuma impressora cadastrada (Equipe e máquinas).
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* A leva que já tem costureira (ligada antes de sair do corte) vai com ela. */}
+          {canSend && toSewing && done > 0 && part.seamstresses.length > 0 && (
+            <p className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-muted">
+              <Scissors className="h-3.5 w-3.5" aria-hidden /> Já está com {part.seamstresses.join(', ')}.
+            </p>
+          )}
+          {canSend && canMark && toSewing && done > 0 && part.seamstresses.length === 0 && (seamstresses.data?.length ?? 0) > 0 && (
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-extrabold tracking-wide uppercase" htmlFor={`costureira-${part.orderId}-${part.batchId ?? '1'}`}>
+                Para qual costureira <span className="font-semibold text-muted normal-case">(opcional)</span>
+              </label>
+              <select
+                id={`costureira-${part.orderId}-${part.batchId ?? '1'}`}
+                className="field w-auto min-w-56"
+                value={seamstressId}
+                onChange={(e) => setSeamstressId(e.target.value)}
+              >
+                <option value="">Decidir depois</option>
+                {seamstresses.data?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {sector === 'costura' && canMark && (
+            <SewingAssign part={part} onDone={refresh} />
+          )}
+
+          <footer className="mt-4 flex flex-wrap items-center gap-2">
+            {canSend && (
+              <Button
+                variant="lime"
+                icon={<ArrowRight className="h-4 w-4" />}
+                busy={send.isPending}
+                disabled={
+                  done === 0 ||
+                  save.isPending ||
+                  (needsPrinter && chosenPrinters.length === 0)
+                }
+                onClick={() => send.mutate()}
+              >
+                {done === 0
+                  ? `Marque as feitas para mandar para ${STAGE_META[nextStage].label}`
+                  : everything
+                    ? `Mandar ${part.split ? 'a leva inteira' : 'tudo'} para ${STAGE_META[nextStage].label}`
+                    : done === 1
+                      ? `Mandar a 1 feita para ${STAGE_META[nextStage].label}`
+                      : `Mandar as ${int(done)} feitas para ${STAGE_META[nextStage].label}`}
+              </Button>
+            )}
+            {canMark && part.cells.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<CheckCheck className="h-3.5 w-3.5" />}
+                onClick={() => markAll(everything ? 'nada' : 'tudo')}
+              >
+                {everything ? 'Desmarcar tudo' : 'Marcar tudo feito'}
+              </Button>
+            )}
+            {canReport && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<AlertTriangle className="h-3.5 w-3.5" />}
+                onClick={() => setIncident({ kind: 'refazer', sector, lines: {} })}
+              >
+                Ocorrência
+              </Button>
+            )}
+            {save.isPending && (
+              <span className="text-[11px] font-semibold text-muted">
+                Salvando…
+              </span>
+            )}
+          </footer>
+          {!everything && done > 0 && canSend && (
+            <p className="mt-2 text-[11px] text-muted">
+              As {int(done)} feitas viram uma leva nova em{' '}
+              {STAGE_META[nextStage].label}; as {int(part.total - done)} que faltam
+              continuam aqui.
+            </p>
+          )}
+          {(save.isError || send.isError) && (
+            <div className="mt-3">
+              <ErrorBox message={refusalText(send.error ?? save.error)} />
+            </div>
+          )}
+        </>
       )}
 
       <IncidentDialog
@@ -727,6 +879,90 @@ const SectorCard = ({
         onClose={() => setIncident(null)}
       />
     </article>
+  )
+}
+
+/**
+ * Na costura: ligar a leva a uma costureira (F231), para quando ela não foi
+ * escolhida ao sair do corte. Vai o que da leva ainda não está com ninguém.
+ */
+const SewingAssign = ({ part, onDone }: { part: SectorPartType; onDone: () => void }) => {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const seamstresses = useSeamstresses('active')
+  const [open, setOpen] = useState(false)
+  const [seamstressId, setSeamstressId] = useState('')
+
+  const assign = useMutation({
+    mutationFn: async () => {
+      const jobs = await queryClient.fetchQuery({
+        queryKey: keys.orderSewing(part.orderId),
+        queryFn: ({ signal }) => fetchOrderSewing(part.orderId, signal),
+      })
+      const taken = new Map<string, number>()
+      for (const job of jobs) {
+        if (job.batchId !== part.batchId || job.status === 'cancelada') continue
+        for (const piece of job.pieces) taken.set(pieceKey(piece.piece), (taken.get(pieceKey(piece.piece)) ?? 0) + piece.quantity)
+      }
+      const free = piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: cell.quantity })))
+        .map((p) => ({ ...p, quantity: p.quantity - (taken.get(pieceKey(p.piece)) ?? 0) }))
+        .filter((p) => p.quantity > 0)
+      if (free.length === 0) throw new UserError('Esta leva já está toda com costureira.')
+      return createSewingJob(part.orderId, { seamstressId, batchId: part.batchId, pieces: free })
+    },
+    onSuccess: (job) => {
+      toast(`${orderRef({ number: part.orderNumber })}: ${int(job.quantity)} ${job.quantity === 1 ? 'peça' : 'peças'} com ${job.seamstressName}.`)
+      setOpen(false)
+      setSeamstressId('')
+      void queryClient.invalidateQueries({ queryKey: keys.orderSewing(part.orderId) })
+      void queryClient.invalidateQueries({ queryKey: keys.sewingAll })
+      onDone()
+    },
+  })
+
+  if ((seamstresses.data?.length ?? 0) === 0) return null
+  return (
+    <div className="mt-4">
+      {!open ? (
+        <Button variant="outline" size="sm" icon={<Scissors className="h-3.5 w-3.5" />} onClick={() => setOpen(true)}>
+          {part.seamstresses.length > 0 ? 'Mais uma costureira' : 'Marcar costureira'}
+        </Button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="field w-auto min-w-56"
+            aria-label="Costureira"
+            value={seamstressId}
+            onChange={(e) => setSeamstressId(e.target.value)}
+          >
+            <option value="">Escolha a costureira</option>
+            {seamstresses.data?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <Button variant="ink" size="sm" busy={assign.isPending} disabled={!seamstressId} onClick={() => assign.mutate()}>
+            Ligar a esta leva
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setOpen(false)
+              assign.reset()
+            }}
+          >
+            Cancelar
+          </Button>
+        </div>
+      )}
+      {assign.isError && (
+        <div className="mt-2">
+          <ErrorBox message={errorMessage(assign.error)} />
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -1526,6 +1526,12 @@ export const SendSectorResponse = z.object({
   moved: z.enum(['tudo', 'parte']),
   to: UniformStageSchema,
   pieces: z.number().int(),
+  /**
+   * A leva que chegou ao próximo setor (F285): a nova, quando as feitas viraram
+   * leva; a mesma, quando andou inteira. Nulo é a leva 1, o restante. Serve
+   * para já ligar a costureira a ela.
+   */
+  batchId: z.string().nullable().default(null),
 })
 
 export type SendSectorResponseType = z.infer<typeof SendSectorResponse>

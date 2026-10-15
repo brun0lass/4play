@@ -442,6 +442,19 @@ export const SalesDocumentListQuery = z.object({
     .optional()
     .transform((value) => (value === undefined ? undefined : value === 'true')),
   /**
+   * Só o que conta como VENDA (F283): venda concluída e pedido entregue — a
+   * mesma regra do Painel. O "Vendas do dia" do Início contava só o balcão.
+   */
+  sold: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /** Só orçamento ainda aberto: rascunho, enviado ou aceito (F283). */
+  openQuotes: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
+  /**
    * Esconde o pedido que espera na fila da rota (F266): "Esperando retirada"
    * lista pedidos confirmados, e o da fila não é retirada.
    */
@@ -498,6 +511,10 @@ export type SalesDocumentListRequest = {
   hideConverted?: boolean | undefined
   /** Sem os pedidos da fila da rota de entrega (F266). */
   hideRouteQueue?: boolean | undefined
+  /** Só o que conta como venda: balcão concluído + pedido entregue (F283). */
+  sold?: boolean | undefined
+  /** Só orçamento aberto: rascunho, enviado ou aceito (F283). */
+  openQuotes?: boolean | undefined
   /** Só o que foi pago com esta forma (F238). */
   paymentMethodId?: string | undefined
   search?: string | undefined
