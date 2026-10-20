@@ -65,6 +65,20 @@ const fromOrder = (order: Order): Draft => ({
   address: addressDraftOf(order.deliveryAddress),
 })
 
+/**
+ * Como o atendimento fica gravado: o Aeris apara os textos (um Enter no fim da
+ * observação) e o endereço. Endereço pela metade não grava — fica como está.
+ */
+const asSaved = (draft: Draft): Draft => {
+  const address = addressToSave(draft.address)
+  return {
+    ...draft,
+    eventNote: draft.eventNote.trim(),
+    notes: draft.notes.trim(),
+    address: address === 'incompleto' ? draft.address : addressDraftOf(address),
+  }
+}
+
 /** O cabeçalho da ficha — a parte do ATENDIMENTO. */
 export const SheetForm = ({
   order,
@@ -80,10 +94,11 @@ export const SheetForm = ({
     queryKey: storeKeys.fabrics,
     queryFn: ({ signal }) => fetchFabrics(signal),
   })
-  const { draft, setDraft, dirty, reset, recovery } = useDraft<Draft>(fromOrder(order), {
-    orderId: order.id,
-    section: 'atendimento',
-  })
+  const { draft, setDraft, dirty, reset, recovery } = useDraft<Draft>(
+    fromOrder(order),
+    { orderId: order.id, section: 'atendimento' },
+    asSaved
+  )
   const { seeMoney } = useAccess()
   const { can } = useAuth()
   // O endereço do cadastro, para começar dele (só quem lê vendas o vê).

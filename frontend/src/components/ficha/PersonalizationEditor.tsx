@@ -30,6 +30,19 @@ const toRows = (rows: readonly PersonalizationType[]): Row[] =>
 /** A linha vale com nome OU número: "só o número 10" também é personalizado. */
 const filled = (row: Pick<Row, 'name' | 'number'>) => row.name.trim() !== '' || row.number.trim() !== ''
 
+/** O que vai para o Aeris — e, de volta por `toRows`, como a lista fica gravada. */
+const toSave = (rows: readonly Row[]) =>
+  rows.filter(filled).map((row) => ({
+    // Só número: o Aeris guarda o nome como "—", como faz o link do cliente.
+    name: row.name.trim() || UNNAMED_PERSON,
+    number: row.number.trim(),
+    piece: row.piece.trim(),
+    size: row.size,
+    quantity: Math.max(1, Number(row.quantity) || 1),
+  }))
+
+const asSaved = (rows: Row[]): Row[] => toRows(toSave(rows))
+
 const isSize = (value: string): value is Size => (SIZES as readonly string[]).includes(value)
 
 /**
@@ -70,10 +83,11 @@ export const PersonalizationEditor = ({
   readOnlyReason: string | null
 }) => {
   const queryClient = useQueryClient()
-  const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(toRows(saved), {
-    orderId,
-    section: 'personalizados',
-  })
+  const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(
+    toRows(saved),
+    { orderId, section: 'personalizados' },
+    asSaved
+  )
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePiece, setPastePiece] = useState('')
@@ -83,19 +97,7 @@ export const PersonalizationEditor = ({
     orderId,
     'personalizados',
     (sheetVersion: number) =>
-      savePersonalization(orderId, {
-        version: sheetVersion,
-        rows: rows
-          .filter(filled)
-          .map((row) => ({
-            // Só número: o Aeris guarda o nome como "—", como faz o link do cliente.
-            name: row.name.trim() || UNNAMED_PERSON,
-            number: row.number.trim(),
-            piece: row.piece.trim(),
-            size: row.size,
-            quantity: Math.max(1, Number(row.quantity) || 1),
-          })),
-      }),
+      savePersonalization(orderId, { version: sheetVersion, rows: toSave(rows) }),
     () => ({ linhas: rows.filter(filled).length })
   )
   // Linha com peça mas sem nome nem número era descartada calada (F279): o

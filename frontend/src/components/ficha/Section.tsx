@@ -149,14 +149,18 @@ type StoredDraft<T> = { draft: T; base: string; savedAt: string }
 
 const draftKey = (p: DraftPersist) => `4play.rascunho.${p.orderId}.${p.section}`
 
-const loadDraft = <T,>(p: DraftPersist | undefined, initialKey: string): StoredDraft<T> | null => {
+const loadDraft = <T,>(
+  p: DraftPersist | undefined,
+  initialKey: string,
+  keyOf: (draft: T) => string
+): StoredDraft<T> | null => {
   if (!p) return null
   try {
     const raw = localStorage.getItem(draftKey(p))
     if (!raw) return null
     const stored = JSON.parse(raw) as StoredDraft<T>
     // Igual ao que está gravado: não há o que recuperar.
-    if (stableJson(stored.draft) === initialKey) {
+    if (keyOf(stored.draft) === initialKey) {
       localStorage.removeItem(draftKey(p))
       return null
     }
@@ -176,22 +180,32 @@ const loadDraft = <T,>(p: DraftPersist | undefined, initialKey: string): StoredD
  * Com `persist`, o que não foi gravado também fica no navegador (F279): sair
  * do pedido, voltar no navegador, a sessão cair ou o computador travar não
  * perde mais o que foi digitado — ao voltar, a ficha oferece recuperar.
+ *
+ * `normalize` diz como o rascunho fica depois de gravado (o Aeris apara os
+ * espaços das pontas, por exemplo). Sem ele, "MATTEO " gravava como "MATTEO"
+ * e o bloco ficava "não gravado" para sempre, mesmo gravado.
  */
-export const useDraft = <T,>(initial: T, persist?: DraftPersist) => {
-  const initialKey = stableJson(initial)
+export const useDraft = <T,>(initial: T, persist?: DraftPersist, normalize?: (draft: T) => T) => {
+  const normalizeRef = useRef(normalize)
+  normalizeRef.current = normalize
+  const keyOf = (value: T) => stableJson(normalizeRef.current ? normalizeRef.current(value) : value)
+  const initialKey = keyOf(initial)
   const [draft, setDraft] = useState<T>(initial)
   const base = useRef(initialKey)
-  const [recovery, setRecovery] = useState<StoredDraft<T> | null>(() => loadDraft<T>(persist, initialKey))
+  const [recovery, setRecovery] = useState<StoredDraft<T> | null>(() => loadDraft<T>(persist, initialKey, keyOf))
+  const initialJson = stableJson(initial)
   useEffect(() => {
     if (base.current === initialKey) return
-    setDraft((current) =>
-      stableJson(current) === base.current ? (JSON.parse(initialKey) as T) : current
-    )
+    // Sem mudança por gravar (ou só o que acabou de ser gravado): fica a versão do servidor.
+    setDraft((current) => {
+      const key = stableJson(normalizeRef.current ? normalizeRef.current(current) : current)
+      return key === base.current || key === initialKey ? (JSON.parse(initialJson) as T) : current
+    })
     base.current = initialKey
-  }, [initialKey])
+  }, [initialKey, initialJson])
 
   const currentKey = stableJson(draft)
-  const dirty = currentKey !== initialKey
+  const dirty = keyOf(draft) !== initialKey
   const storage = persist ? draftKey(persist) : null
 
   // Guarda o rascunho a cada mudança; some quando grava ou descarta. Enquanto
@@ -223,7 +237,7 @@ export const useDraft = <T,>(initial: T, persist?: DraftPersist) => {
     draft,
     setDraft,
     dirty,
-    reset: () => setDraft(JSON.parse(initialKey) as T),
+    reset: () => setDraft(JSON.parse(initialJson) as T),
     /** O rascunho que ficou de outra vez, à espera de recuperar ou descartar. */
     recovery: recovery
       ? {
