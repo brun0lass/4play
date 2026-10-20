@@ -293,6 +293,8 @@ export const PedidoPage = () => {
               rows={personalization}
               editable={open && canWork(viewer, 'atendimento')}
               readOnlyReason={closedReason}
+              lines={order.lines}
+              gradePieces={grade.reduce((sum, entry) => sum + entry.quantity, 0)}
             />
           </div>
 

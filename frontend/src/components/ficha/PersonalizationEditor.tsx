@@ -1,4 +1,4 @@
-import type { PersonalizationType } from '@/contracts/aeris/uniforms.ts'
+import type { PersonalizationType, ProductionOrderLineType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ClipboardPaste, Plus, Trash2, UserRoundPen } from 'lucide-react'
 import { useState } from 'react'
@@ -43,6 +43,51 @@ const toSave = (rows: readonly Row[]) =>
 
 const asSaved = (rows: Row[]): Row[] => toRows(toSave(rows))
 
+/** Peças vendidas: o conjunto conta duas (camisa e shorts), como no "Itens do pedido". */
+const soldPieces = (lines: readonly ProductionOrderLineType[]) =>
+  lines.reduce((sum, line) => sum + Number(line.quantity) * (/^\s*conjunto\b/i.test(line.description) ? 2 : 1), 0)
+
+type Warnings = {
+  /** O mesmo nome e número na mesma peça, em mais de uma linha (o tamanho não importa). */
+  repeated: { label: string; lines: number[] }[]
+  /** Grade + personalizados passando do que foi vendido. */
+  over: { built: number; sold: number } | null
+}
+
+/**
+ * O que merece um "tem certeza?" antes de gravar (pedido #26: uma segunda lista
+ * colada embaixo da primeira — 17 camisetas a mais, até a costura). Avisa, não
+ * bloqueia: às vezes o atleta leva duas mesmo.
+ */
+const warningsOf = (rows: readonly Row[], gradePieces: number, lines: readonly ProductionOrderLineType[]): Warnings => {
+  const seen = new Map<string, { label: string; lines: number[] }>()
+  rows.forEach((row, index) => {
+    const name = row.name.trim().replace(/\s+/g, ' ').toUpperCase()
+    const number = row.number.trim()
+    if (!name || !number) return
+    const key = `${name}#${number}|${row.piece.trim().toLowerCase()}`
+    const entry = seen.get(key) ?? { label: `${name} ${number}${row.piece.trim() ? ` (${row.piece.trim()})` : ''}`, lines: [] }
+    entry.lines.push(index + 1)
+    seen.set(key, entry)
+  })
+  const sold = soldPieces(lines)
+  const built = gradePieces + rows.filter(filled).reduce((sum, row) => sum + Math.max(1, Number(row.quantity) || 1), 0)
+  return {
+    repeated: [...seen.values()].filter((entry) => entry.lines.length > 1),
+    over: lines.length > 0 && built > sold ? { built, sold } : null,
+  }
+}
+
+const joinLines = (lines: number[]) =>
+  lines.length === 1 ? String(lines[0]) : `${lines.slice(0, -1).join(', ')} e ${String(lines.at(-1))}`
+
+const warningText = (warnings: Warnings): string[] => [
+  ...warnings.repeated.map((entry) => `${entry.label} repetido nas linhas ${joinLines(entry.lines)}`),
+  ...(warnings.over
+    ? [`Montado ${int(warnings.over.built)} peças (grade + personalizados), mas o pedido vendeu ${int(warnings.over.sold)}`]
+    : []),
+]
+
 const isSize = (value: string): value is Size => (SIZES as readonly string[]).includes(value)
 
 /**
@@ -75,12 +120,18 @@ export const PersonalizationEditor = ({
   rows: saved,
   editable,
   readOnlyReason,
+  lines,
+  gradePieces,
 }: {
   orderId: string
   version: number
   rows: readonly PersonalizationType[]
   editable: boolean
   readOnlyReason: string | null
+  /** Os itens vendidos, para avisar quando o montado passa deles. */
+  lines: readonly ProductionOrderLineType[]
+  /** As peças da grade gravada. */
+  gradePieces: number
 }) => {
   const queryClient = useQueryClient()
   const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(
@@ -112,6 +163,11 @@ export const PersonalizationEditor = ({
         )
       )
     }
+    const warned = warningText(warningsOf(rows, gradePieces, lines))
+    if (warned.length > 0) {
+      if (!window.confirm(`Confira os personalizados antes de gravar:\n\n• ${warned.join('\n• ')}\n\nGravar mesmo assim?`))
+        return Promise.reject(new UserError('Não gravou. Confira os avisos dos personalizados e grave de novo.'))
+    }
     return send(sheetVersion)
   }
   useFichaSection('personalization', 'Personalizados', dirty, doSave)
@@ -130,6 +186,7 @@ export const PersonalizationEditor = ({
 
   const total = rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
   const disabled = !editable
+  const warned = editable ? warningText(warningsOf(rows, gradePieces, lines)) : []
   const preview = parsePaste(pasteText, pastePiece)
 
   return (
@@ -209,6 +266,18 @@ export const PersonalizationEditor = ({
           <Button variant="outline" size="sm" icon={<ClipboardPaste className="h-4 w-4" />} onClick={() => setPasteOpen(true)}>
             Colar lista
           </Button>
+        </div>
+      )}
+
+      {warned.length > 0 && (
+        <div role="status" className="mt-4 rounded-2xl border-2 border-amber-400 bg-amber-50 p-3 text-sm">
+          <p className="font-bold text-amber-900">Confira antes de mandar para a produção:</p>
+          <ul className="mt-1 list-disc pl-5 text-xs text-amber-900">
+            {warned.map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-amber-800">Se for isso mesmo (o atleta leva duas, por exemplo), pode gravar assim.</p>
         </div>
       )}
 
