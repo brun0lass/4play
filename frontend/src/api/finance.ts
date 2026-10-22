@@ -14,6 +14,7 @@ import { SalesDocumentList } from '@/contracts/aeris/sales.ts'
 import type { ProductionOrderSummaryType } from '@/contracts/aeris/uniforms.ts'
 import { fetchQueue } from '@/api/uniforms'
 import { qs, request } from '@/lib/http'
+import { totalWithFreight } from '@/lib/uniforms'
 
 /**
  * O financeiro do Aeris: títulos a receber e a pagar, baixas e formas de
@@ -129,7 +130,8 @@ export const fetchOpenOrders = async (signal?: AbortSignal): Promise<OpenOrders>
   const orders = items
     .filter((order) => order.status === 'confirmed' && order.totalAmount !== null)
     .map((order) => {
-      const total = toCents(order.totalAmount)
+      // Com o frete repassado ao cliente (F296).
+      const total = toCents(totalWithFreight(order))
       const paid = toCents(order.paidAmount)
       return {
         id: order.id,

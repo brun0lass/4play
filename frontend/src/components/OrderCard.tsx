@@ -24,6 +24,7 @@ import {
   type Order,
   type Part,
   type Stage,
+  totalWithFreight,
 } from '@/lib/uniforms'
 
 export const DispatchChip = ({
@@ -119,7 +120,7 @@ export const OrderCard = ({
           ) : (
             seeMoney && (
               <span className="text-xs font-bold text-muted">
-                {money(order.totalAmount)}
+                {money(totalWithFreight(order))}
               </span>
             )
           )}

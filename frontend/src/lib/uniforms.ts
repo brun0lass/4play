@@ -52,6 +52,21 @@ export const STAGES: readonly Stage[] = [
  */
 export const UNNAMED_PERSON = '—'
 
+/**
+ * O total do pedido com o frete repassado ao cliente (F296). O frete só de
+ * custo não entra. Nulo para quem não vê dinheiro. O pedido de vendas do Aeris
+ * (e o título, quando o pedido sai) continua sem o frete.
+ */
+export const totalWithFreight = (order: {
+  totalAmount: string | null
+  freight: { amount: string; charged: boolean } | null
+}): string | null => {
+  if (order.totalAmount === null) return null
+  if (!order.freight?.charged) return order.totalAmount
+  const cents = Math.round(Number(order.totalAmount) * 100) + Math.round(Number(order.freight.amount) * 100)
+  return (cents / 100).toFixed(2)
+}
+
 export const SIZES: readonly Size[] = [
   'PP',
   'P',

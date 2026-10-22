@@ -23,6 +23,7 @@ import {
   logisticsText,
   orderRef,
   type Stage,
+  totalWithFreight,
 } from '@/lib/uniforms'
 
 type Sort =
@@ -234,7 +235,7 @@ export const OrderList = () => {
                       {seeMoney && (
                         <td className="px-3 py-3 text-right">
                           <p className="font-bold">
-                            {money(order.totalAmount)}
+                            {money(totalWithFreight(order))}
                           </p>
                           {order.ticketPerPiece && (
                             <p className="text-[11px] text-muted">

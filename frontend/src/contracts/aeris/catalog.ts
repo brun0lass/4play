@@ -272,6 +272,8 @@ export const ProductSummary = z.object({
    * "Mostrar de novo".
    */
   shelvedSince: z.string().nullable(),
+  /** Desde quando está oculto da loja online (F291). Nulo é o normal. */
+  hiddenFromStorefrontSince: z.string().nullable(),
   /**
    * The optimistic-concurrency token, sent so the client can hand it back on
    * update (ADR-0014). Exposing it is deliberate: a client that cannot see it
@@ -306,6 +308,21 @@ export const ProductSummary = z.object({
    * de outra loja não serve para quem está nesta.
    */
   location: z.string().nullable().optional(),
+  /**
+   * Cada cor ativa, com o disponível na filial e o preço (F297). Só com
+   * `include=colours`: o "Pesquisar produto" do Atendimento dizia o estoque
+   * da cor padrão sem dizer de que cor.
+   */
+  colours: z
+    .array(
+      z.object({
+        name: z.string().nullable(),
+        sku: z.string(),
+        available: z.string().nullable(),
+        price: z.string().nullable(),
+      })
+    )
+    .optional(),
   /** Present only with `include=cost`, and only for `catalog.write`. F125. */
   cost: ProductCostHint.nullable().optional(),
   /**
@@ -385,6 +402,8 @@ export const ProductListQuery = z.object({
    * ele volta. Quem esconde pede: a lista do dia a dia, o seletor da venda.
    */
   shelved: ShelvedFilterSchema.optional(),
+  /** Oculto da loja online (F291): `exclude` tira, `only` mostra só eles. */
+  siteHidden: ShelvedFilterSchema.optional(),
   /**
    * O que falta no cadastro (F247), separado por vírgula: `photo`, `category`,
    * `price`. Cada um estreita: "photo,category" é sem foto E sem categoria.
@@ -463,7 +482,9 @@ export const ProductListQuery = z.object({
     .transform((value) =>
       value === undefined ? [] : value.split(',').map((part) => part.trim())
     )
-    .pipe(z.array(z.enum(['price', 'stock', 'cost', 'priceChangedAt']))),
+    .pipe(
+      z.array(z.enum(['price', 'stock', 'cost', 'priceChangedAt', 'colours']))
+    ),
 
   /** Absent means the tenant's default price list. */
   priceListId: z.string().optional(),
@@ -507,6 +528,7 @@ export type ProductListRequest = {
   applicationModelId?: string | undefined
   awaitingStock?: boolean | undefined
   shelved?: ShelvedFilter | undefined
+  siteHidden?: ShelvedFilter | undefined
   missing?: readonly MissingField[] | undefined
   search?: string | undefined
   searchMode?: SearchMode | undefined
@@ -539,7 +561,7 @@ export type ProductListRequest = {
     | undefined
   direction?: 'asc' | 'desc' | undefined
   include?:
-    readonly ('price' | 'stock' | 'cost' | 'priceChangedAt')[] | undefined
+    readonly ('price' | 'stock' | 'cost' | 'priceChangedAt' | 'colours')[] | undefined
   priceListId?: string | undefined
   branchId?: string | undefined
 }
@@ -981,6 +1003,8 @@ export const ProductFilterSchema = z.object({
   awaitingStock: z.boolean().optional(),
   /** F247: idem — o arquivado até ter estoque e o que falta no cadastro. */
   shelved: ShelvedFilterSchema.optional(),
+  /** F291: o oculto da loja online, pelo mesmo invariante. */
+  siteHidden: ShelvedFilterSchema.optional(),
   missing: z.array(MissingFieldSchema).max(3).optional(),
   applicationModelId: z.string().optional(),
   /*

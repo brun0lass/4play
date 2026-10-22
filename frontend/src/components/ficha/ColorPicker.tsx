@@ -132,7 +132,7 @@ const Popover = ({
   )
 }
 
-const ColorPanel = ({
+export const ColorPanel = ({
   colors,
   onChange,
   onDone,

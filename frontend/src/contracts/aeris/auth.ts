@@ -264,3 +264,56 @@ export const AuthorizeResponse = z.object({
 })
 
 export type AuthorizeResponse = z.infer<typeof AuthorizeResponse>
+
+/**
+ * A senha de cancelamento da loja (F294).
+ *
+ * O gerente da Elite: o caixa cancela todo dia e chamar o gerente a cada
+ * pedido não funciona. O dono cria uma senha só para cancelar e passa às
+ * caixas; quem cancelou continua sendo a pessoa logada.
+ */
+export const CancelCodeStatus = z.object({
+  configured: z.boolean(),
+  setAt: z.string().nullable(),
+  setBy: z.string().nullable(),
+})
+
+export type CancelCodeStatus = z.infer<typeof CancelCodeStatus>
+
+/** `null` tira a senha: o cancelamento volta a pedir o gerente. */
+export const SetCancelCodeRequest = z.object({
+  code: z.string().trim().min(4).max(64).nullable(),
+})
+
+export type SetCancelCodeRequest = z.infer<typeof SetCancelCodeRequest>
+
+/** Autorizar com a senha de cancelamento: só `sales.cancel`. */
+export const AuthorizeWithCodeRequest = z.object({
+  code: z.string().min(1).max(64),
+  action: z.literal('sales.cancel'),
+  targetType: z.literal('sales_document'),
+  targetId: z.string().min(1),
+  reason: z.string().trim().min(3).max(500),
+})
+
+export type AuthorizeWithCodeRequest = z.infer<typeof AuthorizeWithCodeRequest>
+
+/**
+ * A vendedora confirma que é ela, com a senha dela, na sessão de outra
+ * pessoa (F298): "vai que tô em outro PC até eu logar". Não abre sessão, não
+ * troca quem está logado; só diz "é ela mesmo" para a tela pôr a venda no
+ * nome dela.
+ */
+export const ConfirmPersonRequest = z.object({
+  userId: z.string().min(1),
+  password: z.string().min(1).max(256),
+})
+
+export type ConfirmPersonRequest = z.infer<typeof ConfirmPersonRequest>
+
+export const ConfirmPersonResponse = z.object({
+  userId: z.string(),
+  displayName: z.string(),
+})
+
+export type ConfirmPersonResponse = z.infer<typeof ConfirmPersonResponse>

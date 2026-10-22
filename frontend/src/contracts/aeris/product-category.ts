@@ -208,3 +208,36 @@ export const ImportProductCategoriesResponse = z.object({
 export type ImportProductCategoriesResponseType = z.infer<
   typeof ImportProductCategoriesResponse
 >
+
+/**
+ * O estoque mínimo de uma categoria inteira de uma vez (F288).
+ *
+ * "Tela é 5": o Eduardo dita a regra por categoria, e a prévia (`dryRun`)
+ * conta quantas peças recebem. Sem `overwrite`, só quem ainda não tem mínimo
+ * — o que alguém acertou à mão numa peça continua valendo. As subcategorias
+ * entram junto.
+ */
+export const MinimumStockByCategoryRequest = z.object({
+  categoryId: z.uuid(),
+  minimum: z
+    .string()
+    .trim()
+    .regex(/^\d{1,6}$/, 'Informe o mínimo em unidades inteiras.'),
+  overwrite: z.boolean().default(false),
+  dryRun: z.boolean().default(true),
+})
+
+export type MinimumStockByCategoryBody = z.input<
+  typeof MinimumStockByCategoryRequest
+>
+
+export const MinimumStockByCategoryResponse = z.object({
+  /** Peças (variações ativas) que recebem o mínimo. */
+  matched: z.number().int().nonnegative(),
+  /** Gravadas — zero na prévia. */
+  updated: z.number().int().nonnegative(),
+})
+
+export type MinimumStockByCategoryResponseType = z.infer<
+  typeof MinimumStockByCategoryResponse
+>

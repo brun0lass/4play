@@ -39,6 +39,7 @@ const SHEET_FIELDS: Record<string, string> = {
   gradeChecked: 'grade conferida',
   notes: 'observações',
   deliveryAddress: 'local de entrega',
+  freight: 'frete',
 }
 
 type Revision = Awaited<ReturnType<typeof fetchSalesHistory>>[number]

@@ -121,6 +121,8 @@ export const CompanySalesFlowSchema = z.object({
   /** O orçamento impresso segura a mercadoria: sai do disponível, fica no físico. */
   reservesOnQuote: z.boolean(),
   stockExitAt: StockExitAtSchema,
+  /** F293: dias de vencido que não recusam o fiado. Zero é recusar qualquer um. */
+  creditOverdueToleranceDays: z.number().int().min(0).max(90).default(0),
 })
 
 export type CompanySalesFlowSchema = z.infer<typeof CompanySalesFlowSchema>
@@ -166,6 +168,7 @@ export const UpdateCompanyRequest = z.object({
       tracksStockDefault: z.boolean().optional(),
       reservesOnQuote: z.boolean().optional(),
       stockExitAt: StockExitAtSchema.optional(),
+      creditOverdueToleranceDays: z.number().int().min(0).max(90).optional(),
     })
     .optional(),
   fiscal: z

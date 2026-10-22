@@ -172,6 +172,8 @@ export const PartySummary = z.object({
   mainEmail: z.string().nullable().optional(),
   mainCity: z.string().nullable().optional(),
   mainUf: z.string().nullable().optional(),
+  /** Rua, número, complemento e bairro do endereço principal. */
+  mainAddress: z.string().nullable().optional(),
   /** Com `include=credit` e `finance.read`. Nulo é "sem limite liberado". */
   creditLimit: z.string().nullable().optional(),
   /** Com `include=voucher` e `exchange.read`. */

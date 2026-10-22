@@ -76,7 +76,16 @@ export const PieceSelect = ({
   )
 }
 
-const NewPieceDialog = ({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (name: string) => void }) => {
+/** Cadastra uma peça nova em "Peças e medidas" (a tabela de medidas, sem medidas). */
+export const NewPieceDialog = ({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: (name: string, sizeChartId: string) => void
+}) => {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const create = useMutation({
@@ -89,7 +98,7 @@ const NewPieceDialog = ({ open, onClose, onCreated }: { open: boolean; onClose: 
     onSuccess: (chart) => {
       void queryClient.invalidateQueries({ queryKey: ['size-charts'] })
       setName('')
-      onCreated(chart.name.slice(0, 40))
+      onCreated(chart.name.slice(0, 40), chart.id)
     },
   })
   const close = () => {

@@ -190,8 +190,13 @@ export const REPORT_DEFINITIONS: Readonly<
  * O dono disse "top 1, top 10": os dois têm de ser um clique. Fechado e não um
  * número livre porque um `limit` vindo do fio é o caminho mais curto para
  * alguém pedir 100.000 linhas e derrubar o banco de manhã.
+ *
+ * Até 2.500 desde a F299: a Elite tem mais de mil clientes, e o top 100
+ * deixava a maioria em "Outros".
  */
-export const REPORT_CUTS = [1, 5, 10, 25, 50, 100] as const
+export const REPORT_CUTS = [
+  1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500,
+] as const
 export const ReportCutSchema = z.coerce
   .number()
   .int()

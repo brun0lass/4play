@@ -25,6 +25,7 @@ import {
 import { useToast } from '@/components/Toast'
 import { Button, ErrorBox } from '@/components/ui'
 import { useAccess } from '@/lib/access'
+import { decimalToInput, money, toDecimal } from '@/lib/format'
 import { UserError, errorMessage } from '@/lib/http'
 import { useSalesDocument } from '@/lib/order-lines'
 import { keys, useMembers } from '@/lib/queries'
@@ -34,6 +35,7 @@ import {
   type Fabric,
   type Logistics,
   type PaymentMark,
+  totalWithFreight,
 } from '@/lib/uniforms'
 
 type Order = ProductionOrderResponseType['order']
@@ -50,6 +52,9 @@ type Draft = {
   notes: string
   /** O local de entrega (F280). */
   address: AddressDraft
+  /** O frete (F296), como a pessoa digita: "90,50". Vazio é sem frete. */
+  freight: string
+  freightCharged: boolean
 }
 
 const fromOrder = (order: Order): Draft => ({
@@ -63,7 +68,17 @@ const fromOrder = (order: Order): Draft => ({
   gradeChecked: order.gradeChecked,
   notes: order.notes ?? '',
   address: addressDraftOf(order.deliveryAddress),
+  freight: decimalToInput(order.freight?.amount),
+  freightCharged: order.freight?.charged ?? false,
 })
+
+/** O frete que vai para o Aeris: nulo sem valor (ou zero); `'invalido'` se não é um valor. */
+const freightToSave = (draft: Draft): { amount: string; charged: boolean } | null | 'invalido' => {
+  if (draft.freight.trim() === '') return null
+  const amount = toDecimal(draft.freight)
+  if (amount === null) return 'invalido'
+  return Number(amount) > 0 ? { amount, charged: draft.freightCharged } : null
+}
 
 /**
  * Como o atendimento fica gravado: o Aeris apara os textos (um Enter no fim da
@@ -71,11 +86,15 @@ const fromOrder = (order: Order): Draft => ({
  */
 const asSaved = (draft: Draft): Draft => {
   const address = addressToSave(draft.address)
+  const freight = freightToSave(draft)
   return {
     ...draft,
     eventNote: draft.eventNote.trim(),
     notes: draft.notes.trim(),
     address: address === 'incompleto' ? draft.address : addressDraftOf(address),
+    ...(freight === 'invalido'
+      ? {}
+      : { freight: decimalToInput(freight?.amount), freightCharged: freight?.charged ?? false }),
   }
 }
 
@@ -131,6 +150,8 @@ export const SheetForm = ({
       gradeChecked: draft.gradeChecked,
       notes: draft.notes || null,
       deliveryAddress: addressToSave(draft.address) as Exclude<ReturnType<typeof addressToSave>, 'incompleto'>,
+      // Quem não vê dinheiro não mexe no frete (o Aeris também ignora).
+      ...(seeMoney ? { freight: freightToSave(draft) as Exclude<ReturnType<typeof freightToSave>, 'invalido'> } : {}),
     })
   )
   // Endereço pela metade não grava calado (F280): diz o que falta.
@@ -139,7 +160,9 @@ export const SheetForm = ({
       ? Promise.reject(
           new UserError('Para gravar o local de entrega, preencha a rua, a cidade e a UF (ou deixe o endereço todo em branco).')
         )
-      : send(version)
+      : seeMoney && freightToSave(draft) === 'invalido'
+        ? Promise.reject(new UserError('O frete precisa ser um valor, como 90 ou 90,50 (ou fique em branco).'))
+        : send(version)
   useFichaSection('sheet', 'Atendimento', dirty, doSave)
 
   const mutation = useMutation({
@@ -320,6 +343,44 @@ export const SheetForm = ({
           customerAddress={customerAddress}
         />
       </div>
+
+      {seeMoney && (
+        <div className="mt-3">
+          <label className="label" htmlFor="freight">
+            Frete
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-36">
+              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted">R$</span>
+              <input
+                id="freight"
+                inputMode="decimal"
+                className="field pl-9"
+                maxLength={14}
+                disabled={disabled}
+                placeholder="0,00"
+                value={draft.freight}
+                onChange={(e) => set('freight', e.target.value)}
+              />
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-ink"
+                disabled={disabled || draft.freight.trim() === ''}
+                checked={draft.freightCharged && draft.freight.trim() !== ''}
+                onChange={(e) => set('freightCharged', e.target.checked)}
+              />
+              Repassar ao cliente (soma no total)
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {draft.freightCharged && draft.freight.trim() !== '' && order.totalAmount !== null && toDecimal(draft.freight) !== null
+              ? `Total com frete: ${money(totalWithFreight({ totalAmount: order.totalAmount, freight: { amount: toDecimal(draft.freight) ?? '0', charged: true } }))}.`
+              : 'Sem repassar, o frete fica só como custo, para a loja saber.'}
+          </p>
+        </div>
+      )}
 
       <div className="mt-3">
         <label className="label" htmlFor="notes">

@@ -29,6 +29,31 @@ export type ClaudeConnectionsResponse = z.infer<
   typeof ClaudeConnectionsResponse
 >
 
+/**
+ * As últimas consultas que o Claude e o assistente fizeram (F295): quem,
+ * qual ferramenta, se deu certo e quanto demorou. Sem o resultado.
+ */
+export const AssistantToolCall = z.object({
+  id: z.uuid(),
+  userName: z.string().nullable(),
+  channel: z.enum(['mcp', 'whatsapp', 'digest']),
+  tool: z.string(),
+  args: z.string(),
+  status: z.string(),
+  durationMs: z.number().int(),
+  createdAt: z.string(),
+})
+
+export type AssistantToolCall = z.infer<typeof AssistantToolCall>
+
+export const AssistantToolCallsResponse = z.object({
+  calls: z.array(AssistantToolCall),
+})
+
+export type AssistantToolCallsResponse = z.infer<
+  typeof AssistantToolCallsResponse
+>
+
 // ---------------------------------------------------------------------------
 // O WhatsApp do assistente (F254)
 // ---------------------------------------------------------------------------

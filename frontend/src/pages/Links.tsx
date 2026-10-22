@@ -819,16 +819,23 @@ const ReviewDialog = ({
             const plain = item.rows.filter(
               (row) => row.name === null && row.number === null
             )
-            const total = item.rows.reduce((sum, row) => sum + row.quantity, 0)
+            const kit = item.kit
+            // O conjunto por partes (F300): conta os conjuntos pela primeira parte.
+            const firstPart = kit?.people[0]?.pieces[0]?.part ?? kit?.counts[0]?.part
+            const total = kit
+              ? kit.people.reduce((sum, person) => sum + person.quantity, 0) +
+                kit.counts.filter((count) => count.part === firstPart).reduce((sum, count) => sum + count.quantity, 0)
+              : item.rows.reduce((sum, row) => sum + row.quantity, 0)
             return (
               <section
                 key={item.productId}
                 className="rounded-2xl border border-line p-4"
               >
                 <p className="mb-2 font-extrabold">
-                  {item.productName}{' '}
+                  {item.productName}
+                  {item.color && <span className="font-semibold"> · cor: {item.color}</span>}{' '}
                   <span className="font-semibold text-muted">
-                    · {total} peças
+                    · {total} {kit ? 'conjunto(s)' : 'peças'}
                   </span>
                 </p>
                 {item.options.length > 0 && (
@@ -857,6 +864,43 @@ const ReviewDialog = ({
                       ))}
                     </tbody>
                   </table>
+                )}
+                {kit && (
+                  <div className="space-y-2 text-xs">
+                    {kit.people.length > 0 && (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-muted">
+                            <th className="py-1">Personalizados — cada peça com o seu nome e número</th>
+                            <th className="text-right">Qtde</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {kit.people.map((person, index) => (
+                            <tr key={index} className="border-t border-line align-top">
+                              <td className="py-1">
+                                {person.pieces.map((piece) => (
+                                  <span key={piece.part} className="block">
+                                    {piece.piece} {piece.size}
+                                    {(piece.name || piece.number) && (
+                                      <strong> · {[piece.name, piece.number].filter(Boolean).join(' ')}</strong>
+                                    )}
+                                  </span>
+                                ))}
+                              </td>
+                              <td className="text-right">{person.quantity}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {kit.counts.length > 0 && (
+                      <p>
+                        Sem nome:{' '}
+                        {kit.counts.map((count) => `${String(count.quantity)} ${count.piece} ${count.size}`).join(' · ')}
+                      </p>
+                    )}
+                  </div>
                 )}
                 {plain.length > 0 && (
                   <p className="mt-2 text-xs">

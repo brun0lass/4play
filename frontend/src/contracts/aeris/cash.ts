@@ -131,6 +131,13 @@ export const CashMovementSummary = z.object({
   /** The expected balance immediately after this movement. */
   balanceAfter: z.string(),
   occurredAt: z.string(),
+  /** O número da venda que pôs o dinheiro na gaveta (F286). */
+  documentNumber: z.string().nullable().default(null),
+  /**
+   * A venda, para abrir (F298). Na baixa de título o `sourceId` é a baixa, e
+   * não a venda — por isso o campo próprio.
+   */
+  documentId: z.string().nullable().default(null),
 })
 
 export type CashMovementSummary = z.infer<typeof CashMovementSummary>

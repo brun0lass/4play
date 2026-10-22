@@ -991,6 +991,8 @@ export const PickupSalesDocumentRequest = z.object({
    * servidor recusa com `payment_short` se ainda faltar alguma coisa.
    */
   payments: z.array(TenderRequest),
+  /** F293: o gerente liberou o fiado com vencido (`finance.credit.manage`). */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
 })
 
 export type PickupSalesDocumentRequest = z.input<
@@ -1011,6 +1013,8 @@ export const PayAndHoldRequest = z.object({
   /** Como na retirada: obrigatória só na loja que trabalha com caixa (F174). */
   cashSessionId: z.string().min(1).nullable().default(null),
   payments: z.array(TenderRequest).min(1),
+  /** F293: o gerente liberou o fiado com vencido (`finance.credit.manage`). */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
 })
 
 export type PayAndHoldRequest = z.input<typeof PayAndHoldRequest>
@@ -1025,6 +1029,8 @@ export const DepositSalesDocumentRequest = z.object({
   /** Como na retirada: obrigatória só na loja que trabalha com caixa (F174). */
   cashSessionId: z.string().min(1).nullable().default(null),
   payments: z.array(TenderRequest).min(1),
+  /** F293: o gerente liberou o fiado com vencido (`finance.credit.manage`). */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
 })
 
 /**

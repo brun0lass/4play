@@ -175,6 +175,8 @@ export type StorefrontMenuIcon = (typeof STOREFRONT_MENU_ICONS)[number]
  */
 const StorefrontMenuFields = z.object({
   menu: z.boolean().default(true),
+  /** Fora do menu, vira aba na Pesquisa por Peça (F292). */
+  aba: z.boolean().default(true),
   icone: z.string().nullable().default(null),
 })
 
@@ -375,6 +377,54 @@ export const StorefrontOrdersResponse = z.object({
 
 export const StorefrontOrderResponse = z.object({ data: StorefrontOrder })
 
+/**
+ * Minhas compras (F290): tudo o que o cliente levou no mês — balcão, pedido e
+ * site —, com as peças e como pagou. Sem saldo: o Eduardo pediu para não
+ * mostrar, porque confunde.
+ */
+export const StorefrontPurchasesQuery = z.object({
+  mes: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês no formato AAAA-MM.')
+    .optional(),
+})
+
+const FormaPaga = z.object({
+  forma: z.string(),
+  nome: z.string(),
+  valor: z.string(),
+})
+
+export const StorefrontPurchasesResponse = z.object({
+  mes: z.string(),
+  total: z.string(),
+  porForma: z.array(FormaPaga),
+  aPrazo: z.string(),
+  compras: z.array(
+    z.object({
+      numero: z.number().int().nullable(),
+      tipo: z.enum(['balcao', 'pedido']),
+      data: z.string(),
+      total: z.string(),
+      itens: z.array(
+        z.object({
+          codigo: z.string(),
+          descricao: z.string(),
+          quantidade: z.string(),
+          preco: z.string(),
+          total: z.string(),
+        })
+      ),
+      pagamento: z.array(FormaPaga),
+      aPrazo: z.string(),
+    })
+  ),
+})
+
+export type StorefrontPurchasesResponseType = z.infer<
+  typeof StorefrontPurchasesResponse
+>
+
 export const StorefrontOrderParams = StorefrontSlugParams.extend({
   numero: z.coerce.number().int().min(1).max(10_000_000),
 })
@@ -422,6 +472,8 @@ export const StoreOrderSummary = z.object({
       unitPrice: z.string(),
       /** O disponível agora na filial da loja; nulo é "nunca se moveu". */
       available: z.string().nullable(),
+      /** A foto principal da peça, para a vendedora pegar a certa (F286). */
+      thumbUrl: z.string().nullable().default(null),
     })
   ),
 })
@@ -714,6 +766,7 @@ const MenuLeafSchema = z.object({
   name: z.string(),
   products: z.number().int(),
   inMenu: z.boolean(),
+  inTabs: z.boolean().default(true),
   position: z.number().int().nullable(),
   icon: z.string().nullable(),
 })
@@ -732,6 +785,8 @@ export const SaveStorefrontMenuRequest = z.object({
       z.object({
         categoryId: z.uuid(),
         inMenu: z.boolean(),
+        // Ausente é "continua aba": a tela de antes não mandava (F292).
+        inTabs: z.boolean().default(true),
         position: z.number().int().min(0).max(10_000).nullable(),
         icon: z.enum(STOREFRONT_MENU_ICONS).nullable(),
       })

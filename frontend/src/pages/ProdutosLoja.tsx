@@ -1,6 +1,6 @@
 import type { UniformPieceType } from '@/contracts/aeris/uniforms'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Layers, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import {
@@ -25,6 +25,14 @@ import {
   PageHeader,
   Spinner,
 } from '@/components/ui'
+import {
+  PieceBuilder,
+  blankPart,
+  builderProblem,
+  modeOf,
+  type BuilderMode,
+  type PartDraft,
+} from '@/components/catalog/PieceBuilder'
 import { money } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 
@@ -37,7 +45,7 @@ export const ProdutosPage = () => {
     queryFn: ({ signal }) => fetchPieces(signal),
   })
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<UniformPieceType | 'new' | null>(null)
+  const [editing, setEditing] = useState<UniformPieceType | 'new' | 'kit' | null>(null)
   const remove = useMutation({
     mutationFn: (piece: UniformPieceType) =>
       archivePiece(piece.id, piece.version),
@@ -53,13 +61,22 @@ export const ProdutosPage = () => {
         kicker="Peças e preços por tecido"
         actions={
           manage && (
-            <Button
-              variant="lime"
-              icon={<Plus className="h-4 w-4" />}
-              onClick={() => setEditing('new')}
-            >
-              Novo produto
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                icon={<Layers className="h-4 w-4" />}
+                onClick={() => setEditing('kit')}
+              >
+                Criar conjunto ou kit
+              </Button>
+              <Button
+                variant="lime"
+                icon={<Plus className="h-4 w-4" />}
+                onClick={() => setEditing('new')}
+              >
+                Novo produto
+              </Button>
+            </div>
           )
         }
       >
@@ -173,6 +190,8 @@ export const ProdutosPage = () => {
                   ? `${piece.personalizationTypeIds.length} tipo(s) de personalização`
                   : 'Sem personalização'}{' '}
                 · {piece.sizeChartIds.length} tabela(s) de medidas
+                {piece.parts.length > 1 && ` · conjunto: ${piece.parts.map((part) => part.label).join(' + ')}`}
+                {piece.parts.length === 1 && ` · com tipos (${String(piece.parts[0]?.sizeChartIds.length ?? 0)})`}
               </p>
             </article>
           ))}
@@ -180,8 +199,9 @@ export const ProdutosPage = () => {
       {remove.isError && <ErrorBox message={errorMessage(remove.error)} />}
       {editing !== null && (
         <PieceEditor
-          key={editing === 'new' ? 'new' : editing.id}
-          piece={editing === 'new' ? null : editing}
+          key={typeof editing === 'string' ? editing : editing.id}
+          piece={typeof editing === 'string' ? null : editing}
+          startAsKit={editing === 'kit'}
           onClose={() => setEditing(null)}
         />
       )}
@@ -195,9 +215,12 @@ type FabricDraft = {
 }
 const PieceEditor = ({
   piece,
+  startAsKit = false,
   onClose,
 }: {
   piece: UniformPieceType | null
+  /** "Criar conjunto ou kit": abre já com duas peças para montar. */
+  startAsKit?: boolean
   onClose: () => void
 }) => {
   const client = useQueryClient()
@@ -219,6 +242,19 @@ const PieceEditor = ({
   const [personalized, setPersonalized] = useState(piece?.personalized ?? false)
   const [typeIds, setTypeIds] = useState(piece?.personalizationTypeIds ?? [])
   const [chartIds, setChartIds] = useState(piece?.sizeChartIds ?? [])
+  // Como o cliente monta a peça no link (F300): cada "E" é uma parte, cada "OU" um tipo dela.
+  const [parts, setParts] = useState<PartDraft[]>(
+    startAsKit
+      ? [blankPart(), blankPart()]
+      : (piece?.parts.map((part) => ({
+          key: part.id,
+          id: part.id,
+          label: part.label,
+          sizeChartIds: [...part.sizeChartIds],
+        })) ?? [])
+  )
+  const [mode, setMode] = useState<BuilderMode>(startAsKit ? 'kit' : modeOf(piece?.parts ?? []))
+  const problem = builderProblem(mode, parts)
   const [rows, setRows] = useState<FabricDraft[]>(
     piece?.fabrics.map((f) => ({
       fabricId: f.fabricId,
@@ -240,7 +276,17 @@ const PieceEditor = ({
         discontinued,
         personalized,
         personalizationTypeIds: personalized ? typeIds : [],
-        sizeChartIds: chartIds,
+        // Com tipos ou conjunto, as medidas que o cliente vê são as dos tipos.
+        sizeChartIds:
+          mode === 'unica' ? chartIds : [...new Set(parts.flatMap((part) => part.sizeChartIds))],
+        parts:
+          mode === 'unica'
+            ? []
+            : parts.map((part) => ({
+                ...(part.id ? { id: part.id } : {}),
+                label: part.label,
+                sizeChartIds: part.sizeChartIds,
+              })),
         ...(piece ? { version: piece.version } : {}),
         fabrics: rows.map((row) => ({
           fabricId: row.fabricId,
@@ -268,7 +314,7 @@ const PieceEditor = ({
   return (
     <Modal
       open
-      title={piece ? `Editar ${piece.name}` : 'Novo produto'}
+      title={piece ? `Editar ${piece.name}` : startAsKit ? 'Novo conjunto ou kit' : 'Novo produto'}
       wide
       onClose={onClose}
       footer={
@@ -282,6 +328,7 @@ const PieceEditor = ({
             disabled={
               !name.trim() ||
               rows.length === 0 ||
+              problem !== null ||
               fabrics.isPending ||
               types.isPending ||
               charts.isPending
@@ -300,7 +347,7 @@ const PieceEditor = ({
             maxLength={120}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Camisa polo"
+            placeholder={startAsKit ? "Conjunto camiseta e shorts" : "Camisa polo"}
           />
         </StoreField>
         <label className="flex items-center gap-2 text-sm">
@@ -507,33 +554,17 @@ const PieceEditor = ({
           )}
           {types.isError && <ErrorBox message={errorMessage(types.error)} />}
         </section>
-        <section>
-          <h3 className="mb-2 text-sm font-extrabold">
-            Medidas que o cliente vê
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {charts.data?.map((chart) => (
-              <label
-                key={chart.id}
-                className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-2 text-xs"
-              >
-                <input
-                  type="checkbox"
-                  checked={chartIds.includes(chart.id)}
-                  onChange={(e) =>
-                    setChartIds((ids) =>
-                      e.target.checked
-                        ? [...ids, chart.id]
-                        : ids.filter((id) => id !== chart.id)
-                    )
-                  }
-                />
-                {chart.name}
-              </label>
-            ))}
-          </div>
-          {charts.isError && <ErrorBox message={errorMessage(charts.error)} />}
-        </section>
+        <PieceBuilder
+          charts={charts.data ?? []}
+          mode={mode}
+          onMode={setMode}
+          parts={parts}
+          onParts={setParts}
+          chartIds={chartIds}
+          onChartIds={setChartIds}
+          onChartCreated={() => void client.invalidateQueries({ queryKey: ['size-charts'] })}
+        />
+        {charts.isError && <ErrorBox message={errorMessage(charts.error)} />}
         {save.isError && <ErrorBox message={errorMessage(save.error)} />}
       </div>
     </Modal>

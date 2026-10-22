@@ -37,6 +37,7 @@ import {
   partsNotReady,
   partsOf,
   type Stage,
+  totalWithFreight,
 } from '@/lib/uniforms'
 
 export const PedidoPage = () => {
@@ -152,7 +153,10 @@ export const PedidoPage = () => {
           {access.seeMoney ? (
             <div className="grid w-full grid-cols-2 gap-2 text-right sm:w-auto sm:grid-cols-3 sm:gap-3">
               <Stat label="Peças" value={int(pieces)} />
-              <Stat label="Total" value={money(order.totalAmount)} />
+              <Stat
+                label={order.freight?.charged ? 'Total c/ frete' : 'Total'}
+                value={money(totalWithFreight(order))}
+              />
               <Stat label="Pago" value={money(order.paidAmount)} />
               {order.ticketPerPiece ? <Stat label="Por peça" value={money(order.ticketPerPiece)} /> : <span />}
             </div>

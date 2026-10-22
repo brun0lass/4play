@@ -56,6 +56,8 @@ export const PARTY_COLUMN_IDS = [
   'kind',
   'phone',
   'email',
+  /** Rua, número e bairro do endereço principal (pedido de 19/10). */
+  'address',
   'city',
   'creditLimit',
   'voucherBalance',
@@ -175,6 +177,24 @@ export const PREFERENCE_SCHEMAS = {
         message: 'Nomes demais guardados. Apague alguns antes.',
       }),
   }),
+  /*
+   * Os atalhos de mensagem DESTA vendedora no Atendimento (F297).
+   *
+   * O gerente da Elite, 20/10: "BOM DIA CLIENTE X" → "bom dia fulano, já
+   * estamos abertos…", um clique e vai. Cada uma cria os seus; `{nome}` no
+   * texto vira o primeiro nome do cliente.
+   */
+  'inbox.quickReplies': z.object({
+    items: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(40),
+          title: z.string().trim().min(1).max(40),
+          text: z.string().trim().min(1).max(1000),
+        })
+      )
+      .max(30),
+  }),
 } as const
 
 export const PREFERENCE_KEYS = [
@@ -186,6 +206,7 @@ export const PREFERENCE_KEYS = [
   'search.mode',
   'labels.lastTemplateId',
   'inbox.contactNames',
+  'inbox.quickReplies',
 ] as const satisfies readonly (keyof typeof PREFERENCE_SCHEMAS)[]
 
 export const PreferenceKeySchema = z.enum(PREFERENCE_KEYS)

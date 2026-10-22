@@ -305,6 +305,8 @@ export const PosCheckoutRequest = z.object({
   /** At least one: a sale of nothing is not a sale. */
   lines: z.array(SalesLineRequest).min(1),
   payments: z.array(PosTenderRequest).min(1),
+  /** F293: o gerente liberou o fiado com vencido (`finance.credit.manage`). */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
 })
 
 /**

@@ -89,6 +89,9 @@ export const NewOrderWizard = ({
   const [paymentMark, setPaymentMark] = useState<PaymentMark>('nao')
   const [personalized, setPersonalized] = useState(false)
   const [notes, setNotes] = useState('')
+  // O frete combinado (F296): o custo e se vai para o cliente.
+  const [freight, setFreight] = useState('')
+  const [freightCharged, setFreightCharged] = useState(false)
   const [orderId, setOrderId] = useState(uuidv7)
 
   useEffect(() => {
@@ -105,6 +108,8 @@ export const NewOrderWizard = ({
     setPaymentMark('nao')
     setPersonalized(false)
     setNotes('')
+    setFreight('')
+    setFreightCharged(false)
     setOrderId(uuidv7())
   }, [open, session?.user.id])
 
@@ -125,6 +130,10 @@ export const NewOrderWizard = ({
     0
   )
   const total = lines.reduce((sum, line) => sum + lineTotal(line), 0)
+  const freightAmount = freight.trim() === '' ? null : toDecimal(freight)
+  const freightValid = freight.trim() === '' || freightAmount !== null
+  /** O total que a tela mostra: com o frete, se ele vai para o cliente (F296). */
+  const totalShown = total + (freightCharged && freightAmount !== null ? Number(freightAmount) : 0)
   const linesValid =
     lines.length > 0 &&
     lines.every(
@@ -172,6 +181,10 @@ export const NewOrderWizard = ({
             paymentMark,
             gradeChecked: false,
             notes: notes.trim() || null,
+            freight:
+              freightAmount !== null && Number(freightAmount) > 0
+                ? { amount: freightAmount, charged: freightCharged }
+                : null,
           })
         } catch (error) {
           toast(
@@ -192,7 +205,7 @@ export const NewOrderWizard = ({
   })
 
   const canNext =
-    step === 0 ? customer !== null : step === 1 ? linesValid : true
+    step === 0 ? customer !== null : step === 1 ? linesValid && freightValid : true
 
   return (
     <>
@@ -489,10 +502,46 @@ export const NewOrderWizard = ({
             )}
 
             {lines.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-paper px-4 py-3">
+                <label className="text-sm font-bold" htmlFor="wizard-freight">
+                  Frete combinado
+                </label>
+                <div className="relative w-32">
+                  <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted">R$</span>
+                  <input
+                    id="wizard-freight"
+                    inputMode="decimal"
+                    className={clsx('field pl-9', !freightValid && 'border-red-500')}
+                    maxLength={14}
+                    placeholder="0,00"
+                    value={freight}
+                    onChange={(e) => setFreight(e.target.value)}
+                  />
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-ink"
+                    disabled={freight.trim() === ''}
+                    checked={freightCharged && freight.trim() !== ''}
+                    onChange={(e) => setFreightCharged(e.target.checked)}
+                  />
+                  Repassar ao cliente (soma no total)
+                </label>
+                {!freightValid && (
+                  <p className="w-full text-xs font-bold text-red-700">Use um valor como 90 ou 90,50.</p>
+                )}
+              </div>
+            )}
+
+            {lines.length > 0 && (
               <div className="mt-4 flex items-center justify-between rounded-2xl bg-ink px-4 py-3 text-white">
-                <span className="text-sm font-bold">{int(pieces)} peças</span>
+                <span className="text-sm font-bold">
+                  {int(pieces)} peças
+                  {freightCharged && freightAmount !== null && ` · com frete de ${money(freightAmount)}`}
+                </span>
                 <span className="display text-2xl text-lime">
-                  {money(total.toFixed(2))}
+                  {money(totalShown.toFixed(2))}
                 </span>
               </div>
             )}
@@ -608,7 +657,9 @@ export const NewOrderWizard = ({
             <div className="rounded-2xl bg-paper p-4 text-sm">
               <p className="font-extrabold">{customer?.name}</p>
               <p className="text-muted">
-                {int(pieces)} peças · {money(total.toFixed(2))}
+                {int(pieces)} peças · {money(totalShown.toFixed(2))}
+                {freightAmount !== null &&
+                  ` · frete ${money(freightAmount)}${freightCharged ? ' (repassado)' : ' (custo da loja)'}`}
               </p>
             </div>
             {submit.isError && (

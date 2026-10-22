@@ -66,8 +66,9 @@ export const serializeColors = (colors: readonly GradeColor[]): string =>
     .map(({ name, hex }) => {
       const clean = name.replace(HEX, '').replace(/\s+/g, ' ').trim()
       const fromList = known(clean)
-      if (fromList) return fromList.name
-      return [clean, hex].filter(Boolean).join(' ')
+      // O nome da lista com outro RGB ("Azul royal" mais claro) guarda o RGB escolhido.
+      if (fromList && (hex === null || hex.toLowerCase() === fromList.hex.toLowerCase())) return fromList.name
+      return [fromList?.name ?? clean, hex].filter(Boolean).join(' ')
     })
     .filter(Boolean)
     .join(' e ')

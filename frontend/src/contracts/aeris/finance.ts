@@ -238,6 +238,11 @@ export const SettleFinanceEntryRequest = z.object({
    * exigi-lo obrigaria a loja a abrir um turno para receber um PIX.
    */
   cashSessionId: z.string().min(1).nullable().default(null),
+  /**
+   * O gerente liberou o fiado deste cliente com vencido (F293): o id do
+   * `/auth/authorize` com a ação `finance.credit.manage`, alvo o cliente.
+   */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
 })
 
 export type SettleFinanceEntryRequest = z.infer<
@@ -264,6 +269,8 @@ export const SettleSplitRequest = z.object({
     .min(1)
     .max(6),
   cashSessionId: z.string().min(1).nullable().default(null),
+  /** F293: a liberação do gerente, como no `/settle`. */
+  creditAuthorisationId: z.string().min(1).nullable().default(null),
   note: z.string().trim().max(500).nullable().default(null),
 })
 
@@ -303,6 +310,8 @@ export const CreditStandingResponse = z.object({
   available: z.string(),
   overdueCount: z.number().int().nonnegative(),
   oldestOverdueDays: z.number().int().nonnegative(),
+  /** Vencido há até estes dias não recusa (F293). */
+  overdueToleranceDays: z.number().int().nonnegative().default(0),
   /** The party's optimistic-concurrency token, for the next write. */
   version: z.number().int().positive(),
 })

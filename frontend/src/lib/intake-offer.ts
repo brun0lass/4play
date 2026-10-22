@@ -62,7 +62,13 @@ export const madeIn = (
 /** Mesma regra do servidor: opção por item, dados por linha, por-pedido uma vez só. */
 export const personalizationCharges = (
   types: readonly OfferType[],
-  items: readonly { typeIds: string[]; options: string[]; rows: OfferRow[] }[]
+  items: readonly {
+    typeIds: string[]
+    options: string[]
+    rows: OfferRow[]
+    /** Quantas peças as opções cobram; ausente, a soma das linhas (F300: os conjuntos). */
+    pieces?: number
+  }[]
 ) =>
   types
     .map((type) => {
@@ -72,7 +78,7 @@ export const personalizationCharges = (
         quantity +=
           type.kind === 'opcao'
             ? item.options.includes(type.id)
-              ? item.rows.reduce((sum, row) => sum + row.quantity, 0)
+              ? (item.pieces ?? item.rows.reduce((sum, row) => sum + row.quantity, 0))
               : 0
             : item.rows
                 .filter(

@@ -335,6 +335,26 @@ export const DeliveryAddressSchema = z.object({
 
 export type DeliveryAddressType = z.infer<typeof DeliveryAddressSchema>
 
+/**
+ * O frete do pedido (F296): quanto custa e se vai para o cliente. Repassado,
+ * a tela soma ao total; o pedido de vendas não muda.
+ */
+export const OrderFreightSchema = z.object({
+  /** Com ponto: "90.00". */
+  amount: z
+    .string()
+    .trim()
+    .regex(/^\d{1,9}(\.\d{1,2})?$/, 'Use um valor como 90 ou 90.50.')
+    .refine(
+      (value) => Number(value) > 0,
+      'O frete precisa ser maior que zero.'
+    ),
+  /** Repassado ao cliente: entra no total que o 4Play mostra. */
+  charged: z.boolean(),
+})
+
+export type OrderFreightType = z.infer<typeof OrderFreightSchema>
+
 export const ProductionOrderSummary = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
@@ -364,6 +384,8 @@ export const ProductionOrderSummary = z.object({
   eventNote: z.string().nullable(),
   /** O local de entrega (F280); nulo é "não informado". */
   deliveryAddress: DeliveryAddressSchema.nullable().default(null),
+  /** O frete (F296); nulo é "sem frete" — e para quem não vê dinheiro. */
+  freight: OrderFreightSchema.nullable().default(null),
   /** Anotação, não dinheiro. O sinal recebido de verdade é `paidAmount` (F173). */
   paymentMark: UniformPaymentMarkSchema,
   /** O andamento da arte (F171). */
@@ -604,6 +626,11 @@ export const UpdateProductionSheetRequest = z.object({
   notes: nullableText(2_000),
   /** O local de entrega (F280). Ausente não mexe; nulo apaga. */
   deliveryAddress: DeliveryAddressSchema.nullable().optional(),
+  /**
+   * O frete (F296). Ausente não mexe; nulo apaga. Só quem vê dinheiro mexe —
+   * dos outros, é ignorado.
+   */
+  freight: OrderFreightSchema.nullable().optional(),
 })
 
 export type UpdateProductionSheetBody = z.input<
@@ -1114,6 +1141,50 @@ export const IntakeCustomerSchema = z.object({
 
 export type IntakeCustomerType = z.infer<typeof IntakeCustomerSchema>
 
+const IntakeKitPiece = z.object({
+  partId: z.uuid(),
+  /** O tipo de peça: uma tabela de medidas da parte. */
+  sizeChartId: z.uuid(),
+  size: UniformSizeSchema,
+})
+
+/** O conjunto preenchido por partes (F300). */
+export const IntakeKitSchema = z.object({
+  /**
+   * Os conjuntos personalizados: uma peça de cada parte, cada uma no seu tipo
+   * e tamanho, com o seu nome e número — a camisa "AMANDA 22", o shorts só
+   * "22". A peça sem nome nem número vai para a grade.
+   */
+  people: z
+    .array(
+      z.object({
+        quantity: z.number().int().min(1).max(100_000).default(1),
+        pieces: z
+          .array(
+            IntakeKitPiece.extend({
+              name: optionalText(80),
+              number: optionalText(10),
+            })
+          )
+          .min(1)
+          .max(6),
+      })
+    )
+    .max(2_000)
+    .default([]),
+  /** As peças sem nome, por parte, tipo e tamanho. */
+  counts: z
+    .array(
+      IntakeKitPiece.extend({
+        quantity: z.number().int().min(1).max(100_000),
+      })
+    )
+    .max(400)
+    .default([]),
+})
+
+export type IntakeKitType = z.infer<typeof IntakeKitSchema>
+
 /** O que o cliente envia — e o que fica gravado no link. */
 export const IntakeSubmissionSchema = z.object({
   /** Obrigatório quando o link é de cliente novo; ignorado quando não. */
@@ -1122,9 +1193,21 @@ export const IntakeSubmissionSchema = z.object({
     .array(
       z.object({
         productId: z.uuid(),
-        rows: z.array(IntakeRowSchema).min(1).max(2_000),
+        /** As linhas da peça sem partes; vazio no conjunto por partes (F300). */
+        rows: z.array(IntakeRowSchema).max(2_000).default([]),
         /** As personalizações de marcar que o cliente quis nesta peça (F261). */
         options: z.array(z.uuid()).max(20).default([]),
+        /**
+         * A cor que o cliente escolheu (F302): o texto da cor da grade, "Azul
+         * royal #1d4ed8" ou "Preto e Vermelho". Nula: a loja define.
+         */
+        color: optionalText(60),
+        /**
+         * A peça com partes (F300): os conjuntos personalizados, peça por
+         * peça, e as peças sem nome.
+         * Obrigatório na peça com partes; nulo na sem.
+         */
+        kit: IntakeKitSchema.nullable().default(null),
       })
     )
     .min(1, 'Escolha pelo menos uma peça.')
@@ -1228,6 +1311,21 @@ export const PublicIntakeResponse = z.object({
       sizeChartIds: z.array(z.string()),
       /** As personalizações da peça (F261), em `personalizationTypes`. */
       personalizationTypeIds: z.array(z.string()),
+      /**
+       * As partes da peça (F300): "Camisa", "Shorts" — e os tipos de peça de
+       * cada uma. Vazio: a peça é preenchida por linhas, como antes.
+       */
+      parts: z
+        .array(
+          z.object({
+            id: z.string(),
+            label: z.string(),
+            options: z.array(
+              z.object({ sizeChartId: z.string(), piece: z.string() })
+            ),
+          })
+        )
+        .default([]),
       /**
        * O que o cliente preenche em cada peça (F261): os campos do tipo de
        * preencher da peça; vazio quando ela não tem — a grade só por tamanho.
@@ -1367,6 +1465,39 @@ export const IntakeDetailResponse = z.object({
           productId: z.string(),
           productName: z.string(),
           rows: z.array(IntakeRowOut),
+          /** A cor que o cliente escolheu (F302); nula, a loja define. */
+          color: z.string().nullable().default(null),
+          /**
+           * O conjunto por partes (F300), com os nomes das partes e das
+           * peças; nulo na peça sem partes.
+           */
+          kit: z
+            .object({
+              people: z.array(
+                z.object({
+                  quantity: z.number().int(),
+                  pieces: z.array(
+                    z.object({
+                      part: z.string(),
+                      piece: z.string(),
+                      size: z.string(),
+                      name: z.string().nullable(),
+                      number: z.string().nullable(),
+                    })
+                  ),
+                })
+              ),
+              counts: z.array(
+                z.object({
+                  part: z.string(),
+                  piece: z.string(),
+                  size: z.string(),
+                  quantity: z.number().int(),
+                })
+              ),
+            })
+            .nullable()
+            .default(null),
           /** As personalizações de marcar que o cliente quis (F261). */
           options: z.array(z.object({ id: z.string(), name: z.string() })),
         })
@@ -1953,6 +2084,19 @@ export const PieceFabricSchema = z.object({
   cost: z.string().nullable(),
 })
 
+/**
+ * Uma parte da peça no link (F300): "Camisa", "Shorts" — e os tipos de peça
+ * que ela aceita, pelas tabelas de medidas.
+ */
+export const PiecePartSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  /** As tabelas de medidas da parte, na ordem do link. */
+  sizeChartIds: z.array(z.string()),
+})
+
+export type PiecePartType = z.infer<typeof PiecePartSchema>
+
 export const UniformPieceSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1961,6 +2105,8 @@ export const UniformPieceSchema = z.object({
   personalized: z.boolean(),
   personalizationTypeIds: z.array(z.string()),
   sizeChartIds: z.array(z.string()),
+  /** As partes para o cliente escolher no link (F300). */
+  parts: z.array(PiecePartSchema).default([]),
   fabrics: z.array(PieceFabricSchema),
   version: z.number().int(),
 })
@@ -1985,6 +2131,28 @@ export const SavePieceRequest = z
     personalized: z.boolean().default(false),
     personalizationTypeIds: z.array(z.uuid()).max(20).default([]),
     sizeChartIds: z.array(z.uuid()).max(20).default([]),
+    /**
+     * As partes (F300), trocadas inteiras. Ausente não mexe. Os tipos de cada
+     * parte saem das tabelas da peça.
+     */
+    parts: z
+      .array(
+        z.object({
+          /** A parte que já existia; ausente é uma nova. */
+          id: z.uuid().optional(),
+          label: z
+            .string()
+            .trim()
+            .min(1, 'Dê um nome à parte (Camisa, Shorts…).')
+            .max(30),
+          sizeChartIds: z
+            .array(z.uuid())
+            .min(1, 'Escolha os tipos de peça da parte.')
+            .max(10),
+        })
+      )
+      .max(6)
+      .optional(),
     fabrics: z
       .array(
         z.object({
@@ -1999,6 +2167,16 @@ export const SavePieceRequest = z
     version: z.number().int().positive().optional(),
   })
   .superRefine((value, context) => {
+    const labels = (value.parts ?? []).map((part) =>
+      part.label.trim().replace(/\s+/g, ' ').toLowerCase()
+    )
+    if (new Set(labels).size !== labels.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['parts'],
+        message: 'Duas partes com o mesmo nome.',
+      })
+    }
     const fabrics = value.fabrics.map((entry) => entry.fabricId)
     if (new Set(fabrics).size !== fabrics.length) {
       context.addIssue({
@@ -2322,4 +2500,6 @@ export const ClientEventListResponse = z.object({
   events: z.array(ClientEventSummary),
 })
 
-export type ClientEventListResponseType = z.infer<typeof ClientEventListResponse>
+export type ClientEventListResponseType = z.infer<
+  typeof ClientEventListResponse
+>

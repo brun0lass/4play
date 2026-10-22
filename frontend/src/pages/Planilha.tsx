@@ -15,6 +15,7 @@ import {
   logisticsText,
   type Order,
   type Stage,
+  totalWithFreight,
 } from '@/lib/uniforms'
 import { errorMessage } from '@/lib/http'
 
@@ -187,7 +188,7 @@ const COLUMNS: Col[] = [
     print: false,
     money: true,
     cell: (o) => (
-      <span className="whitespace-nowrap">{money(o.totalAmount)}</span>
+      <span className="whitespace-nowrap">{money(totalWithFreight(o))}</span>
     ),
   },
   {
@@ -211,7 +212,7 @@ const COLUMNS: Col[] = [
         )
       if (
         o.paymentMark === 'total' ||
-        (paid > 0 && paid >= Number(o.totalAmount))
+        (paid > 0 && paid >= Number(totalWithFreight(o)))
       )
         return (
           <span className="rounded bg-sky-600 px-1.5 text-[10px] font-extrabold text-white">
