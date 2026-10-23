@@ -227,6 +227,17 @@ const IntakeForm = ({
   const [fabric, setFabric] = useState<Fabric | null>(
     saved?.fabric != null && data.fabrics.some((f) => f.id === saved.fabric) ? saved.fabric : null
   )
+  // O acabamento do tecido (F303): liso ou furadinho, no tecido que tem.
+  const [finish, setFinish] = useState<string | null>(saved?.finish ?? null)
+  const finishesOf = (id: Fabric | null) => data.fabrics.find((f) => f.id === id)?.finishes ?? []
+  const finishes = finishesOf(fabric)
+  const chosenFinish = finish !== null && finishes.includes(finish) ? finish : null
+  const finishMissing = finishes.length > 0 && chosenFinish === null
+  const pickFabric = (value: Fabric | null) => {
+    setFabric(value)
+    // O mesmo acabamento vale se o outro tecido também tem.
+    if (finish !== null && !finishesOf(value).includes(finish)) setFinish(null)
+  }
   const resumed = Object.keys(items).length > 0
   const [measuring, setMeasuring] = useState<Product | null>(null)
   // Voltou com peças escolhidas: começa pelo pedido.
@@ -257,12 +268,12 @@ const IntakeForm = ({
     try {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ items, notes, isEvent, eventDate, eventName, fabric, customer } satisfies Draft)
+        JSON.stringify({ items, notes, isEvent, eventDate, eventName, fabric, finish, customer } satisfies Draft)
       )
     } catch {
       /* sem armazenamento: só não guarda */
     }
-  }, [storageKey, items, notes, isEvent, eventDate, eventName, fabric, customer])
+  }, [storageKey, items, notes, isEvent, eventDate, eventName, fabric, finish, customer])
 
   // CEP completo → preenche o endereço vazio.
   const lastCep = useRef('')
@@ -413,6 +424,7 @@ const IntakeForm = ({
             ? { date: eventDate, name: eventName.trim() || null }
             : null,
         fabricId: fabric,
+        fabricFinish: chosenFinish,
       })
     },
     onSuccess: () => {
@@ -489,10 +501,14 @@ const IntakeForm = ({
     return `${int(count)} ${unit}${named > 0 ? ` · ${int(named)} com nome` : ''}`
   }
   const pending = chosen.filter((product) => statusOf(product).pieces === 0)
-  const problems = chosen.flatMap((product) => {
-    const { problem, pieces: count } = statusOf(product)
-    return problem !== null ? [problem] : count === 0 ? [`Falta montar ${product.name}.`] : []
-  })
+  const finishHint = `Escolha o acabamento do tecido: ${finishes.join(' ou ')}.`
+  const problems = [
+    ...chosen.flatMap((product) => {
+      const { problem, pieces: count } = statusOf(product)
+      return problem !== null ? [problem] : count === 0 ? [`Falta montar ${product.name}.`] : []
+    }),
+    ...(finishMissing ? [finishHint] : []),
+  ]
   const startItem = (product: Product): Item => ({
     named: [],
     bySize: {},
@@ -534,6 +550,8 @@ const IntakeForm = ({
   const steps = ['Peças', 'Prazo', ...(data.needsRegistration ? ['Seus dados'] : []), 'Conferir']
   const fabricName =
     fabric === null ? 'Não sei — a loja ajuda' : (data.fabrics.find((f) => f.id === fabric)?.name ?? 'Tecido')
+  // O tecido com o acabamento, para o cliente conferir.
+  const fabricLabel = chosenFinish === null ? fabricName : `${fabricName} · ${chosenFinish}`
 
   const fabricPicker = data.fabrics.length > 0 && (
     <section className="card space-y-3 p-4">
@@ -547,7 +565,7 @@ const IntakeForm = ({
             <button
               key={label}
               type="button"
-              onClick={() => setFabric(value)}
+              onClick={() => pickFabric(value)}
               className={clsx(
                 'rounded-full border-2 px-3 py-1.5 text-xs font-extrabold',
                 fabric === value ? 'border-ink bg-lime' : 'border-line bg-white'
@@ -558,6 +576,28 @@ const IntakeForm = ({
           )
         )}
       </div>
+      {finishes.length > 0 && (
+        <div className="border-t border-line pt-3">
+          <h3 className="text-xs font-extrabold tracking-wider uppercase">Acabamento</h3>
+          <p className="mt-0.5 text-xs text-muted">Mesmo tecido, mesmo preço. Escolha um.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {finishes.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={chosenFinish === value}
+                onClick={() => setFinish(value)}
+                className={clsx(
+                  'rounded-full border-2 px-3 py-1.5 text-xs font-extrabold',
+                  chosenFinish === value ? 'border-ink bg-lime' : 'border-line bg-white'
+                )}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   )
 
@@ -649,8 +689,13 @@ const IntakeForm = ({
           </section>
           <BottomBar
             title={chosen.length === 0 ? 'Marque as peças' : `${int(chosen.length)} ${chosen.length === 1 ? 'escolhida' : 'escolhidas'}`}
+            hint={finishMissing ? finishHint : undefined}
             action={
-              <Button variant="lime" disabled={chosen.length === 0} onClick={() => go(pending[0] ? next() : { kind: 'pedido' })}>
+              <Button
+                variant="lime"
+                disabled={chosen.length === 0 || finishMissing}
+                onClick={() => go(pending[0] ? next() : { kind: 'pedido' })}
+              >
                 {chosen.length > 0 && pending.length === 0 ? 'Ver o pedido' : 'Montar'}
               </Button>
             }
@@ -715,7 +760,7 @@ const IntakeForm = ({
             </button>
           </section>
           <p className="text-xs text-muted">
-            Tecido: <strong>{fabricName}</strong>{' '}
+            Tecido: <strong>{fabricLabel}</strong>{' '}
             <button type="button" className="font-bold underline" onClick={() => go({ kind: 'escolher' })}>
               trocar
             </button>
@@ -1201,7 +1246,7 @@ const IntakeForm = ({
             >
               <Plus className="h-4 w-4" /> Adicionar outra peça
             </button>
-            {data.fabrics.length > 0 && <ReviewRow title="Tecido" text={fabricName} onEdit={() => go({ kind: 'escolher' })} />}
+            {data.fabrics.length > 0 && <ReviewRow title="Tecido" text={fabricLabel} onEdit={() => go({ kind: 'escolher' })} />}
             <ReviewRow
               title="Para quando"
               text={
@@ -1275,6 +1320,8 @@ type Draft = {
   eventDate: string
   eventName: string
   fabric: Fabric | null
+  /** O acabamento do tecido (F303); ausente nos rascunhos de antes. */
+  finish?: string | null
   customer: Record<string, string>
 }
 

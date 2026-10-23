@@ -105,6 +105,13 @@ export const UniformPaymentMarkSchema = z.enum(UNIFORM_PAYMENT_MARK_VALUES)
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const Day = z.string().regex(DAY, 'Use a data no formato AAAA-MM-DD.')
 
+/** O acabamento do tecido — "Liso", "Furadinho" (F303). */
+const FabricFinish = z
+  .string()
+  .trim()
+  .min(1, 'Dê um nome ao acabamento: "Liso".')
+  .max(30, 'Use no máximo 30 caracteres.')
+
 const isTimeZone = (value: string): boolean => {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value })
@@ -378,6 +385,8 @@ export const ProductionOrderSummary = z.object({
   /** O tecido da loja (F260); nulo é "a definir". */
   fabricId: z.string().nullable(),
   fabricName: z.string().nullable(),
+  /** O acabamento do tecido — "Liso", "Furadinho" (F303); nulo é "não marcado". */
+  fabricFinish: z.string().nullable().default(null),
   personalized: z.boolean(),
   logistics: z.array(UniformLogisticsSchema),
   eventDate: z.string().nullable(),
@@ -631,6 +640,11 @@ export const UpdateProductionSheetRequest = z.object({
    * dos outros, é ignorado.
    */
   freight: OrderFreightSchema.nullable().optional(),
+  /**
+   * O acabamento do tecido (F303): um dos que o tecido tem. Ausente não mexe;
+   * nulo é "não marcado".
+   */
+  fabricFinish: FabricFinish.nullable().optional(),
 })
 
 export type UpdateProductionSheetBody = z.input<
@@ -781,6 +795,20 @@ export const SaveArtResponse = z.object({
 })
 
 export type SaveArtResponseType = z.infer<typeof SaveArtResponse>
+
+/**
+ * O designer do pedido escolhido já no atendimento (F317): o pedido chega à
+ * arte na fila de quem vai fazer. Nulo tira.
+ */
+export const AssignDesignerRequest = z.object({
+  designerUserId: z.uuid().nullable(),
+})
+
+export type AssignDesignerBody = z.infer<typeof AssignDesignerRequest>
+
+export const AssignDesignerResponse = z.object({
+  artVersion: z.number().int(),
+})
 
 /** O conjunto inteiro de máquinas do pedido — a correção da PRODUÇÃO. */
 export const ReplacePrintersRequest = z.object({
@@ -1226,6 +1254,8 @@ export const IntakeSubmissionSchema = z.object({
     .default(null),
   /** O tecido da loja que o cliente quer (F260); nulo é "não sei, a loja ajuda". */
   fabricId: z.uuid().nullable().default(null),
+  /** O acabamento do tecido (F303); nulo é "tanto faz" ou o tecido sem acabamento. */
+  fabricFinish: FabricFinish.nullable().default(null),
 })
 
 export type IntakeSubmissionBody = z.input<typeof IntakeSubmissionSchema>
@@ -1341,8 +1371,14 @@ export const PublicIntakeResponse = z.object({
   leadDays: z.number().int(),
   /** Quantos dias antes do evento o pedido sai. */
   eventLeadDays: z.number().int(),
-  /** Os tecidos que o link oferece (F260). */
-  fabrics: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Os tecidos que o link oferece (F260), com os acabamentos (F303). */
+  fabrics: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      finishes: z.array(z.string()).default([]),
+    })
+  ),
   /** "Hoje" no fuso da loja, para a página mostrar a previsão. */
   today: z.string(),
   expiresAt: z.string(),
@@ -1508,6 +1544,8 @@ export const IntakeDetailResponse = z.object({
         .nullable(),
       fabricId: z.string().nullable(),
       fabricName: z.string().nullable(),
+      /** O acabamento que o cliente escolheu (F303). */
+      fabricFinish: z.string().nullable().default(null),
       /** O despacho que o link calcula (F233); a atendente muda na ficha. */
       dispatchDate: z.string().nullable(),
       /** Evento com menos de uma semana: prazo curto. */
@@ -1582,6 +1620,8 @@ export const SectorPartSchema = z.object({
   late: z.boolean(),
   eventDate: z.string().nullable(),
   fabricName: z.string().nullable(),
+  /** O acabamento do tecido (F303); nulo é "não marcado". */
+  fabricFinish: z.string().nullable().default(null),
   /** Nula é a leva 1, o restante. */
   batchId: z.string().nullable(),
   batchNumber: z.number().int(),
@@ -1926,6 +1966,8 @@ export const UniformFabricSchema = z.object({
   discontinued: z.boolean(),
   /** Quantas peças têm preço neste tecido. */
   productCount: z.number().int(),
+  /** Os acabamentos do tecido — "Liso", "Furadinho" (F303). */
+  finishes: z.array(z.string()).default([]),
   version: z.number().int(),
 })
 
@@ -1937,9 +1979,21 @@ export const UniformFabricListResponse = z.object({
 
 export const UniformFabricResponse = z.object({ fabric: UniformFabricSchema })
 
+const FabricFinishes = z
+  .array(FabricFinish)
+  .max(10, 'No máximo 10 acabamentos.')
+  .refine(
+    (list) =>
+      new Set(list.map((name) => name.toLocaleLowerCase('pt-BR'))).size ===
+      list.length,
+    'Acabamento repetido.'
+  )
+
 export const CreateUniformFabricRequest = z.object({
   name: FabricName,
   discontinued: z.boolean().default(false),
+  /** Os acabamentos (F303); vazio é sem acabamento a escolher. */
+  finishes: FabricFinishes.default([]),
 })
 
 export type CreateUniformFabricBody = z.input<typeof CreateUniformFabricRequest>
@@ -1947,6 +2001,8 @@ export type CreateUniformFabricBody = z.input<typeof CreateUniformFabricRequest>
 export const UpdateUniformFabricRequest = z.object({
   name: FabricName,
   discontinued: z.boolean(),
+  /** Ausente não mexe (F303). */
+  finishes: FabricFinishes.optional(),
   version: z.number().int().positive(),
 })
 

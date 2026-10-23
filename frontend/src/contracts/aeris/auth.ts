@@ -37,6 +37,11 @@ export const SessionTransport = z.enum(['cookie', 'bearer'])
 
 export type SessionTransport = z.infer<typeof SessionTransport>
 
+/** O navegador (e o PC, que é o site) ou o app do celular. F304. */
+export const SessionClient = z.enum(['web', 'mobile'])
+
+export type SessionClient = z.infer<typeof SessionClient>
+
 export const LoginRequest = z.object({
   email: z
     .string()
@@ -49,6 +54,26 @@ export const LoginRequest = z.object({
   // telling an attacker which ones parse.
   password: z.string().min(1, 'Informe a senha').max(256),
   transport: SessionTransport.default('cookie'),
+  /**
+   * Quem está entrando (F304, ADR-0047). `mobile` é o app do celular: a
+   * sessão dele aguenta 7 dias parada, e por isso só existe com `bearer` — o
+   * servidor recusa `mobile` com cookie.
+   */
+  client: SessionClient.default('web'),
+  /**
+   * O nome do aparelho, para a Equipe reconhecer a sessão. Só com `mobile`.
+   *
+   * Sem caractere de controle nem de direção (`\p{C}`): um U+202E ou uma
+   * quebra de linha deixaria forjar, em Equipe → Sessões, um nome que imita
+   * outro aparelho ou outro IP.
+   */
+  deviceName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^\P{C}+$/u, 'Nome de aparelho inválido')
+    .optional(),
 })
 
 export type LoginRequest = z.input<typeof LoginRequest>

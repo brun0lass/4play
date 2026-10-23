@@ -3,7 +3,7 @@ import type {
   UniformFabricType,
 } from '@/contracts/aeris/uniforms'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import {
   archiveFabric,
@@ -89,6 +89,11 @@ export const TecidosPage = () => {
               <p className="mt-1 text-xs text-muted">
                 {fabric.productCount} produto(s) com preço neste tecido
               </p>
+              {fabric.finishes.length > 0 && (
+                <p className="mt-1 text-xs">
+                  Acabamentos: <b>{fabric.finishes.join(' · ')}</b>
+                </p>
+              )}
               {fabric.discontinued && (
                 <Badge tone="warning">Descontinuado</Badge>
               )}
@@ -148,15 +153,29 @@ const FabricEditor = ({
   const [discontinued, setDiscontinued] = useState(
     fabric?.discontinued ?? false
   )
+  const [finishes, setFinishes] = useState<string[]>([
+    ...(fabric?.finishes ?? []),
+  ])
+  const [finish, setFinish] = useState('')
+  const typed = finish.trim()
+  const repeated = finishes.some(
+    (entry) => entry.toLocaleLowerCase('pt-BR') === typed.toLocaleLowerCase('pt-BR')
+  )
+  const addFinish = () => {
+    if (!typed || repeated || finishes.length >= 10) return
+    setFinishes([...finishes, typed])
+    setFinish('')
+  }
   const save = useMutation({
     mutationFn: () =>
       fabric
         ? updateFabric(fabric.id, {
             name,
             discontinued,
+            finishes,
             version: fabric.version,
           })
-        : createFabric({ name, discontinued }),
+        : createFabric({ name, discontinued, finishes }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: storeKeys.fabrics })
       void client.invalidateQueries({ queryKey: storeKeys.pieces })
@@ -204,6 +223,66 @@ const FabricEditor = ({
           />
           Descontinuado
         </label>
+        <StoreField label="Acabamentos (opcional)">
+          <p className="mb-2 text-xs text-muted">
+            O mesmo tecido e o mesmo preço, com acabamentos diferentes — por
+            exemplo "Liso" e "Furadinho". O cliente escolhe no link e a
+            atendente marca no pedido.
+          </p>
+          {finishes.length > 0 && (
+            <ul className="mb-2 flex flex-wrap gap-2">
+              {finishes.map((entry) => (
+                <li
+                  key={entry}
+                  className="flex items-center gap-1 rounded-full border border-line bg-paper px-3 py-1 text-sm font-bold"
+                >
+                  {entry}
+                  <button
+                    type="button"
+                    className="text-muted hover:text-ink"
+                    onClick={() =>
+                      setFinishes(finishes.filter((other) => other !== entry))
+                    }
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span className="sr-only">Tirar {entry}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            <input
+              className="field"
+              maxLength={30}
+              value={finish}
+              onChange={(e) => setFinish(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addFinish()
+                }
+              }}
+              placeholder={finishes.length === 0 ? 'Liso' : 'Furadinho'}
+              aria-label="Novo acabamento"
+            />
+            <Button
+              variant="outline"
+              disabled={!typed || repeated || finishes.length >= 10}
+              onClick={addFinish}
+            >
+              Adicionar
+            </Button>
+          </div>
+          {repeated && typed && (
+            <p className="mt-1 text-xs text-red-700">Esse acabamento já está.</p>
+          )}
+          {fabric && fabric.finishes.some((entry) => !finishes.includes(entry)) && (
+            <p className="mt-1 text-xs text-muted">
+              Tirar um acabamento não muda os pedidos que já têm ele marcado.
+            </p>
+          )}
+        </StoreField>
         {save.isError && <ErrorBox message={errorMessage(save.error)} />}
       </div>
     </Modal>

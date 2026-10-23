@@ -14,7 +14,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { ColorDots, colorLabel } from '@/lib/grade-color'
 import { useSalesDocument } from '@/lib/order-lines'
 import { useOrder } from '@/lib/queries'
-import { ADULT_SIZES, SIZES, type Size } from '@/lib/uniforms'
+import { ADULT_SIZES, SIZES, type Size, fabricLabel } from '@/lib/uniforms'
 
 /**
  * A ficha do pedido para imprimir ou mandar ao cliente — o "PEDIDO - 3226"
@@ -260,7 +260,7 @@ const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
                 <Cell label="Qtd peças" value={String(order.pieces)} />
                 <Cell
                   label="Tecido"
-                  value={order.fabricName ? order.fabricName : 'A definir'}
+                  value={fabricLabel(order) ?? 'A definir'}
                 />
               </tr>
               <tr>

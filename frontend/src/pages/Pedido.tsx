@@ -31,6 +31,7 @@ import {
   STAGES,
   STAGE_META,
   canWork,
+  fabricLabel,
   isSplit,
   orderRef,
   partLabel,
@@ -290,6 +291,7 @@ export const PedidoPage = () => {
               grade={grade}
               editable={open && canWork(viewer, 'atendimento')}
               readOnlyReason={closedReason}
+              fabric={fabricLabel(order)}
             />
             <PersonalizationEditor
               orderId={order.id}

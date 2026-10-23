@@ -65,6 +65,7 @@ import {
   pieceKey,
   type FactorySector,
   type Stage,
+  fabricLabel,
 } from '@/lib/uniforms'
 
 const SECTOR_KEY = '4play.setor'
@@ -598,7 +599,7 @@ const SectorCard = ({
             <Badge>{STAGE_META[part.stage].label}</Badge>
             <DispatchChip order={part} />
             {part.eventDate && <span>Evento {day(part.eventDate)}</span>}
-            {part.fabricName && <span>· {part.fabricName}</span>}
+            {part.fabricName && <span>· {fabricLabel(part)}</span>}
             {part.printers.length > 0 && (
               <span className="inline-flex items-center gap-1">
                 · <Printer className="h-3 w-3" aria-hidden />{' '}

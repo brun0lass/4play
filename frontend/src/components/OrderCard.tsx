@@ -25,6 +25,7 @@ import {
   type Part,
   type Stage,
   totalWithFreight,
+  fabricLabel,
 } from '@/lib/uniforms'
 
 export const DispatchChip = ({
@@ -163,7 +164,7 @@ export const OrderCard = ({
               </Badge>
             )}
             {order.fabricName && (
-              <Badge tone="neutral">{order.fabricName}</Badge>
+              <Badge tone="neutral">{fabricLabel(order)}</Badge>
             )}
             {seeMoney && order.paymentMark !== 'total' && (
               <Badge tone={PAYMENT_MARK_META[order.paymentMark].tone}>

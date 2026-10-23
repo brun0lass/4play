@@ -226,6 +226,9 @@ export const MemberSessionSummary = z.object({
   /** Null when the request arrived without one the server could record. */
   ip: z.string().nullable(),
   userAgent: z.string().nullable(),
+  /** O app do celular, e o nome do aparelho (F304). */
+  clientKind: z.enum(['web', 'mobile']),
+  deviceName: z.string().nullable(),
   /** True for the session making this request, so nobody ends their own by accident. */
   isCurrent: z.boolean(),
 })

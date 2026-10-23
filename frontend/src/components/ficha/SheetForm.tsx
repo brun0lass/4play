@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 
 import { fetchFabrics, storeKeys } from '@/api/uniform-store'
 import { changeOrderSalesperson } from '@/api/orders'
-import { saveSheet } from '@/api/uniforms'
+import { assignDesigner, saveSheet } from '@/api/uniforms'
 import { useAuth } from '@/auth/AuthProvider'
 import {
   SaveBar,
@@ -43,6 +43,8 @@ type Order = ProductionOrderResponseType['order']
 type Draft = {
   dispatchDate: string
   fabric: Fabric | ''
+  /** O acabamento do tecido (F303); vazio é "não marcado". */
+  finish: string
   personalized: boolean
   logistics: Logistics[]
   eventDate: string
@@ -60,6 +62,7 @@ type Draft = {
 const fromOrder = (order: Order): Draft => ({
   dispatchDate: order.dispatchDate ?? '',
   fabric: order.fabricId ?? '',
+  finish: order.fabricFinish ?? '',
   personalized: order.personalized,
   logistics: [...order.logistics],
   eventDate: order.eventDate ?? '',
@@ -142,6 +145,7 @@ export const SheetForm = ({
       version,
       dispatchDate: draft.dispatchDate || null,
       fabricId: draft.fabric || null,
+      fabricFinish: draft.finish || null,
       personalized: draft.personalized,
       logistics: draft.logistics,
       eventDate: draft.eventDate || null,
@@ -179,10 +183,33 @@ export const SheetForm = ({
 
   const disabled = !editable
 
+  // Os acabamentos do tecido escolhido (F303) — e o já marcado, mesmo que o
+  // tecido não tenha mais.
+  const finishes = [
+    ...(fabrics.data?.find((f) => f.id === draft.fabric)?.finishes ?? []),
+  ]
+  if (
+    draft.finish &&
+    draft.fabric === (order.fabricId ?? '') &&
+    draft.finish === order.fabricFinish &&
+    !finishes.includes(draft.finish)
+  )
+    finishes.push(draft.finish)
+  const pickFabric = (fabric: Fabric | '') =>
+    setDraft((current) => {
+      const next = fabrics.data?.find((f) => f.id === fabric)?.finishes ?? []
+      return {
+        ...current,
+        fabric,
+        finish: next.includes(current.finish) ? current.finish : '',
+      }
+    })
+
   return (
     <Section title="Atendimento" icon={<Headset className="h-3.5 w-3.5" />}>
       {editable && <DraftRecovery recovery={recovery} />}
       <SalespersonField order={order} />
+      <DesignerField order={order} editable={editable} />
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="dispatch">
@@ -206,7 +233,7 @@ export const SheetForm = ({
             className="field"
             disabled={disabled}
             value={draft.fabric}
-            onChange={(e) => set('fabric', e.target.value as Fabric | '')}
+            onChange={(e) => pickFabric(e.target.value as Fabric | '')}
           >
             <option value="">? A definir</option>
             {order.fabricId &&
@@ -224,6 +251,35 @@ export const SheetForm = ({
           </select>
         </div>
       </div>
+
+      {finishes.length > 0 && (
+        <div className="mt-3">
+          <span className="label">Acabamento do tecido</span>
+          <div className="flex flex-wrap gap-1.5">
+            {finishes.map((value) => {
+              const on = draft.finish === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={on}
+                  // Tocar no marcado desmarca: vazio é "não marcado".
+                  onClick={() => set('finish', on ? '' : value)}
+                  className={clsx(
+                    'rounded-full border px-3 py-1.5 text-xs font-bold transition disabled:opacity-60',
+                    on
+                      ? 'border-ink bg-ink text-lime'
+                      : 'border-line bg-white hover:border-ink/40'
+                  )}
+                >
+                  {value}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3">
         <span className="label">Logística</span>
@@ -497,6 +553,75 @@ const SalespersonField = ({ order }: { order: Order }) => {
           Só o gerente, o admin ou o dono trocam o vendedor de um pedido confirmado.
         </p>
       )}
+      {mutation.isError && (
+        <div className="mt-2">
+          <ErrorBox message={errorMessage(mutation.error)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Quem vai fazer a arte (F304), escolhido já no atendimento: quando o pedido
+ * for para a arte, cai na fila dele. Grava na hora, como o vendedor.
+ */
+const DesignerField = ({ order, editable }: { order: Order; editable: boolean }) => {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const members = useMembers()
+  const current = order.designerUserId ?? ''
+  const [choice, setChoice] = useState(current)
+  useEffect(() => setChoice(current), [current])
+
+  const mutation = useMutation({
+    mutationFn: () => assignDesigner(order.id, choice || null),
+    onSuccess: () => toast(choice ? 'Designer escolhido.' : 'Designer tirado.'),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.order(order.id) })
+      void queryClient.invalidateQueries({ queryKey: keys.queueAll })
+    },
+  })
+
+  const designers = members.data?.filter((m) => m.functions.includes('arte') || m.userId === current) ?? []
+  const known = designers.some((m) => m.userId === current)
+  const changed = choice !== current
+
+  return (
+    <div className="mt-3">
+      <label className="label" htmlFor="sheet-designer">
+        Designer
+      </label>
+      <div className="flex gap-2">
+        <select
+          id="sheet-designer"
+          className="field"
+          disabled={!editable || mutation.isPending}
+          value={choice}
+          onChange={(e) => {
+            mutation.reset()
+            setChoice(e.target.value)
+          }}
+        >
+          <option value="">Ninguém ainda</option>
+          {current && !known && <option value={current}>{order.designerName ?? 'Designer atual'}</option>}
+          {designers.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.displayName}
+            </option>
+          ))}
+        </select>
+        {changed && (
+          <>
+            <Button variant="ghost" size="sm" disabled={mutation.isPending} onClick={() => setChoice(current)}>
+              Desfazer
+            </Button>
+            <Button variant="lime" size="sm" busy={mutation.isPending} onClick={() => mutation.mutate()}>
+              Gravar
+            </Button>
+          </>
+        )}
+      </div>
       {mutation.isError && (
         <div className="mt-2">
           <ErrorBox message={errorMessage(mutation.error)} />

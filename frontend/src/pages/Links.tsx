@@ -36,7 +36,7 @@ import {
 import { day, int } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { keys, useIntake, useIntakes } from '@/lib/queries'
-import { orderRef } from '@/lib/uniforms'
+import { orderRef, fabricLabel } from '@/lib/uniforms'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success' | 'lime'
 type Fabric = IntakeSummaryType['fabricIds'][number]
@@ -941,7 +941,7 @@ const ReviewDialog = ({
             <p className="mt-1">
               Tecido:{' '}
               <strong>
-                {submission.fabricName ?? 'não sabe — a loja ajuda'}
+                {fabricLabel(submission) ?? 'não sabe — a loja ajuda'}
               </strong>
             </p>
           </section>

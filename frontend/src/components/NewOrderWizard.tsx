@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router'
 
 import { confirmOrder, createOrder, uuidv7 } from '@/api/sales'
 import { fetchCustomers } from '@/api/store'
-import { saveSheet } from '@/api/uniforms'
+import { assignDesigner, saveSheet } from '@/api/uniforms'
 import { fetchFabrics, storeKeys } from '@/api/uniform-store'
 import { useAuth } from '@/auth/AuthProvider'
 import { NewCustomerDialog } from '@/components/NewCustomerDialog'
@@ -83,8 +83,14 @@ export const NewOrderWizard = ({
   const [lines, setLines] = useState<Line[]>([])
   const [picking, setPicking] = useState(true)
   const [salesperson, setSalesperson] = useState('')
+  // Quem vai fazer a arte (F304): o pedido chega à arte na fila dele.
+  const [designer, setDesigner] = useState('')
   const [dispatchDate, setDispatchDate] = useState('')
   const [fabric, setFabric] = useState<Fabric | ''>('')
+  // O acabamento do tecido (F303): liso, furadinho; vazio é "não marcado".
+  const [finish, setFinish] = useState('')
+  const finishes =
+    fabrics.data?.find((f) => f.id === fabric)?.finishes ?? []
   const [logistics, setLogistics] = useState<Logistics[]>([])
   const [paymentMark, setPaymentMark] = useState<PaymentMark>('nao')
   const [personalized, setPersonalized] = useState(false)
@@ -102,8 +108,10 @@ export const NewOrderWizard = ({
     setLines([])
     setPicking(true)
     setSalesperson(session?.user.id ?? '')
+    setDesigner('')
     setDispatchDate('')
     setFabric('')
+    setFinish('')
     setLogistics([])
     setPaymentMark('nao')
     setPersonalized(false)
@@ -174,6 +182,7 @@ export const NewOrderWizard = ({
             version: 0,
             dispatchDate: dispatchDate || null,
             fabricId: fabric || null,
+            fabricFinish: finish || null,
             personalized,
             logistics,
             eventDate: null,
@@ -191,6 +200,16 @@ export const NewOrderWizard = ({
             `Pedido criado, mas a ficha não foi gravada: ${errorMessage(error)}`,
             'error'
           )
+        }
+        if (designer) {
+          try {
+            await assignDesigner(created.id, designer)
+          } catch (error) {
+            toast(
+              `Pedido criado, mas o designer não foi gravado: ${errorMessage(error)}`,
+              'error'
+            )
+          }
         }
       }
       return { id: created.id, number, confirmed }
@@ -456,7 +475,10 @@ export const NewOrderWizard = ({
                           (l) => l.key !== line.key
                         )
                         setLines(remaining)
-                        if (remaining.length === 0) setFabric('')
+                        if (remaining.length === 0) {
+                          setFabric('')
+                          setFinish('')
+                        }
                       }}
                       className="mb-1 rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"
                     >
@@ -465,40 +487,6 @@ export const NewOrderWizard = ({
                   </div>
                 ))}
               </div>
-            )}
-
-            {picking ? (
-              <ProductPicker
-                fabricId={fabric || undefined}
-                onPick={(product) => {
-                  setFabric(product.fabricId)
-                  setLines((all) => [
-                    ...all,
-                    {
-                      ...product,
-                      key: crypto.randomUUID(),
-                      quantity: '10',
-                      automaticPrice: true,
-                      price: decimalToInput(
-                        [...product.tiers]
-                          .reverse()
-                          .find((tier) => tier.minQuantity <= 10)?.unitPrice ??
-                          product.basePrice
-                      ),
-                    },
-                  ])
-                  setPicking(false)
-                }}
-              />
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => setPicking(true)}
-              >
-                Outro produto
-              </Button>
             )}
 
             {lines.length > 0 && (
@@ -550,6 +538,42 @@ export const NewOrderWizard = ({
                 Atenção: o pedido mínimo da 4Play é de 10 peças.
               </p>
             )}
+
+            <div className="mt-4">
+              {picking ? (
+                <ProductPicker
+                  fabricId={fabric || undefined}
+                  onPick={(product) => {
+                    setFabric(product.fabricId)
+                    setLines((all) => [
+                      ...all,
+                      {
+                        ...product,
+                        key: crypto.randomUUID(),
+                        quantity: '10',
+                        automaticPrice: true,
+                        price: decimalToInput(
+                          [...product.tiers]
+                            .reverse()
+                            .find((tier) => tier.minQuantity <= 10)?.unitPrice ??
+                            product.basePrice
+                        ),
+                      },
+                    ])
+                    setPicking(false)
+                  }}
+                />
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={() => setPicking(true)}
+                >
+                  Outro produto
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -592,6 +616,29 @@ export const NewOrderWizard = ({
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="label" htmlFor="w-designer">
+                  Designer
+                </label>
+                <select
+                  id="w-designer"
+                  className="field"
+                  value={designer}
+                  onChange={(e) => setDesigner(e.target.value)}
+                >
+                  <option value="">Escolher depois</option>
+                  {members.data
+                    ?.filter((m) => m.functions.includes('arte'))
+                    .map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.displayName}
+                      </option>
+                    ))}
+                </select>
+                <p className="mt-1 text-[11px] font-semibold text-muted">
+                  Quando for para a arte, o pedido cai na fila dele.
+                </p>
+              </div>
             </div>
 
             <div>
@@ -604,6 +651,20 @@ export const NewOrderWizard = ({
                 Definido pelo tecido das peças escolhidas.
               </p>
             </div>
+            {finishes.length > 0 && (
+              <div>
+                <span className="label">Acabamento do tecido</span>
+                <Chips
+                  options={finishes.map((name): [string, string] => [
+                    name,
+                    name,
+                  ])}
+                  value={[finish]}
+                  // Tocar no marcado desmarca: fica sem acabamento.
+                  onToggle={(name) => setFinish(name === finish ? '' : name)}
+                />
+              </div>
+            )}
             <div>
               <span className="label">Entrega (pode marcar mais de uma)</span>
               <Chips

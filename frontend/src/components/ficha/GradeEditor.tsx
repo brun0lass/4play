@@ -61,12 +61,15 @@ export const GradeEditor = ({
   grade,
   editable,
   readOnlyReason,
+  fabric,
 }: {
   orderId: string
   version: number
   grade: readonly GradeEntryType[]
   editable: boolean
   readOnlyReason: string | null
+  /** O tecido com o acabamento (F303), "92/8 · Liso"; nulo é "a definir". */
+  fabric: string | null
 }) => {
   const queryClient = useQueryClient()
   const { draft: rows, setDraft: setRows, dirty, reset, recovery } = useDraft<Row[]>(toRows(grade), {
@@ -136,6 +139,20 @@ export const GradeEditor = ({
       }
     >
       {editable && <DraftRecovery recovery={recovery} />}
+      <p
+        className={clsx(
+          'mb-3 inline-block rounded-xl px-3 py-1.5 text-xs',
+          fabric === null ? 'bg-amber-50 font-bold text-amber-800' : 'bg-paper'
+        )}
+      >
+        {fabric === null ? (
+          'Tecido a definir — marque no Atendimento.'
+        ) : (
+          <>
+            Tecido: <strong>{fabric}</strong>
+          </>
+        )}
+      </p>
       <div className="scroll-thin -mx-5 overflow-x-auto px-5">
         <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
           <thead>

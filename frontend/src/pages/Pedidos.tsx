@@ -24,6 +24,7 @@ import {
   orderRef,
   type Stage,
   totalWithFreight,
+  fabricLabel,
 } from '@/lib/uniforms'
 
 type Sort =
@@ -257,7 +258,7 @@ export const OrderList = () => {
                         </td>
                       )}
                       <td className="px-3 py-3">
-                        {order.fabricName ? order.fabricName : '?'}
+                        {fabricLabel(order) ?? '?'}
                       </td>
                       <td className="px-3 py-3">
                         {logisticsText(order.logistics)}

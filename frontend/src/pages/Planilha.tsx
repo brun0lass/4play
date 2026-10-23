@@ -16,6 +16,7 @@ import {
   type Order,
   type Stage,
   totalWithFreight,
+  fabricLabel,
 } from '@/lib/uniforms'
 import { errorMessage } from '@/lib/http'
 
@@ -144,7 +145,7 @@ const COLUMNS: Col[] = [
     print: true,
     cell: (o) =>
       o.fabricName ? (
-        <span className="uppercase">{o.fabricName}</span>
+        <span className="uppercase">{fabricLabel(o)}</span>
       ) : (
         <span className="rounded bg-ink px-2 text-white">?</span>
       ),

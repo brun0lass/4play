@@ -134,6 +134,12 @@ export const SalesLineSummary = z.object({
    */
   location: z.string().nullable().default(null),
   /**
+   * A miniatura da foto principal da peça (F316), para o item aparecer com a
+   * foto no celular. A de agora, não a do dia da venda. Nulo sem foto ou em
+   * servidor antigo.
+   */
+  thumbUrl: z.string().nullable().default(null),
+  /**
    * Quanto desta linha JÁ voltou em trocas concluídas (F178).
    *
    * Só no detalhe, e só onde pode ter voltado. É o que faz a tela da troca
@@ -626,6 +632,15 @@ export const UpdateSalesDocumentRequest = z.object({
    * já saiu; vai para o histórico junto com quem e quando.
    */
   reason: z.string().trim().max(500).optional(),
+  /**
+   * A senha do gerente, para quem não altera sozinho (F303).
+   *
+   * A vendedora corrige o pedido que já saiu com o motoboy — "o cliente troca
+   * a peça e eu tenho que tirar ela da nota" — com o gerente digitando a senha
+   * dele no computador dela. Vem de `/auth/authorize` com `sales.amend` para
+   * ESTE documento.
+   */
+  authorisationId: z.string().min(1).optional(),
 })
 
 export type UpdateSalesDocumentRequest = z.input<

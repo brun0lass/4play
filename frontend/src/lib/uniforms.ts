@@ -57,6 +57,17 @@ export const UNNAMED_PERSON = '—'
  * custo não entra. Nulo para quem não vê dinheiro. O pedido de vendas do Aeris
  * (e o título, quando o pedido sai) continua sem o frete.
  */
+/** O tecido com o acabamento (F303): "92/8 · Furadinho"; nulo sem tecido. */
+export const fabricLabel = (order: {
+  fabricName: string | null
+  fabricFinish?: string | null | undefined
+}): string | null =>
+  order.fabricName === null
+    ? null
+    : order.fabricFinish
+      ? `${order.fabricName} · ${order.fabricFinish}`
+      : order.fabricName
+
 export const totalWithFreight = (order: {
   totalAmount: string | null
   freight: { amount: string; charged: boolean } | null

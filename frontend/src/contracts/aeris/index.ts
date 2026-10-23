@@ -1370,6 +1370,9 @@ export {
   type UniformPrinterSummaryType,
   type UpdateProductionSheetBody,
   type UpdateUniformPrinterBody,
+  AssignDesignerRequest,
+  AssignDesignerResponse,
+  type AssignDesignerBody,
 } from './uniforms.ts'
 export {
   AlertStreamEvent,

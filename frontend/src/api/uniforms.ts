@@ -75,6 +75,8 @@ import {
   ReplacePersonalizationRequest,
   ReplacePrintersRequest,
   SaveArtRequest,
+  AssignDesignerRequest,
+  AssignDesignerResponse,
   SaveArtResponse,
   SplitBatchRequest,
   UniformMemberListResponse,
@@ -528,6 +530,18 @@ export const saveArt = async (
       body: SaveArtRequest.parse(input),
     })
   )
+
+/** O designer escolhido no atendimento (F304); nulo tira. */
+export const assignDesigner = async (
+  id: string,
+  designerUserId: string | null
+): Promise<number> =>
+  AssignDesignerResponse.parse(
+    await request(`${BASE}/orders/${id}/designer`, {
+      method: 'PUT',
+      body: AssignDesignerRequest.parse({ designerUserId }),
+    })
+  ).artVersion
 
 export const replacePrinters = async (
   id: string,

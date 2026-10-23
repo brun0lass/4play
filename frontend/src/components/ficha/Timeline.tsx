@@ -31,6 +31,7 @@ const EVENT_TEXT: Record<string, string> = {
 const SHEET_FIELDS: Record<string, string> = {
   dispatchDate: 'despacho',
   fabric: 'tecido',
+  fabricFinish: 'acabamento do tecido',
   personalized: 'personalizado',
   logistics: 'logística',
   eventDate: 'data do evento',
