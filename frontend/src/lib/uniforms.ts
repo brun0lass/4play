@@ -429,9 +429,14 @@ export const orderPieces = (
   return merged
 }
 
-/** A peça como chave — a mesma regra do Aeris (`pieceKey`): "Camisa" = " camisa". */
-export const pieceKey = (piece: string): string =>
-  piece.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')
+/**
+ * A peça como chave — a mesma regra do Aeris (`pieceKey`): "Camisa" = " camisa".
+ * Sem peça, "Personalizado", para a marcação e o envio usarem o mesmo nome.
+ */
+export const pieceKey = (piece: string): string => {
+  const trimmed = piece.trim().replace(/\s+/g, ' ')
+  return (trimmed === '' ? 'Personalizado' : trimmed).toLocaleLowerCase('pt-BR')
+}
 
 // ---------------------------------------------------------------------------
 // O andamento da grade e as ocorrências (F234 do Aeris)

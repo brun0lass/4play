@@ -25,8 +25,18 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { createSewingJob, fetchOrderSewing, sendSector, setPrintQueue, setSectorDone } from '@/api/uniforms'
+import {
+  createSewingJob,
+  fetchOrder,
+  fetchOrderSewing,
+  fetchSector,
+  savePersonalization,
+  sendSector,
+  setPrintQueue,
+  setSectorDone,
+} from '@/api/uniforms'
 import { DispatchChip } from '@/components/OrderCard'
+import { PieceSelect } from '@/components/PieceSelect'
 import {
   IncidentDialog,
   useCanReport,
@@ -38,9 +48,11 @@ import {
   Button,
   Empty,
   ErrorBox,
+  Modal,
   PageHeader,
   Spinner,
 } from '@/components/ui'
+import { useAccess } from '@/lib/access'
 import { day, int, todaySP } from '@/lib/format'
 import { ApiError, UserError, errorMessage } from '@/lib/http'
 import {
@@ -48,6 +60,7 @@ import {
   usePrinters,
   useSeamstresses,
   useSector,
+  useOrder,
   useSectorStats,
   useViewer,
 } from '@/lib/queries'
@@ -56,6 +69,7 @@ import {
   SECTOR_LABELS,
   STAGE_META,
   STAGE_REFUSALS,
+  UNNAMED_PERSON,
   canMoveStage,
   canWork,
   cellLabel,
@@ -381,6 +395,31 @@ const piecesTotal = (entries: readonly { piece: string; quantity: number }[]) =>
   return [...total.values()]
 }
 
+/** O personalizado sem peça: a chave dele é a de "Personalizado". */
+const withoutPiece = (cell: SectorCellType): boolean =>
+  cell.person !== null && pieceKey(cell.piece) === pieceKey('')
+
+/** A mesma pessoa no mesmo tamanho: a chave muda quando a peça é definida. */
+const sameOwner = (left: SectorCellType, right: SectorCellType): boolean =>
+  left.size === right.size &&
+  left.person?.name === right.person?.name &&
+  left.person?.number === right.person?.number
+
+/** Peças que a tabela da costureira terceirizada não tem: o serviço iria a R$ 0,00. */
+const unpricedPieces = (
+  seamstress: { kind: string; prices: readonly { piece: string }[] } | undefined,
+  pieces: readonly { piece: string; quantity: number }[]
+) =>
+  seamstress?.kind === 'terceirizada'
+    ? pieces.filter((entry) => !seamstress.prices.some((row) => pieceKey(row.piece) === pieceKey(entry.piece)))
+    : []
+
+/** O preço digitado na hora, para a peça que não está na tabela. */
+const typedPrice = (prices: Record<string, string>, piece: string) => {
+  const typed = prices[pieceKey(piece)]?.replace(',', '.').trim()
+  return typed ? { unitPrice: typed } : {}
+}
+
 /** Uma leva no setor: a grade com o feito embaixo, e mandar as feitas. */
 /** A leva na fila da impressão (F242): a posição e, para quem gerencia, mexer nela. */
 type QueueControls = {
@@ -478,8 +517,12 @@ const SectorCard = ({
   const [chosenPrinters, setChosenPrinters] = useState<string[]>([])
   // Do corte para a costura: para qual costureira vai (opcional).
   const [seamstressId, setSeamstressId] = useState('')
+  const [sewingPrices, setSewingPrices] = useState<Record<string, string>>({})
   const toSewing = nextStage === 'costurando'
   const seamstresses = useSeamstresses('active')
+  const chosenSeamstress = toSewing ? seamstresses.data?.find((s) => s.id === seamstressId) : undefined
+  // Mandando peça sem definir: pergunta antes, com o jeito de definir ali mesmo.
+  const [asking, setAsking] = useState(false)
   const [incident, setIncident] = useState<IncidentDraft | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const pending = useRef<Record<string, number>>({})
@@ -495,9 +538,10 @@ const SectorCard = ({
       setSectorDone(part.orderId, sector, { batchId: part.batchId, cells }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: keys.sector(sector) })
+      // O gravado passa a vir do servidor; fica só o que foi clicado depois.
       setDraft((all) =>
         Object.fromEntries(
-          Object.entries(all).filter(([key]) => !(key in pending.current))
+          Object.entries(all).filter(([key]) => key in pending.current)
         )
       )
     },
@@ -538,10 +582,10 @@ const SectorCard = ({
   const needsPrinter = sector === 'impressao' && part.stage !== 'imprimindo'
 
   const send = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (defined?: { piece: string; quantity: number }[]) => {
       await flush()
       // O que vai, por peça — para já ligar à costureira escolhida.
-      const going = piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: doneOf(cell) })))
+      const going = defined ?? piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: doneOf(cell) })))
       const result = await sendSector(part.orderId, sector, {
         batchId: part.batchId,
         from: part.stage,
@@ -550,7 +594,11 @@ const SectorCard = ({
       const seamstress = toSewing ? seamstresses.data?.find((s) => s.id === seamstressId) : undefined
       if (!seamstress) return { result, sewing: null }
       try {
-        await createSewingJob(part.orderId, { seamstressId: seamstress.id, batchId: result.batchId, pieces: going })
+        await createSewingJob(part.orderId, {
+          seamstressId: seamstress.id,
+          batchId: result.batchId,
+          pieces: going.map((entry) => ({ ...entry, ...typedPrice(sewingPrices, entry.piece) })),
+        })
         return { result, sewing: { name: seamstress.name, error: null } }
       } catch (error) {
         return { result, sewing: { name: seamstress.name, error: errorMessage(error) } }
@@ -564,10 +612,89 @@ const SectorCard = ({
         toast(`Foi para a costura, mas não deu para marcar ${sewing.name}: ${sewing.error} Marque na tela da Costura.`)
       setDraft({})
       setSeamstressId('')
+      setSewingPrices({})
       refresh()
     },
     onError: refresh,
   })
+
+  /*
+   * Definir as peças aqui no setor: grava na lista de personalizados e passa as
+   * marcações para as células novas, porque a chave da célula muda com a peça.
+   * Depois manda, a não ser que a costureira não tenha preço para a peça escolhida.
+   */
+  const define = useMutation({
+    mutationFn: async (choices: Record<string, string>) => {
+      await flush()
+      const before = part.cells.filter(withoutPiece)
+      const unmatched = [...before]
+      const sheet = await fetchOrder(part.orderId)
+      await savePersonalization(part.orderId, {
+        version: sheet.order.sheetVersion,
+        rows: sheet.personalization.map((row) => {
+          if (pieceKey(row.piece) !== pieceKey('')) return row
+          const at = unmatched.findIndex(
+            (cell) =>
+              cell.size === row.size &&
+              cell.person?.name === (row.name === UNNAMED_PERSON ? '' : row.name) &&
+              cell.person?.number === row.number
+          )
+          if (at === -1) return row
+          const [cell] = unmatched.splice(at, 1)
+          return { ...row, piece: (cell && choices[cell.key]) || row.piece }
+        }),
+      })
+      const fresh = await queryClient.fetchQuery({
+        queryKey: keys.sector(sector),
+        queryFn: ({ signal }) => fetchSector(sector, signal),
+      })
+      const cells = fresh.parts.find((item) => item.orderId === part.orderId && item.batchId === part.batchId)?.cells ?? []
+      const free = [...cells]
+      const marks = before.flatMap((cell) => {
+        const at = free.findIndex(
+          (candidate) =>
+            candidate.person !== null &&
+            sameOwner(candidate, cell) &&
+            pieceKey(candidate.piece) === pieceKey(choices[cell.key] ?? '')
+        )
+        if (at === -1) return []
+        const [target] = free.splice(at, 1)
+        const done = doneOf(cell)
+        return target && done > 0 ? [{ key: target.key, done, piece: target.piece }] : []
+      })
+      if (marks.length > 0) {
+        await setSectorDone(part.orderId, sector, {
+          batchId: part.batchId,
+          cells: marks.map(({ key, done }) => ({ key, done })),
+        })
+      }
+      // Com as peças novas: as outras células continuam como estavam.
+      return piecesTotal([
+        ...part.cells
+          .filter((cell) => !withoutPiece(cell))
+          .map((cell) => ({ piece: cell.piece, quantity: doneOf(cell) })),
+        ...marks.map((mark) => ({ piece: mark.piece, quantity: mark.done })),
+      ])
+    },
+    onSuccess: (going) => {
+      setAsking(false)
+      setDraft({})
+      refresh()
+      if (going.length === 0) return
+      if (unpricedPieces(chosenSeamstress, going).length > 0) {
+        toast(`Peças definidas. Confira o preço de ${chosenSeamstress?.name ?? 'costureira'} e mande.`)
+        return
+      }
+      send.mutate(going)
+    },
+  })
+
+  const mandar = () => {
+    // Na leva já separada não dá mais para definir: não há o que perguntar.
+    const asks = part.batchId === null && part.cells.some((cell) => withoutPiece(cell) && doneOf(cell) > 0)
+    if (asks) setAsking(true)
+    else send.mutate(undefined)
+  }
 
   // A grade e os personalizados são peças diferentes (F263 do Aeris): a grade
   // conta por tamanho, o personalizado é conferido nome por nome.
@@ -801,6 +928,12 @@ const SectorCard = ({
                   </option>
                 ))}
               </select>
+              <PriceGaps
+                seamstress={chosenSeamstress}
+                pieces={piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: doneOf(cell) })))}
+                prices={sewingPrices}
+                onChange={setSewingPrices}
+              />
             </div>
           )}
 
@@ -819,7 +952,7 @@ const SectorCard = ({
                   save.isPending ||
                   (needsPrinter && chosenPrinters.length === 0)
                 }
-                onClick={() => send.mutate()}
+                onClick={mandar}
               >
                 {done === 0
                   ? `Marque as feitas para mandar para ${STAGE_META[nextStage].label}`
@@ -871,6 +1004,26 @@ const SectorCard = ({
         </>
       )}
 
+      {asking && (
+        <MissingPieces
+          orderId={part.orderId}
+          cells={part.cells.filter(withoutPiece)}
+          canDefine={canWork(viewer, 'atendimento')}
+          busy={define.isPending || send.isPending}
+          error={define.error}
+          onClose={() => {
+            setAsking(false)
+            define.reset()
+          }}
+          onSkip={() => {
+            setAsking(false)
+            define.reset()
+            send.mutate(undefined)
+          }}
+          onDefine={(choices) => define.mutate(choices)}
+        />
+      )}
+
       <IncidentDialog
         orderId={part.orderId}
         lines={part.cells}
@@ -893,6 +1046,8 @@ const SewingAssign = ({ part, onDone }: { part: SectorPartType; onDone: () => vo
   const seamstresses = useSeamstresses('active')
   const [open, setOpen] = useState(false)
   const [seamstressId, setSeamstressId] = useState('')
+  const [prices, setPrices] = useState<Record<string, string>>({})
+  const chosen = seamstresses.data?.find((s) => s.id === seamstressId)
 
   const assign = useMutation({
     mutationFn: async () => {
@@ -909,12 +1064,17 @@ const SewingAssign = ({ part, onDone }: { part: SectorPartType; onDone: () => vo
         .map((p) => ({ ...p, quantity: p.quantity - (taken.get(pieceKey(p.piece)) ?? 0) }))
         .filter((p) => p.quantity > 0)
       if (free.length === 0) throw new UserError('Esta leva já está toda com costureira.')
-      return createSewingJob(part.orderId, { seamstressId, batchId: part.batchId, pieces: free })
+      return createSewingJob(part.orderId, {
+        seamstressId,
+        batchId: part.batchId,
+        pieces: free.map((entry) => ({ ...entry, ...typedPrice(prices, entry.piece) })),
+      })
     },
     onSuccess: (job) => {
       toast(`${orderRef({ number: part.orderNumber })}: ${int(job.quantity)} ${job.quantity === 1 ? 'peça' : 'peças'} com ${job.seamstressName}.`)
       setOpen(false)
       setSeamstressId('')
+      setPrices({})
       void queryClient.invalidateQueries({ queryKey: keys.orderSewing(part.orderId) })
       void queryClient.invalidateQueries({ queryKey: keys.sewingAll })
       onDone()
@@ -956,6 +1116,12 @@ const SewingAssign = ({ part, onDone }: { part: SectorPartType; onDone: () => vo
           >
             Cancelar
           </Button>
+          <PriceGaps
+            seamstress={chosen}
+            pieces={piecesTotal(part.cells.map((cell) => ({ piece: cell.piece, quantity: cell.quantity })))}
+            prices={prices}
+            onChange={setPrices}
+          />
         </div>
       )}
       {assign.isError && (
@@ -964,6 +1130,160 @@ const SewingAssign = ({ part, onDone }: { part: SectorPartType; onDone: () => vo
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * A peça que a costureira terceirizada não tem na tabela iria a R$ 0,00, e a
+ * entrega sem valor não gera conta a pagar. Avisa, e quem vê dinheiro põe o preço.
+ */
+const PriceGaps = ({
+  seamstress,
+  pieces,
+  prices,
+  onChange,
+}: {
+  seamstress: { name: string; kind: string; prices: readonly { piece: string }[] } | undefined
+  pieces: readonly { piece: string; quantity: number }[]
+  prices: Record<string, string>
+  onChange: (prices: Record<string, string>) => void
+}) => {
+  const { seeMoney } = useAccess()
+  const gaps = unpricedPieces(seamstress, pieces)
+  if (gaps.length === 0) return null
+  return (
+    <div className="mt-2 w-full rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+      <p>
+        {seamstress?.name} não tem preço para {gaps.map((entry) => entry.piece).join(', ')}.{' '}
+        {seeMoney
+          ? 'Sem preço, o serviço vai a R$ 0,00 e a entrega não gera conta a pagar.'
+          : 'O serviço vai a R$ 0,00 e a entrega não gera conta a pagar. Avise quem cuida das costureiras.'}
+      </p>
+      {seeMoney && (
+        <div className="mt-2 flex flex-wrap gap-3">
+          {gaps.map((entry) => (
+            <label key={entry.piece} className="flex items-center gap-1.5">
+              {entry.piece} R$
+              <input
+                inputMode="decimal"
+                placeholder="0,00"
+                className="field h-8 w-20 px-2 text-right text-xs"
+                value={prices[pieceKey(entry.piece)] ?? ''}
+                onChange={(e) => onChange({ ...prices, [pieceKey(entry.piece)]: e.target.value })}
+                aria-label={`Preço por ${entry.piece}`}
+              />
+              /pç
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Mandando personalizado sem peça: não é erro. Diz o que falta, deixa seguir
+ * assim e, para quem é do atendimento, define as peças ali mesmo.
+ */
+const MissingPieces = ({
+  orderId,
+  cells,
+  canDefine,
+  busy,
+  error,
+  onClose,
+  onSkip,
+  onDefine,
+}: {
+  orderId: string
+  cells: readonly SectorCellType[]
+  canDefine: boolean
+  busy: boolean
+  error: unknown
+  onClose: () => void
+  onSkip: () => void
+  onDefine: (choices: Record<string, string>) => void
+}) => {
+  const order = useOrder(orderId)
+  const [choices, setChoices] = useState<Record<string, string>>({})
+  const [forAll, setForAll] = useState('')
+  const complete = cells.every((cell) => (choices[cell.key] ?? '') !== '')
+  const count = cells.reduce((sum, cell) => sum + cell.quantity, 0)
+  const sold = order.data?.order.lines.map((line) => line.description) ?? []
+  return (
+    <Modal
+      open
+      wide
+      title="Faltam definir as peças"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" disabled={busy} onClick={onSkip}>
+            Seguir assim
+          </Button>
+          {canDefine && (
+            <Button variant="lime" icon={<ArrowRight className="h-4 w-4" />} busy={busy} disabled={!complete} onClick={() => onDefine(choices)}>
+              Definir e mandar
+            </Button>
+          )}
+        </>
+      }
+    >
+      <p className="text-sm font-semibold">
+        {int(count)} {count === 1 ? 'personalizado está' : 'personalizados estão'} sem dizer qual é a peça.
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Dá para seguir assim, como “Personalizado”. Mas a costureira fica sem preço para isso, e o que sair numa leva separada não poderá mais
+        ser definido.
+      </p>
+      {sold.length > 0 && <p className="mt-2 text-xs font-semibold">Este pedido vendeu: {sold.join(' · ')}</p>}
+      {canDefine ? (
+        <>
+          <div className="mt-4 rounded-2xl bg-paper p-3">
+            <label className="mb-1 block text-xs font-extrabold tracking-wide uppercase" htmlFor={`peca-todas-${orderId}`}>
+              A mesma peça para todas
+            </label>
+            <PieceSelect
+              id={`peca-todas-${orderId}`}
+              value={forAll}
+              onChange={(piece) => {
+                setForAll(piece)
+                setChoices(Object.fromEntries(cells.map((cell) => [cell.key, piece])))
+              }}
+            />
+          </div>
+          <ul className="mt-3 divide-y divide-line">
+            {cells.map((cell) => (
+              <li key={cell.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0 text-sm font-bold">
+                  <span className="mr-2 rounded-md bg-ink px-1.5 py-0.5 text-[10px] font-extrabold text-lime">{cell.size ?? '—'}</span>
+                  {cell.person ? personLabel(cell.person) : cell.piece}
+                </span>
+                <PieceSelect
+                  className="h-9 w-auto min-w-44 px-2 text-xs"
+                  placeholder="Peça"
+                  value={choices[cell.key] ?? ''}
+                  onChange={(piece) => setChoices((all) => ({ ...all, [cell.key]: piece }))}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="mt-4 rounded-xl bg-paper p-3 text-sm">
+          Quem define é o atendimento, na{' '}
+          <Link to={`/pedidos/${orderId}`} className="font-bold underline">
+            ficha do pedido
+          </Link>
+          .
+        </p>
+      )}
+      {error != null && (
+        <div className="mt-3">
+          <ErrorBox message={errorMessage(error)} />
+        </div>
+      )}
+    </Modal>
   )
 }
 
