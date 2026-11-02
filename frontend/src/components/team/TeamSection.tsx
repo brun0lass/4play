@@ -4,10 +4,10 @@ import { KeyRound, Pencil, UserCheck, UserPlus, UserX, Users } from 'lucide-reac
 import { useEffect, useState } from 'react'
 
 import { addMember, changeRole, fetchTeam, resetPassword, setMemberActive, type TeamMember } from '@/api/team'
-import { replaceMemberFunctions } from '@/api/uniforms'
+import { replaceMemberFunctions, setMemberClientLink } from '@/api/uniforms'
 import { Section } from '@/components/ficha/Section'
 import { InviteCard } from '@/components/team/InviteCard'
-import { ProfilePicker, profileValid, type ProfileValue } from '@/components/team/ProfilePicker'
+import { ClientLinkToggle, ProfilePicker, profileValid, type ProfileValue } from '@/components/team/ProfilePicker'
 import { useToast } from '@/components/Toast'
 import { Badge, Button, ErrorBox, Modal, Spinner } from '@/components/ui'
 import { ago } from '@/lib/format'
@@ -20,7 +20,7 @@ const TEAM_KEY = ['team'] as const
 
 const roleOf = (value: ProfileValue) => (value.exclusive ? PROFILE_META[value.exclusive].role : 'salesperson')
 const functionsOf = (value: ProfileValue): ('atendimento' | 'arte' | 'producao')[] =>
-  value.exclusive ? [] : value.production
+  value.exclusive === null || value.exclusive === 'gerente' ? value.production : []
 
 /** Funcionários: convidar pelo e-mail, trocar o perfil, nova senha, desativar. */
 export const TeamSection = ({ canWrite }: { canWrite: boolean }) => {
@@ -96,6 +96,7 @@ export const TeamSection = ({ canWrite }: { canWrite: boolean }) => {
       <EditDialog
         member={editing}
         functions={editing ? functionsBy.get(editing.userId) ?? [] : []}
+        clientLink={editing ? (members.data?.find((person) => person.userId === editing.userId)?.clientLink ?? true) : true}
         onClose={() => setEditing(null)}
       />
     </Section>
@@ -108,6 +109,7 @@ const InviteDialog = ({ open, onClose }: { open: boolean; onClose: () => void })
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [profile, setProfile] = useState<ProfileValue>({ exclusive: null, production: [] })
+  const [clientLink, setClientLink] = useState(true)
   const [result, setResult] = useState<{ name: string; email: string; password: string | null } | null>(null)
 
   useEffect(() => {
@@ -115,6 +117,7 @@ const InviteDialog = ({ open, onClose }: { open: boolean; onClose: () => void })
       setName('')
       setEmail('')
       setProfile({ exclusive: null, production: [] })
+      setClientLink(true)
       setResult(null)
     }
   }, [open])
@@ -128,6 +131,13 @@ const InviteDialog = ({ open, onClose }: { open: boolean; onClose: () => void })
           await replaceMemberFunctions(created.member.userId, fns)
         } catch (error) {
           toast(`Acesso criado, mas as funções não foram gravadas: ${errorMessage(error)}`, 'error')
+        }
+      }
+      if (!clientLink) {
+        try {
+          await setMemberClientLink(created.member.userId, false)
+        } catch (error) {
+          toast(`Acesso criado, mas o link do cliente não foi desligado: ${errorMessage(error)}`, 'error')
         }
       }
       return created
@@ -179,6 +189,7 @@ const InviteDialog = ({ open, onClose }: { open: boolean; onClose: () => void })
             <span className="label">Perfil</span>
             <ProfilePicker value={profile} onChange={setProfile} />
           </div>
+          <ClientLinkToggle on={clientLink} onChange={setClientLink} />
           {mutation.isError && <ErrorBox message={errorMessage(mutation.error)} />}
         </div>
       )}
@@ -189,20 +200,24 @@ const InviteDialog = ({ open, onClose }: { open: boolean; onClose: () => void })
 const EditDialog = ({
   member,
   functions,
+  clientLink: clientLinkSaved,
   onClose,
 }: {
   member: TeamMember | null
   functions: UniformFunction[]
+  clientLink: boolean
   onClose: () => void
 }) => {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [profile, setProfile] = useState<ProfileValue>({ exclusive: null, production: [] })
+  const [clientLink, setClientLink] = useState(true)
   const [newPassword, setNewPassword] = useState<string | null>(null)
 
   useEffect(() => {
     if (member) {
       setProfile(profileOf(member.role, functions))
+      setClientLink(clientLinkSaved)
       setNewPassword(null)
     }
     // As funções chegam de outra consulta; só recalcula quando abre outra pessoa.
@@ -221,6 +236,7 @@ const EditDialog = ({
       if (role !== member.role) await changeRole(member.userId, member.version, role)
       const fns = functionsOf(profile)
       if ([...fns].sort().join() !== [...functions].sort().join()) await replaceMemberFunctions(member.userId, fns)
+      if (clientLink !== clientLinkSaved) await setMemberClientLink(member.userId, clientLink)
     },
     onSuccess: () => {
       toast('Perfil atualizado.')
@@ -271,6 +287,7 @@ const EditDialog = ({
         <div className="space-y-5">
           <p className="text-sm text-muted">{member.email}</p>
           <ProfilePicker value={profile} onChange={setProfile} />
+          <ClientLinkToggle on={clientLink} onChange={setClientLink} />
           <div className="flex flex-wrap gap-2 border-t border-line pt-4">
             <Button variant="outline" size="sm" busy={reset.isPending} icon={<KeyRound className="h-4 w-4" />} onClick={() => reset.mutate()}>
               Gerar nova senha temporária

@@ -17,6 +17,7 @@ const access = (overrides: Partial<Access> = {}): Access => ({
   functions: [],
   seeMoney: false,
   createOrder: false,
+  clientLink: false,
   customers: false,
   products: false,
   stock: false,
@@ -62,6 +63,7 @@ test('atendimento não ganha estoque, setores ou administração', () => {
   const nav = visibleNavigation(
     access({
       createOrder: true,
+      clientLink: true,
       customers: true,
       products: true,
       priceTable: true,
@@ -86,6 +88,14 @@ test('atendimento não ganha estoque, setores ou administração', () => {
     nav.groups.some((group) => group.id === 'administration'),
     false
   )
+})
+
+test('quem gera link vê a tela sem precisar criar pedido', () => {
+  const nav = visibleNavigation(
+    access({ clientLink: true }),
+    (permission) => permission === 'uniforms.read'
+  )
+  assert.deepEqual(nav.primary.map((item) => item.to), ['/', '/producao', '/links'])
 })
 
 test('operador não ganha cadastros comerciais ou valores', () => {

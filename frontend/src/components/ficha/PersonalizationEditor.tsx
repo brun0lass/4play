@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { savePersonalization } from '@/api/uniforms'
 import { DraftRecovery, SaveBar, Section, tracked, useDraft, useFichaSection } from '@/components/ficha/Section'
+import { ColorPicker } from '@/components/ficha/ColorPicker'
 import { PieceSelect } from '@/components/PieceSelect'
 import { useToast } from '@/components/Toast'
 import { Button, Modal } from '@/components/ui'
@@ -14,7 +15,7 @@ import { UserError } from '@/lib/http'
 import { keys } from '@/lib/queries'
 import { SIZES, UNNAMED_PERSON, type Size } from '@/lib/uniforms'
 
-type Row = { name: string; number: string; piece: string; size: Size; quantity: string }
+type Row = { name: string; number: string; piece: string; color: string; size: Size; quantity: string }
 
 const toRows = (rows: readonly PersonalizationType[]): Row[] =>
   // Os campos na ordem de `Row`: o rascunho compara por JSON, e a linha nova
@@ -23,6 +24,7 @@ const toRows = (rows: readonly PersonalizationType[]): Row[] =>
     name: row.name === UNNAMED_PERSON ? '' : row.name,
     number: row.number,
     piece: row.piece,
+    color: row.color,
     size: row.size,
     quantity: String(row.quantity),
   }))
@@ -37,6 +39,7 @@ const toSave = (rows: readonly Row[]) =>
     name: row.name.trim() || UNNAMED_PERSON,
     number: row.number.trim(),
     piece: row.piece.trim(),
+    color: row.color.trim(),
     size: row.size,
     quantity: Math.max(1, Number(row.quantity) || 1),
   }))
@@ -65,7 +68,7 @@ const warningsOf = (rows: readonly Row[], gradePieces: number, lines: readonly P
     const name = row.name.trim().replace(/\s+/g, ' ').toUpperCase()
     const number = row.number.trim()
     if (!name || !number) return
-    const key = `${name}#${number}|${row.piece.trim().toLowerCase()}`
+    const key = `${name}#${number}|${row.piece.trim().toLowerCase()}|${row.color.trim().toLocaleLowerCase('pt-BR')}`
     const entry = seen.get(key) ?? { label: `${name} ${number}${row.piece.trim() ? ` (${row.piece.trim()})` : ''}`, lines: [] }
     entry.lines.push(index + 1)
     seen.set(key, entry)
@@ -109,7 +112,7 @@ const parsePaste = (text: string, piece: string): { rows: Row[]; skipped: number
         skipped += 1
         return []
       }
-      return [{ name, number, piece: rowPiece ?? piece, size, quantity: quantity.replace(/\D/g, '') || '1' }]
+      return [{ name, number, piece: rowPiece ?? piece, color: '', size, quantity: quantity.replace(/\D/g, '') || '1' }]
     })
   return { rows, skipped }
 }
@@ -208,6 +211,7 @@ export const PersonalizationEditor = ({
                 <th className="pb-2 text-left">Nome</th>
                 <th className="w-20 pb-2 text-left">Número</th>
                 <th className="w-44 pb-2 text-left">Peça</th>
+                <th className="w-44 pb-2 text-left">Cor</th>
                 <th className="w-24 pb-2 text-left">Tamanho</th>
                 <th className="w-16 pb-2 text-left">Qtd</th>
                 {!disabled && <th className="w-8" />}
@@ -225,6 +229,9 @@ export const PersonalizationEditor = ({
                   </td>
                   <td className="p-0.5">
                     <PieceSelect className="h-9 px-2 text-xs" disabled={disabled} placeholder="Peça" value={row.piece} onChange={(piece) => update(index, { piece })} />
+                  </td>
+                  <td className="p-0.5">
+                    <ColorPicker disabled={disabled} value={row.color} onChange={(color) => update(index, { color })} />
                   </td>
                   <td className="p-0.5">
                     <select className="field h-9 px-2 text-xs font-bold" disabled={disabled} value={row.size} onChange={(e) => update(index, { size: e.target.value as Size })}>
@@ -257,7 +264,7 @@ export const PersonalizationEditor = ({
             onClick={() =>
               setRows((current) => [
                 ...current,
-                { name: '', number: '', piece: current.at(-1)?.piece ?? '', size: current.at(-1)?.size ?? 'M', quantity: '1' },
+                { name: '', number: '', piece: current.at(-1)?.piece ?? '', color: '', size: current.at(-1)?.size ?? 'M', quantity: '1' },
               ])
             }
           >

@@ -340,14 +340,14 @@ const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
                 <thead>
                   <tr>
                     <th
-                      colSpan={5}
+                      colSpan={6}
                       className="border border-ink bg-red-200 py-1.5 text-sm font-extrabold"
                     >
                       Personalizados (nome e número)
                     </th>
                   </tr>
                   <tr className="bg-red-50">
-                    {['NOME', 'NÚMERO', 'PEÇA', 'TAMANHO', 'QTD'].map((h) => (
+                    {['NOME', 'NÚMERO', 'PEÇA', 'COR', 'TAMANHO', 'QTD'].map((h) => (
                       <th
                         key={h}
                         className="border border-ink px-3 py-1 font-extrabold"
@@ -367,6 +367,7 @@ const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
                         {p.number}
                       </td>
                       <td className="border border-ink px-2 py-1">{p.piece}</td>
+                      <td className="border border-ink px-2 py-1">{p.color}</td>
                       <td className="border border-ink px-2 py-1 text-center">
                         {p.size}
                       </td>
@@ -379,7 +380,7 @@ const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
                     { length: personalization.length === 0 ? 6 : 0 },
                     (_, i) => (
                       <tr key={`b${String(i)}`}>
-                        {[0, 1, 2, 3, 4].map((c) => (
+                        {[0, 1, 2, 3, 4, 5].map((c) => (
                           <td key={c} className="h-6 border border-ink" />
                         ))}
                       </tr>

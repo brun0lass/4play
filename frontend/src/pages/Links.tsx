@@ -35,6 +35,7 @@ import {
 } from '@/components/ui'
 import { day, int } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
+import { useAccess } from '@/lib/access'
 import { keys, useIntake, useIntakes } from '@/lib/queries'
 import { orderRef, fabricLabel } from '@/lib/uniforms'
 
@@ -77,6 +78,7 @@ const whatsappUrl = (intake: IntakeSummaryType): string | null => {
  * WhatsApp, acompanhar e conferir o que o cliente preencheu.
  */
 export const LinksPage = () => {
+  const access = useAccess()
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('enviado')
   const list = useIntakes(tab)
   const [creating, setCreating] = useState(false)
@@ -140,6 +142,7 @@ export const LinksPage = () => {
           <IntakeRow
             key={intake.id}
             intake={intake}
+            canReview={access.createOrder}
             onReview={() => setReviewing(intake.id)}
           />
         ))}
@@ -186,9 +189,11 @@ const CopyButton = ({ intake }: { intake: IntakeSummaryType }) => {
 
 const IntakeRow = ({
   intake,
+  canReview,
   onReview,
 }: {
   intake: IntakeSummaryType
+  canReview: boolean
   onReview: () => void
 }) => {
   const queryClient = useQueryClient()
@@ -225,7 +230,7 @@ const IntakeRow = ({
         <Badge tone={meta.tone}>{meta.label}</Badge>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        {intake.status === 'enviado' && (
+        {canReview && intake.status === 'enviado' && (
           <Button
             size="sm"
             variant="ink"
@@ -258,7 +263,7 @@ const IntakeRow = ({
             </Button>
           </Link>
         )}
-        {(intake.status === 'aberto' || intake.status === 'enviado') && (
+        {canReview && (intake.status === 'aberto' || intake.status === 'enviado') && (
           <Button
             size="sm"
             variant="ghost"

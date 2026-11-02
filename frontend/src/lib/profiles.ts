@@ -81,7 +81,9 @@ export const profileLabel = (role: Role, functions: readonly UniformFunction[]):
     case 'admin':
       return 'Administrador'
     case 'manager':
-      return 'Gerente'
+      return functions.length === 0
+        ? 'Gerente'
+        : `Gerente · ${functions.map((fn) => FN_LABEL[fn]).join(' + ')}`
     case 'cashier':
       return 'Financeiro'
     case 'trocador':
@@ -97,7 +99,7 @@ export const profileOf = (
   functions: readonly UniformFunction[]
 ): { exclusive: ProfileKey | null; production: UniformFunction[] } => {
   if (role === 'cashier') return { exclusive: 'financeiro', production: [] }
-  if (role === 'manager') return { exclusive: 'gerente', production: [] }
+  if (role === 'manager') return { exclusive: 'gerente', production: [...functions] }
   if (role === 'admin' || role === 'owner') return { exclusive: 'admin', production: [] }
   return { exclusive: null, production: [...functions] }
 }

@@ -1,7 +1,7 @@
 import type { IncidentSummaryType } from '@/contracts/aeris/uniforms.ts'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { AlertTriangle, Check, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Check, Printer, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -266,6 +266,14 @@ export const IncidentRow = ({ incident, showOrder = false }: { incident: Inciden
         </div>
         <Badge tone={open ? (incident.kind === 'refazer' ? 'danger' : 'warning') : 'success'}>{open ? 'Aberta' : 'Resolvida'}</Badge>
       </div>
+      <p className="mt-1 flex items-center gap-1.5 text-xs font-bold">
+        <Printer className="h-3.5 w-3.5 shrink-0" />
+        {incident.printers.length > 0 ? (
+          incident.printers.map((printer) => printer.name).join(', ')
+        ) : (
+          <span className="font-semibold text-muted">Sem impressora marcada</span>
+        )}
+      </p>
       <p className="mt-1 text-sm">{incident.description}</p>
       {incident.lines.length > 0 && (
         <p className="mt-1 text-xs text-ink/80">{incident.lines.map((line) => `${String(line.quantity)}× ${line.label}`).join(' · ')}</p>

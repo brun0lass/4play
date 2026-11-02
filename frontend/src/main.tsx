@@ -198,7 +198,7 @@ const App = () => (
       <Route
         path="links"
         element={
-          <Guard allow={(a) => a.createOrder}>
+          <Guard allow={(a) => a.clientLink}>
             <LinksPage />
           </Guard>
         }

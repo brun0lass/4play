@@ -500,6 +500,8 @@ export const PersonalizationSchema = z.object({
   piece: z.string().trim().max(40),
   /** Texto: "07" não é 7. */
   number: z.string().trim().max(10),
+  /** A cor da peça. Vazio é sem cor. O mesmo texto da cor da grade. */
+  color: z.string().trim().max(60).default(''),
   size: UniformSizeSchema,
   quantity: z.number().int().min(1).max(100_000),
 })
@@ -843,6 +845,8 @@ export const UniformMemberSummary = z.object({
     'salesperson',
   ]),
   functions: z.array(UniformFunctionSchema),
+  /** Pode gerar o link do cliente. Sem marcação, pode. */
+  clientLink: z.boolean().default(true),
 })
 
 export type UniformMemberSummaryType = z.infer<typeof UniformMemberSummary>
@@ -873,6 +877,8 @@ export const UniformViewerResponse = z.object({
    * pôs só na arte e/ou na fábrica não vê — a fila e a ficha mandam nulo.
    */
   seesMoney: z.boolean(),
+  /** Pode gerar o link do cliente. Sem marcação, pode. */
+  clientLink: z.boolean().default(true),
 })
 
 export type UniformViewerResponseType = z.infer<typeof UniformViewerResponse>
@@ -1725,6 +1731,8 @@ export const IncidentSummary = z.object({
       quantity: z.number().int(),
     })
   ),
+  /** A impressora da leva, ou as do pedido quando a ocorrência é do restante. */
+  printers: z.array(ProductionPrinterRef).default([]),
   status: IncidentStatusSchema,
   resolution: z.string().nullable(),
   createdAt: z.string(),

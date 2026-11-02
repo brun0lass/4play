@@ -11,9 +11,44 @@ export const profileValid = (value: ProfileValue): boolean =>
 
 const EXCLUSIVE: ProfileKey[] = ['financeiro', 'gerente', 'admin']
 
+/** O link do cliente. Ligado para todo mundo, até alguém desligar. */
+export const ClientLinkToggle = ({
+  on,
+  onChange,
+}: {
+  on: boolean
+  onChange: (on: boolean) => void
+}) => (
+  <button
+    type="button"
+    aria-pressed={on}
+    onClick={() => onChange(!on)}
+    className={clsx(
+      'flex w-full items-start gap-3 rounded-2xl border-2 p-3 text-left transition',
+      on ? 'border-ink bg-lime' : 'border-line bg-white hover:border-ink/30'
+    )}
+  >
+    <span
+      className={clsx(
+        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 border-ink',
+        on && 'bg-ink text-lime'
+      )}
+    >
+      {on && <Check className="h-3 w-3" strokeWidth={4} />}
+    </span>
+    <span>
+      <span className="block text-sm font-extrabold">Pode gerar o link do cliente</span>
+      <span className="text-[11px] leading-snug text-ink/70">
+        Ligado para todo mundo. Desligue só quem não deve mandar o link.
+      </span>
+    </span>
+  </button>
+)
+
 /**
  * Escolher o perfil: os três da produção se combinam (quem atende também
- * pode desenhar); Financeiro, Gerente e Administrador são um só.
+ * pode desenhar). Gerente também: o cargo fica e as funções de cima
+ * continuam. Financeiro e Administrador são um só.
  */
 export const ProfilePicker = ({
   value,
@@ -39,7 +74,7 @@ export const ProfilePicker = ({
               what={PROFILE_META[key].what}
               onClick={() =>
                 onChange({
-                  exclusive: null,
+                  exclusive: value.exclusive === 'gerente' ? 'gerente' : null,
                   production: on ? value.production.filter((f) => f !== fn) : [...value.production, fn],
                 })
               }
@@ -57,12 +92,21 @@ export const ProfilePicker = ({
             on={value.exclusive === key}
             title={PROFILE_META[key].label}
             what={PROFILE_META[key].what}
-            onClick={() => onChange({ exclusive: key, production: [] })}
+            onClick={() =>
+              onChange(
+                key === 'gerente'
+                  ? {
+                      exclusive: value.exclusive === 'gerente' ? null : 'gerente',
+                      production: value.production,
+                    }
+                  : { exclusive: key, production: [] }
+              )
+            }
           />
         ))}
       </div>
       <p className="mt-2 text-[11px] font-semibold text-muted">
-        Precisa ver a produção <em>e</em> o financeiro? Use <strong className="text-ink">Gerente</strong>.
+        O gerente também pode ser atendente, designer ou operador. Clique de novo em Gerente para tirar só o cargo.
       </p>
     </div>
   </div>

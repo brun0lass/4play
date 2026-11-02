@@ -55,7 +55,7 @@ export const PRIMARY_NAV: NavItem[] = [
     to: '/links',
     label: 'Links do cliente',
     icon: Link2,
-    show: (a) => a.createOrder,
+    show: (a) => a.clientLink,
   },
   {
     to: '/financeiro',

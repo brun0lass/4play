@@ -642,6 +642,13 @@ export const replaceMemberFunctions = async (
   })
 }
 
+export const setMemberClientLink = async (userId: string, enabled: boolean): Promise<void> => {
+  await request(`${BASE}/members/${userId}/client-link`, {
+    method: 'PUT',
+    body: { enabled },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // A tabela da loja: o tecido, o descontinuado e as cobranças (F258 do Aeris)
 // ---------------------------------------------------------------------------
