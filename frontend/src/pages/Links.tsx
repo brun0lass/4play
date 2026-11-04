@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Link2,
   MessageCircle,
+  Pencil,
   Plus,
   Search,
   X,
@@ -22,7 +23,7 @@ import { Link, useNavigate } from 'react-router'
 
 import { fetchPieces, fetchFabrics, storeKeys } from '@/api/uniform-store'
 import { fetchCustomers } from '@/api/store'
-import { cancelIntake, convertIntake, createIntake } from '@/api/uniforms'
+import { cancelIntake, convertIntake, createIntake, reopenIntake } from '@/api/uniforms'
 import { useToast } from '@/components/Toast'
 import {
   Badge,
@@ -33,9 +34,11 @@ import {
   PageHeader,
   Spinner,
 } from '@/components/ui'
-import { day, int } from '@/lib/format'
+import { day } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { useAccess } from '@/lib/access'
+import { intakeChanges } from '@/lib/intake-changes'
+import { tallyLabel } from '@/lib/intake-offer'
 import { keys, useIntake, useIntakes } from '@/lib/queries'
 import { orderRef, fabricLabel } from '@/lib/uniforms'
 
@@ -59,6 +62,7 @@ const STATUS_META: Record<
 const TABS = [
   { key: 'enviado', label: 'Para conferir' },
   { key: 'aberto', label: 'Esperando o cliente' },
+  { key: 'expirado', label: 'Vencidos' },
   { key: undefined, label: 'Todos' },
 ] as const
 
@@ -69,7 +73,9 @@ const whatsappUrl = (intake: IntakeSummaryType): string | null => {
   const digits = intake.contactPhone?.replace(/\D/g, '') ?? ''
   if (digits.length < 10) return null
   const phone = digits.startsWith('55') ? digits : `55${digits}`
-  const text = `Oi! Monte o seu pedido da 4Play por aqui: escolha as peças e preencha nome, número e tamanho de cada um. ${linkUrl(intake.token)}`
+  const text = intake.reopenedAt
+    ? `Oi! Reabrimos o seu pedido da 4Play: mude o que precisar e envie de novo por aqui. ${linkUrl(intake.token)}`
+    : `Oi! Monte o seu pedido da 4Play por aqui: escolha as peças e preencha nome, número e tamanho de cada um. ${linkUrl(intake.token)}`
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 }
 
@@ -80,7 +86,11 @@ const whatsappUrl = (intake: IntakeSummaryType): string | null => {
 export const LinksPage = () => {
   const access = useAccess()
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('enviado')
-  const list = useIntakes(tab)
+  // O vencido é um aberto que passou da validade: só a tela o separa.
+  const list = useIntakes(tab === 'expirado' ? 'aberto' : tab)
+  const shown = list.data?.filter((intake) =>
+    tab === 'aberto' || tab === 'expirado' ? intake.status === tab : true
+  )
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<IntakeSummaryType | null>(null)
   const [reviewing, setReviewing] = useState<string | null>(null)
@@ -129,21 +139,22 @@ export const LinksPage = () => {
           onRetry={() => void list.refetch()}
         />
       )}
-      {list.data?.length === 0 && (
+      {shown?.length === 0 && (
         <Empty
-          title={tab === 'enviado' ? 'Nada para conferir' : 'Nenhum link aqui'}
+          title={tab === 'enviado' ? 'Nada para conferir' : tab === 'expirado' ? 'Nenhum link vencido' : 'Nenhum link aqui'}
         >
           <p>Gere um link e mande para o cliente pelo WhatsApp.</p>
         </Empty>
       )}
 
       <div className="space-y-2">
-        {list.data?.map((intake) => (
+        {shown?.map((intake) => (
           <IntakeRow
             key={intake.id}
             intake={intake}
             canReview={access.createOrder}
             onReview={() => setReviewing(intake.id)}
+            onReopened={setCreated}
           />
         ))}
       </div>
@@ -191,10 +202,12 @@ const IntakeRow = ({
   intake,
   canReview,
   onReview,
+  onReopened,
 }: {
   intake: IntakeSummaryType
   canReview: boolean
   onReview: () => void
+  onReopened: (intake: IntakeSummaryType) => void
 }) => {
   const queryClient = useQueryClient()
   const meta = STATUS_META[intake.status]
@@ -204,9 +217,17 @@ const IntakeRow = ({
     onSuccess: () =>
       void queryClient.invalidateQueries({ queryKey: keys.intakesAll }),
   })
+  const reopen = useMutation({
+    mutationFn: () => reopenIntake(intake.id, intake.version),
+    onSuccess: (reopened) => {
+      void queryClient.invalidateQueries({ queryKey: keys.intakesAll })
+      onReopened(reopened)
+    },
+  })
   const who =
     intake.submittedName ??
     intake.customer?.name ??
+    intake.contactName ??
     intake.contactPhone ??
     intake.contactEmail ??
     'Cliente'
@@ -223,8 +244,11 @@ const IntakeRow = ({
             {intake.createdByName && ` por ${intake.createdByName}`}
             {intake.status === 'aberto' &&
               ` · vale até ${day(intake.expiresAt)}`}
+            {intake.status === 'aberto' &&
+              intake.reopenedAt &&
+              ` · reaberto ${day(intake.reopenedAt)} para ele editar`}
             {intake.submittedAt &&
-              ` · enviado ${day(intake.submittedAt)} · ${int(intake.submittedPieces)} peças`}
+              ` · ${intake.reopenedAt ? 'editado' : 'enviado'} ${day(intake.submittedAt)} · ${tallyLabel(intake.submittedSets, intake.submittedPieces)}`}
           </p>
         </div>
         <Badge tone={meta.tone}>{meta.label}</Badge>
@@ -238,6 +262,24 @@ const IntakeRow = ({
             onClick={onReview}
           >
             Conferir
+          </Button>
+        )}
+        {canReview && intake.status === 'enviado' && (
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            busy={reopen.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Reabrir o link para o cliente editar? Ele volta para "Esperando o cliente" até o cliente enviar de novo.'
+                )
+              )
+                reopen.mutate()
+            }}
+          >
+            Reabrir para o cliente
           </Button>
         )}
         {intake.status === 'aberto' && <CopyButton intake={intake} />}
@@ -282,9 +324,9 @@ const IntakeRow = ({
           </Button>
         )}
       </div>
-      {cancel.isError && (
+      {(cancel.isError || reopen.isError) && (
         <p className="mt-2 text-xs font-semibold text-red-700">
-          {errorMessage(cancel.error)}
+          {errorMessage(cancel.error ?? reopen.error)}
         </p>
       )}
     </article>
@@ -308,13 +350,16 @@ const CreateDialog = ({
     name: string
     phone: string | null
   } | null>(null)
+  const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [showPrices, setShowPrices] = useState(false)
   const [restrict, setRestrict] = useState(false)
   const [productIds, setProductIds] = useState<string[]>([])
   const [fabrics, setFabrics] = useState<Fabric[] | null>(null)
-  const [days, setDays] = useState(7)
+  // Os acabamentos desmarcados, por tecido: sem nada aqui, o link oferece todos.
+  const [finishesOff, setFinishesOff] = useState<Record<string, string[]>>({})
+  const [days, setDays] = useState(30)
   const [leadDays, setLeadDays] = useState(30)
   const [message, setMessage] = useState('')
 
@@ -322,13 +367,15 @@ const CreateDialog = ({
     if (!open) return
     setSearch('')
     setCustomer(null)
+    setName('')
     setPhone('')
     setEmail('')
     setShowPrices(false)
     setRestrict(false)
     setProductIds([])
     setFabrics(null)
-    setDays(7)
+    setFinishesOff({})
+    setDays(30)
     setLeadDays(30)
     setMessage('')
   }, [open])
@@ -367,6 +414,7 @@ const CreateDialog = ({
     mutationFn: () =>
       createIntake({
         customerPartyId: customer?.id ?? null,
+        contactName: customer ? null : name.trim() || null,
         phone: customer ? (customer.phone ?? null) : phone.trim() || null,
         email: customer ? null : email.trim() || null,
         showPrices,
@@ -374,6 +422,13 @@ const CreateDialog = ({
         // Os tecidos de sempre (os não descontinuados) vão vazios: o link segue a tabela da loja.
         fabricIds:
           fabrics === null || sameSet(fabrics, defaultFabrics) ? [] : fabrics,
+        fabricFinishes: chosenFabrics.flatMap((fabricId) => {
+          const off = finishesOff[fabricId] ?? []
+          const own = fabricList.data?.find((f) => f.id === fabricId)?.finishes ?? []
+          return off.length === 0
+            ? []
+            : [{ fabricId, finishes: own.filter((finish) => !off.includes(finish)) }]
+        }),
         expiresInDays: days,
         leadDays,
         message: message.trim() || null,
@@ -386,8 +441,8 @@ const CreateDialog = ({
 
   const ready =
     (customer !== null ||
-      phone.replace(/\D/g, '').length >= 10 ||
-      email.includes('@')) &&
+      (name.trim().length >= 2 &&
+        (phone.replace(/\D/g, '').length >= 10 || email.includes('@')))) &&
     (!restrict || productIds.length > 0) &&
     (offeredFabrics.length === 0 || chosenFabrics.length > 0)
 
@@ -471,10 +526,18 @@ const CreateDialog = ({
                 </div>
               )}
               <p className="mt-3 mb-2 text-xs text-muted">
-                Cliente novo? Diga o WhatsApp ou o e-mail — ele preenche o
-                cadastro no link. Se o número já for de um cliente, o link fica
+                Cliente novo? Diga o nome e o WhatsApp ou o e-mail — ele completa
+                o cadastro no link. Se o número já for de um cliente, o link fica
                 no nome dele.
               </p>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={200}
+                placeholder="Nome do cliente ou do time *"
+                aria-label="Nome do cliente"
+                className="field mb-3"
+              />
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   value={phone}
@@ -579,37 +642,67 @@ const CreateDialog = ({
             <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">
               Tecidos que ele pode escolher
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {offeredFabrics.map((entry) => {
                 const on = chosenFabrics.includes(entry.id)
+                const off = finishesOff[entry.id] ?? []
                 return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() =>
-                      setFabrics(
-                        on
-                          ? chosenFabrics.filter((f) => f !== entry.id)
-                          : [...chosenFabrics, entry.id]
-                      )
-                    }
-                    className={clsx(
-                      'rounded-full border-2 px-3 py-1.5 text-xs font-extrabold',
-                      on ? 'border-ink bg-lime' : 'border-line'
-                    )}
-                  >
-                    {entry.name}
-                    {entry.discontinued && (
-                      <span className="ml-1 font-bold text-amber-800">
-                        · descontinuado
-                      </span>
-                    )}
-                  </button>
+                  <div key={entry.id} className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFabrics(
+                          on
+                            ? chosenFabrics.filter((f) => f !== entry.id)
+                            : [...chosenFabrics, entry.id]
+                        )
+                      }
+                      className={clsx(
+                        'rounded-full border-2 px-3 py-1.5 text-xs font-extrabold',
+                        on ? 'border-ink bg-lime' : 'border-line'
+                      )}
+                    >
+                      {entry.name}
+                      {entry.discontinued && (
+                        <span className="ml-1 font-bold text-amber-800">
+                          · descontinuado
+                        </span>
+                      )}
+                    </button>
+                    {on &&
+                      entry.finishes.map((finish) => {
+                        const kept = !off.includes(finish)
+                        return (
+                          <button
+                            key={finish}
+                            type="button"
+                            aria-pressed={kept}
+                            // O tecido marcado fica com ao menos um acabamento.
+                            disabled={kept && entry.finishes.length - off.length === 1}
+                            onClick={() =>
+                              setFinishesOff((all) => ({
+                                ...all,
+                                [entry.id]: kept
+                                  ? [...off, finish]
+                                  : off.filter((value) => value !== finish),
+                              }))
+                            }
+                            className={clsx(
+                              'rounded-full border-2 px-2.5 py-1 text-[11px] font-bold',
+                              kept ? 'border-ink bg-lime/50' : 'border-line text-muted'
+                            )}
+                          >
+                            {finish}
+                          </button>
+                        )
+                      })}
+                  </div>
                 )
               })}
             </div>
             <p className="mt-1 text-xs text-muted">
-              O descontinuado só aparece para o cliente se você marcar aqui.
+              O cliente escolhe entre os acabamentos marcados. O descontinuado só
+              aparece para ele se você marcar aqui.
             </p>
           </div>
         )}
@@ -692,7 +785,7 @@ const CreatedDialog = ({
   return (
     <Modal
       open={intake !== null}
-      title="Link pronto"
+      title={intake?.reopenedAt ? 'Link reaberto' : 'Link pronto'}
       onClose={onClose}
       footer={
         <Button variant="ink" onClick={onClose}>
@@ -703,10 +796,12 @@ const CreatedDialog = ({
       {intake && (
         <div className="space-y-4 text-sm">
           <p>
-            {intake.customer
-              ? `Link de ${intake.customer.name}`
+            {intake.submittedName
+              ? `Link de ${intake.submittedName}`
               : 'Link de cliente novo'}{' '}
             — vale até <strong>{day(intake.expiresAt)}</strong>.
+            {intake.reopenedAt &&
+              ' Mande para o cliente: a página abre com o que ele já tinha preenchido.'}
           </p>
           <p className="rounded-xl bg-paper p-3 font-mono text-xs break-all">
             {linkUrl(intake.token)}
@@ -754,6 +849,8 @@ const ReviewDialog = ({
   })
   const submission = detail.data?.submission ?? null
   const customer = submission?.customer ?? null
+  const previous = detail.data?.previous ?? null
+  const changes = previous && submission ? intakeChanges(previous, submission) : null
 
   return (
     <Modal
@@ -785,6 +882,28 @@ const ReviewDialog = ({
       {detail.isError && <ErrorBox message={errorMessage(detail.error)} />}
       {detail.data && submission && (
         <div className="space-y-5 text-sm">
+          {changes && (
+            <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+              <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">
+                O que o cliente alterou
+              </p>
+              {changes.length === 0 && (
+                <p>Ele enviou de novo sem mudar nada.</p>
+              )}
+              <div className="space-y-2">
+                {changes.map((change) => (
+                  <div key={change.title}>
+                    <p className="font-extrabold">{change.title}</p>
+                    <ul className="text-xs">
+                      {change.lines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {customer ? (
             <section className="rounded-2xl border border-line p-4">
               <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">
@@ -831,6 +950,13 @@ const ReviewDialog = ({
               ? kit.people.reduce((sum, person) => sum + person.quantity, 0) +
                 kit.counts.filter((count) => count.part === firstPart).reduce((sum, count) => sum + count.quantity, 0)
               : item.rows.reduce((sum, row) => sum + row.quantity, 0)
+            // Só a peça de duas partes ou mais é conjunto: a camiseta sozinha é peça.
+            const isSet =
+              kit !== null &&
+              new Set([
+                ...kit.people.flatMap((person) => person.pieces.map((piece) => piece.part)),
+                ...kit.counts.map((count) => count.part),
+              ]).size > 1
             return (
               <section
                 key={item.productId}
@@ -840,7 +966,7 @@ const ReviewDialog = ({
                   {item.productName}
                   {item.color && <span className="font-semibold"> · cor: {item.color}</span>}{' '}
                   <span className="font-semibold text-muted">
-                    · {total} {kit ? 'conjunto(s)' : 'peças'}
+                    · {total} {isSet ? 'conjunto(s)' : 'peças'}
                   </span>
                 </p>
                 {item.options.length > 0 && (

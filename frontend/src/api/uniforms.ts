@@ -37,6 +37,14 @@ import {
   IntakeVersionRequest,
   PublicIntakeResponse,
   PublicIntakeSubmitResponse,
+  ReopenIntakeRequest,
+  CreateQuoteRequest,
+  QuoteListResponse,
+  QuoteResponse,
+  UpdateQuoteRequest,
+  type CreateQuoteBody,
+  type QuoteSummaryType,
+  type UpdateQuoteBody,
   type CreateIntakeBody,
   type IntakeDetailResponseType,
   type IntakeSubmissionBody,
@@ -502,6 +510,18 @@ export const cancelIntake = async (
     })
   ).intake
 
+/** Reabre o link enviado para o cliente editar, antes de virar pedido. */
+export const reopenIntake = async (
+  id: string,
+  version: number
+): Promise<IntakeSummaryType> =>
+  IntakeResponse.parse(
+    await request(`${BASE}/intakes/${id}/reopen`, {
+      method: 'POST',
+      body: ReopenIntakeRequest.parse({ version }),
+    })
+  ).intake
+
 /** A conferência vira pedido: o cadastro do cliente novo, o pedido e a ficha. */
 export const convertIntake = async (id: string, version: number) =>
   ConvertIntakeResponse.parse(
@@ -510,6 +530,44 @@ export const convertIntake = async (id: string, version: number) =>
       body: IntakeVersionRequest.parse({ version }),
     })
   )
+
+/** Os orçamentos da loja, do mais novo para o mais velho. */
+export const fetchQuotes = async (
+  signal?: AbortSignal
+): Promise<QuoteSummaryType[]> =>
+  QuoteListResponse.parse(await request(`${BASE}/quotes`, { signal })).quotes
+
+export const fetchQuote = async (
+  id: string,
+  signal?: AbortSignal
+): Promise<QuoteSummaryType> =>
+  QuoteResponse.parse(await request(`${BASE}/quotes/${id}`, { signal })).quote
+
+export const createQuote = async (
+  input: CreateQuoteBody
+): Promise<QuoteSummaryType> =>
+  QuoteResponse.parse(
+    await request(`${BASE}/quotes`, {
+      method: 'POST',
+      body: CreateQuoteRequest.parse(input),
+    })
+  ).quote
+
+export const updateQuote = async (
+  id: string,
+  input: UpdateQuoteBody
+): Promise<QuoteSummaryType> =>
+  QuoteResponse.parse(
+    await request(`${BASE}/quotes/${id}`, {
+      method: 'PUT',
+      body: UpdateQuoteRequest.parse(input),
+    })
+  ).quote
+
+/** Some da lista, e o número não volta a ser usado. */
+export const archiveQuote = async (id: string): Promise<void> => {
+  await request(`${BASE}/quotes/${id}`, { method: 'DELETE' })
+}
 
 /** Os pedidos do cliente, abertos e entregues, do mais novo para o mais velho (F229). */
 export const fetchCustomerHistory = async (

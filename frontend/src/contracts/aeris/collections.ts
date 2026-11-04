@@ -283,6 +283,11 @@ export const RecordCollectionContactRequest = z
       .string()
       .regex(DAY, 'Informe a data como AAAA-MM-DD')
       .optional(),
+    /**
+     * Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo contato, e a
+     * segunda resposta (200) devolve o primeiro.
+     */
+    id: z.uuid().optional(),
   })
   .superRefine((value, ctx) => {
     if (value.outcome === 'promised') {

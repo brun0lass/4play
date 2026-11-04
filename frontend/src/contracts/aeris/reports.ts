@@ -41,6 +41,7 @@ export const REPORT_IDS = [
   'top-produtos',
   'trocas',
   'vendedores',
+  'variacoes',
 ] as const
 
 export const ReportIdSchema = z.enum(REPORT_IDS)
@@ -139,6 +140,22 @@ export const REPORT_DEFINITIONS: Readonly<
       column('profit', 'Lucro', 'money'),
       column('margin', 'Margem', 'percent', false),
       column('returned', 'Devolvido', 'money'),
+    ],
+  },
+  /*
+   * F366: cada cor do produto — o que vendeu no período e o que tem hoje.
+   * O estoque é de hoje, e não do fim do período.
+   */
+  variacoes: {
+    label: 'Variações (cores)',
+    what: 'variações',
+    columns: [
+      column('colour', 'Cor', 'text', false),
+      column('sku', 'Código', 'text', false),
+      column('quantity', 'Vendidas', 'quantity'),
+      column('revenue', 'Faturamento', 'money'),
+      column('onHand', 'Estoque', 'quantity'),
+      column('available', 'Disponível', 'quantity'),
     ],
   },
   trocas: {

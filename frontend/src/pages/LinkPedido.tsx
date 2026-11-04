@@ -22,7 +22,9 @@ import { SizeChartTable } from '@/components/catalog/SizeChartTable'
 import { ColorPanel } from '@/components/ficha/ColorPicker'
 import {
   KitEditor,
+  SpecialSizeNotice,
   kitChargeRows,
+  kitFromSubmission,
   kitProblem,
   kitToSubmit,
   kitTotals,
@@ -35,6 +37,8 @@ import {
   madeIn,
   personalizationCharges,
   priceAt,
+  quantitiesBySize,
+  tallyLabel,
   tiersOf,
 } from '@/lib/intake-offer'
 import { day, int, money } from '@/lib/format'
@@ -92,12 +96,49 @@ const blankRow = (): NamedRow => ({
   quantity: '1',
 })
 
+/** O link reaberto: o que o cliente tinha mandado, na forma do rascunho. */
+const draftFromPrevious = (data: PublicIntakeResponseType): Partial<Draft> | null => {
+  const previous = data.previous
+  if (previous === null) return null
+  return {
+    items: Object.fromEntries(
+      previous.items.flatMap((sent) => {
+        const product = data.products.find((entry) => entry.id === sent.productId)
+        if (product === undefined) return []
+        const item: Item = {
+          named: sent.rows
+            .filter((row) => row.name !== null || row.number !== null)
+            .map((row) => ({
+              key: nextKey++,
+              name: row.name ?? '',
+              number: row.number ?? '',
+              size: row.size,
+              quantity: String(row.quantity),
+            })),
+          bySize: quantitiesBySize(sent.rows.filter((row) => row.name === null && row.number === null)),
+          options: sent.options,
+          color: sent.color ?? '',
+          ...(sent.kit !== null ? { kit: kitFromSubmission(product, sent.kit) } : {}),
+        }
+        return [[sent.productId, item]]
+      })
+    ),
+    notes: previous.notes ?? '',
+    isEvent: previous.event !== null,
+    eventDate: previous.event?.date ?? '',
+    eventName: previous.event?.name ?? '',
+    fabric: previous.fabricId,
+    finish: previous.fabricFinish,
+  }
+}
+
 /**
  * O link do pedido (F232 do Aeris) — a página que o CLIENTE abre, sem login.
  *
  * Ele escolhe as peças, preenche nome, número e tamanho de cada atleta (ou só
  * as quantidades por tamanho), e o cadastro se ainda não é cliente. Depois de
- * enviar não muda mais: quem atende confere e transforma em pedido.
+ * enviar só muda se quem atende reabrir o link; quem atende confere e
+ * transforma em pedido.
  */
 export const LinkPedidoPage = () => {
   const { token = '' } = useParams()
@@ -204,14 +245,18 @@ const IntakeForm = ({
 }) => {
   // O que o cliente já preencheu fica neste celular: fechou o navegador,
   // caiu a internet, volta de onde parou.
-  const storageKey = `4play.link.v2.${token}`
+  // O link reaberto tem rascunho à parte: o de antes do envio (até vazio, de outro
+  // navegador) não pode ganhar do que o cliente já mandou.
+  const storageKey = `4play.link.v2.${token}${data.previous === null ? '' : '.reaberto'}`
   const [saved] = useState<Partial<Draft> | null>(() => {
     try {
       const raw = localStorage.getItem(storageKey)
-      return raw ? (JSON.parse(raw) as Partial<Draft>) : null
+      if (raw) return JSON.parse(raw) as Partial<Draft>
     } catch {
-      return null
+      /* sem armazenamento: segue sem rascunho */
     }
+    // Sem rascunho neste celular: o link reaberto vem com o que ele já mandou.
+    return draftFromPrevious(data)
   })
   const [items, setItems] = useState<Record<string, Item>>(() =>
     // Só as peças que o link ainda oferece.
@@ -224,14 +269,19 @@ const IntakeForm = ({
   const [isEvent, setIsEvent] = useState<boolean | null>(saved?.isEvent ?? null)
   const [eventDate, setEventDate] = useState(saved?.eventDate ?? '')
   const [eventName, setEventName] = useState(saved?.eventName ?? '')
-  const [fabric, setFabric] = useState<Fabric | null>(
-    saved?.fabric != null && data.fabrics.some((f) => f.id === saved.fabric) ? saved.fabric : null
-  )
+  // Já vem no primeiro tecido do link; "não sei" é o cliente quem escolhe.
+  const [fabric, setFabric] = useState<Fabric | null>(() => {
+    const first = data.fabrics[0]?.id ?? null
+    if (saved?.fabric === undefined) return first
+    return saved.fabric === null || data.fabrics.some((f) => f.id === saved.fabric) ? saved.fabric : first
+  })
   // O acabamento do tecido (F303): liso ou furadinho, no tecido que tem.
   const [finish, setFinish] = useState<string | null>(saved?.finish ?? null)
   const finishesOf = (id: Fabric | null) => data.fabrics.find((f) => f.id === id)?.finishes ?? []
   const finishes = finishesOf(fabric)
-  const chosenFinish = finish !== null && finishes.includes(finish) ? finish : null
+  // Um acabamento só no link: já está escolhido.
+  const chosenFinish =
+    finishes.length === 1 ? (finishes[0] ?? null) : finish !== null && finishes.includes(finish) ? finish : null
   const finishMissing = finishes.length > 0 && chosenFinish === null
   const pickFabric = (value: Fabric | null) => {
     setFabric(value)
@@ -249,7 +299,7 @@ const IntakeForm = ({
   }, [screen])
   const [customer, setCustomer] = useState({
     kind: 'person' as 'person' | 'company',
-    name: '',
+    name: data.contactName ?? '',
     document: '',
     phone: data.contactPhone ?? '',
     email: data.contactEmail ?? '',
@@ -343,6 +393,11 @@ const IntakeForm = ({
     [items, chosen.length, fabric]
   )
   const pieces = totals.reduce((sum, entry) => sum + entry.pieces, 0)
+  // O conjunto é a peça de duas partes ou mais: a camiseta sozinha conta como peça.
+  const sets = totals
+    .filter((entry) => entry.product.parts.length > 1)
+    .reduce((sum, entry) => sum + entry.pieces, 0)
+  const tally = tallyLabel(sets, pieces - sets)
   const charges = personalizationCharges(
     data.personalizationTypes,
     chosen.map((product) => {
@@ -497,7 +552,7 @@ const IntakeForm = ({
           Object.values(person.pieces).some((piece) => piece.name.trim() !== '' || piece.number.trim() !== '')
         ).length
       : item.named.filter((row) => row.name.trim() !== '' || row.number.trim() !== '').length
-    const unit = item.kit ? (count === 1 ? 'conjunto' : 'conjuntos') : count === 1 ? 'peça' : 'peças'
+    const unit = product.parts.length > 1 ? (count === 1 ? 'conjunto' : 'conjuntos') : count === 1 ? 'peça' : 'peças'
     return `${int(count)} ${unit}${named > 0 ? ` · ${int(named)} com nome` : ''}`
   }
   const pending = chosen.filter((product) => statusOf(product).pieces === 0)
@@ -579,7 +634,9 @@ const IntakeForm = ({
       {finishes.length > 0 && (
         <div className="border-t border-line pt-3">
           <h3 className="text-xs font-extrabold tracking-wider uppercase">Acabamento</h3>
-          <p className="mt-0.5 text-xs text-muted">Mesmo tecido, mesmo preço. Escolha um.</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {finishes.length > 1 ? 'Mesmo tecido, mesmo preço. Escolha um.' : 'Este pedido vai neste acabamento.'}
+          </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {finishes.map((value) => (
               <button
@@ -707,7 +764,9 @@ const IntakeForm = ({
         <>
           {welcomeBack && (
             <p className="flex items-center justify-between gap-2 rounded-2xl bg-lime/40 p-3 text-sm font-semibold">
-              Voltamos de onde você parou.
+              {data.previous !== null
+                ? 'Reabrimos o seu pedido. Mude o que precisar e envie de novo.'
+                : 'Voltamos de onde você parou.'}
               <button type="button" className="text-xs underline" onClick={() => setWelcomeBack(false)}>
                 ok
               </button>
@@ -766,7 +825,7 @@ const IntakeForm = ({
             </button>
           </p>
           <BottomBar
-            title={`${int(pieces)} peças`}
+            title={tally}
             detail={value !== null && pieces > 0 ? `Cerca de ${money(value.toFixed(2))}` : undefined}
             hint={chosen.length > 0 ? problems[0] : 'Escolha pelo menos uma peça.'}
             action={
@@ -945,7 +1004,7 @@ const IntakeForm = ({
             </section>
           )}
           <BottomBar
-            title={`${int(pieces)} peças no pedido`}
+            title={`${tally} no pedido`}
             action={
               <Button variant="lime" onClick={() => go(next(product.id))}>
                 {pending.filter((entry) => entry.id !== product.id).length > 0 ? 'Próxima peça' : 'Ver o pedido'}
@@ -1026,7 +1085,7 @@ const IntakeForm = ({
           >
             {eventTight
               ? `O evento é em menos de uma semana. Envie mesmo assim: quem te atendeu vai ver se dá tempo.`
-              : `Previsão de despacho: ${day(dispatch)}. Quem te atendeu confirma na conferência.`}
+              : `Previsão de despacho: ${day(dispatch)}. Por favor, confirmar com nosso comercial a data.`}
           </p>
         )}
         {eventPast && (
@@ -1275,7 +1334,7 @@ const IntakeForm = ({
             )}
           </section>
           <BottomBar
-            title={`${int(pieces)} peças`}
+            title={tally}
             detail={value !== null && pieces > 0 ? `Cerca de ${money(value.toFixed(2))}` : undefined}
             hint={problems[0] ?? (registrationMissing ? 'Preencha os seus dados.' : whenMissing ? 'Diga para quando.' : undefined)}
             action={
@@ -1475,7 +1534,10 @@ const ItemEditor = ({
   item: Item
   onChange: (item: Item) => void
 }) => {
-  const [allSizes, setAllSizes] = useState(false)
+  // O que já veio preenchido fora dos tamanhos de adulto não pode ficar escondido.
+  const [allSizes, setAllSizes] = useState(() => Object.keys(item.bySize).some((size) => !ADULT.includes(size)))
+  const special =
+    Number(item.bySize.ESP ?? 0) > 0 || item.named.some((row) => row.size === 'ESP' && Number(row.quantity) > 0)
   // "Vai ter nome ou número?": só abre as linhas de pessoa quando sim.
   const filledRow = (row: NamedRow) => row.name.trim() !== '' || row.number.trim() !== ''
   const [named, setNamed] = useState(item.named.some(filledRow))
@@ -1749,6 +1811,7 @@ const ItemEditor = ({
           </button>
         )}
       </div>
+      {special && <SpecialSizeNotice />}
     </div>
   )
 }

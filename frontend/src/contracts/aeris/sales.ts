@@ -650,6 +650,54 @@ export type UpdateSalesDocumentBody = z.output<
   typeof UpdateSalesDocumentRequest
 >
 
+/**
+ * Corrigir pedido ou venda já paga ou acertada (F348): tirar peça ou diminuir
+ * a quantidade. O valor que sai abate o que a venda ainda deve; o resto vira
+ * vale do cliente. Só tira: preço e peça nova continuam fora daqui.
+ */
+export const AmendPaidSalesDocumentRequest = z.object({
+  version: z.number().int().nonnegative(),
+  lines: z
+    .array(
+      z.object({
+        lineId: z.uuid(),
+        /** A quantidade que FICA. Zero tira a peça. */
+        quantity: z.string().regex(/^\d+(\.\d+)?$/),
+        /** A peça voltou para a loja (entra no estoque) ou não. */
+        restock: z.boolean(),
+      })
+    )
+    .min(1),
+  reason: z.string().trim().min(3).max(500),
+  /** A senha do gerente (F318), para quem não tem `sales.amend`. */
+  authorisationId: z.string().min(1).optional(),
+})
+
+export type AmendPaidSalesDocumentRequest = z.input<
+  typeof AmendPaidSalesDocumentRequest
+>
+
+export const AmendPaidSalesDocumentResponse = z.object({
+  totalBefore: z.string(),
+  totalAfter: z.string(),
+  /** Os títulos da venda que diminuíram ou foram cancelados. */
+  titles: z.array(
+    z.object({
+      id: z.string(),
+      dueAt: z.string(),
+      from: z.string(),
+      /** Nulo: o abatimento cobriu tudo e ele foi cancelado. */
+      to: z.string().nullable(),
+    })
+  ),
+  /** O que virou vale do cliente. `0.00` quando nada. */
+  voucher: z.string(),
+})
+
+export type AmendPaidSalesDocumentResponse = z.infer<
+  typeof AmendPaidSalesDocumentResponse
+>
+
 export const TransitionSalesDocumentRequest = z.object({
   version: z.number().int().nonnegative(),
   to: SalesDocumentStatusSchema,
@@ -677,6 +725,13 @@ export const TransitionSalesDocumentRequest = z.object({
   paidResolution: z.enum(['refund', 'voucher']).nullable().default(null),
   /** O caixa de onde sai o dinheiro devolvido, quando há dinheiro a devolver. */
   cashSessionId: z.string().min(1).nullable().default(null),
+  /**
+   * Por onde o dinheiro voltou ao cliente, no `refund` (F319). O pedido 686 da
+   * Elite foi pago em dinheiro e devolvido no Pix: sem isto, o estorno tirava
+   * da gaveta um dinheiro que saiu pelo banco. Nulo, cada pagamento volta
+   * pela forma em que entrou.
+   */
+  refundMethodId: z.string().min(1).nullable().default(null),
 })
 
 export type TransitionSalesDocumentRequest = z.input<
@@ -684,6 +739,29 @@ export type TransitionSalesDocumentRequest = z.input<
 >
 export type TransitionSalesDocumentBody = z.output<
   typeof TransitionSalesDocumentRequest
+>
+
+/**
+ * Corrigir a forma de um pagamento já recebido (F319).
+ *
+ * O Eduardo: "colocou como Pix e era dinheiro, aí dava pra corrigir". Com a
+ * senha do gerente (`sales.amend` para o documento): o recebimento errado é
+ * estornado e o certo entra com o mesmo valor e a mesma data, e a gaveta
+ * acompanha quando há dinheiro no meio.
+ */
+export const CorrectPaymentMethodRequest = z.object({
+  toMethodId: z.string().min(1),
+  reason: z.string().trim().min(3).max(500),
+  authorisationId: z.string().min(1),
+  /** O caixa aberto, quando entra ou sai dinheiro da gaveta. */
+  cashSessionId: z.string().min(1).nullable().default(null),
+})
+
+export type CorrectPaymentMethodRequest = z.input<
+  typeof CorrectPaymentMethodRequest
+>
+export type CorrectPaymentMethodBody = z.output<
+  typeof CorrectPaymentMethodRequest
 >
 
 export const ConvertQuoteRequest = z.object({

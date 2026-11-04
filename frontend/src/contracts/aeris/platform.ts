@@ -348,3 +348,88 @@ export const PlatformAiCostResponse = z.object({
 })
 
 export type PlatformAiCostResponse = z.infer<typeof PlatformAiCostResponse>
+
+/* -------------------------------------------------------------------------- */
+/* O painel do dono (F320)                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** O que o app autenticador lê do QR. Só antes de ligar. */
+export const PlatformMfaSetupResponse = z.object({
+  otpauthUri: z.string(),
+  secret: z.string(),
+})
+
+export const PlatformMfaActivateRequest = z.object({
+  code: z.string().regex(/^\d{6}$/u, 'O código tem 6 números'),
+})
+
+export const PlatformMfaStatusResponse = z.object({
+  enabled: z.boolean(),
+  enabledAt: z.string().nullable(),
+})
+
+export const PlatformOverviewResponse = z.object({
+  accounts: z.object({
+    active: z.number().int(),
+    suspended: z.number().int(),
+    archived: z.number().int(),
+  }),
+  /** Somado dos retratos de uso: vendas do mês em reais (decimal em texto). */
+  salesAmount: z.string(),
+  salesCount: z.number().int(),
+  activeUserCount: z.number().int(),
+  openErrors: z.number().int(),
+  measuredAt: z.string().nullable(),
+})
+
+export const PlatformCheckStatus = z.enum(['ok', 'atencao', 'fora', 'nao_configurado'])
+
+export const PlatformStatusResponse = z.object({
+  checkedAt: z.string(),
+  version: z.string(),
+  uptimeSeconds: z.number().int(),
+  checks: z.array(
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      status: PlatformCheckStatus,
+      detail: z.string(),
+      millis: z.number().int().nullable(),
+    })
+  ),
+})
+
+export const PlatformAuditQuery = z.object({
+  before: z.string().optional(),
+  action: z.string().max(100).optional(),
+  tenantId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+})
+
+export const PlatformAuditResponse = z.object({
+  events: z.array(
+    z.object({
+      id: z.string(),
+      occurredAt: z.string(),
+      action: z.string(),
+      actorEmail: z.string().nullable(),
+      tenantId: z.string().nullable(),
+      tenantName: z.string().nullable(),
+      subjectType: z.string().nullable(),
+      subjectId: z.string().nullable(),
+    })
+  ),
+})
+
+export const PlatformErrorList = z.object({
+  errors: z.array(
+    z.object({
+      id: z.string(),
+      origin: z.string(),
+      message: z.string(),
+      occurrences: z.number().int(),
+      firstAt: z.string(),
+      lastAt: z.string(),
+    })
+  ),
+})

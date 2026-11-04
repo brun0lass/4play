@@ -268,6 +268,11 @@ export const RecordCashMovementRequest = z.object({
    * quem tem, para este caixa e este valor. Uma autorização, uma sangria.
    */
   authorisationId: z.uuid().optional(),
+  /**
+   * Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo lançamento, e a
+   * segunda resposta (200) devolve o primeiro em vez de lançar de novo.
+   */
+  id: z.uuid().optional(),
 })
 
 export type RecordCashMovementRequest = z.input<

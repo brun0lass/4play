@@ -38,7 +38,7 @@ export const SessionTransport = z.enum(['cookie', 'bearer'])
 export type SessionTransport = z.infer<typeof SessionTransport>
 
 /** O navegador (e o PC, que é o site) ou o app do celular. F304. */
-export const SessionClient = z.enum(['web', 'mobile'])
+export const SessionClient = z.enum(['web', 'mobile', 'admin'])
 
 export type SessionClient = z.infer<typeof SessionClient>
 
@@ -73,6 +73,14 @@ export const LoginRequest = z.object({
     .min(1)
     .max(80)
     .regex(/^\P{C}+$/u, 'Nome de aparelho inválido')
+    .optional(),
+  /**
+   * O código do app autenticador (F320). Só o painel do dono (`admin`) manda;
+   * quem opera a plataforma e já ligou o código não entra sem ele.
+   */
+  code: z
+    .string()
+    .regex(/^\d{6}$/u, 'O código tem 6 números')
     .optional(),
 })
 
@@ -315,10 +323,25 @@ export type SetCancelCodeRequest = z.infer<typeof SetCancelCodeRequest>
 /** Autorizar com a senha de cancelamento: só `sales.cancel`. */
 export const AuthorizeWithCodeRequest = z.object({
   code: z.string().min(1).max(64),
-  action: z.literal('sales.cancel'),
-  targetType: z.literal('sales_document'),
+  /**
+   * F363: o código da loja vale em toda autorização (editar venda paga,
+   * supervisão do PDV, trocas), e não só no cancelar — a loja pediu o 1212
+   * no lugar do e-mail e da senha do gerente.
+   */
+  action: z.enum([
+    'sales.cancel',
+    'sales.amend',
+    'pos.supervise',
+    'exchange.without_sale',
+    'exchange.repeat_return',
+    'exchange.credit.adjust',
+    'finance.credit.manage',
+  ]),
+  targetType: z.enum(['sales_document', 'cash_session', 'party', 'exchange']),
   targetId: z.string().min(1),
   reason: z.string().trim().min(3).max(500),
+  /** O que está sendo aprovado, como no `AuthorizeRequest` (F148). */
+  detail: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type AuthorizeWithCodeRequest = z.infer<typeof AuthorizeWithCodeRequest>

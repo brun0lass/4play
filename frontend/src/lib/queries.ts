@@ -10,6 +10,8 @@ import {
   fetchDayCloses,
   fetchCustomerHistory,
   fetchIntake,
+  fetchQuote,
+  fetchQuotes,
   fetchIntakes,
   fetchOrderSewing,
   fetchSeamstressJobs,
@@ -40,6 +42,8 @@ export const keys = {
   intakes: (statuses?: string) => ['uniforms', 'intakes', statuses ?? 'all'] as const,
   intakesAll: ['uniforms', 'intakes'] as const,
   intake: (id: string) => ['uniforms', 'intake', id] as const,
+  quotes: ['uniforms', 'quotes'] as const,
+  quote: (id: string) => ['uniforms', 'quotes', id] as const,
   sector: (sector: string) => ['uniforms', 'sector', sector] as const,
   sectorAll: ['uniforms', 'sector'] as const,
   stats: (from: string, to: string, group: string) => ['uniforms', 'stats', from, to, group] as const,
@@ -147,6 +151,18 @@ export const useIntake = (id: string | null) =>
     queryKey: keys.intake(id ?? ''),
     queryFn: ({ signal }) => fetchIntake(id ?? '', signal),
     enabled: id !== null,
+  })
+
+export const useQuotes = () =>
+  useQuery({
+    queryKey: keys.quotes,
+    queryFn: ({ signal }) => fetchQuotes(signal),
+  })
+
+export const useQuote = (id: string) =>
+  useQuery({
+    queryKey: keys.quote(id),
+    queryFn: ({ signal }) => fetchQuote(id, signal),
   })
 
 /** O que cada setor fez no período (F240). */

@@ -363,6 +363,11 @@ export const RecordExpenseRequest = z.object({
   paymentSource: ExpensePaymentSourceSchema,
   /** O caixa aberto de onde o dinheiro saiu, quando `cash`. */
   cashSessionId: z.uuid().nullable().default(null),
+  /**
+   * Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo gasto, e a
+   * segunda resposta (200) devolve o primeiro.
+   */
+  id: z.uuid().optional(),
 })
 export type RecordExpenseRequest = z.input<typeof RecordExpenseRequest>
 export type RecordExpenseBody = z.output<typeof RecordExpenseRequest>

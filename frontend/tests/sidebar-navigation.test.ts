@@ -18,6 +18,7 @@ const access = (overrides: Partial<Access> = {}): Access => ({
   seeMoney: false,
   createOrder: false,
   clientLink: false,
+  quotes: false,
   customers: false,
   products: false,
   stock: false,
@@ -31,12 +32,12 @@ const access = (overrides: Partial<Access> = {}): Access => ({
   ...overrides,
 })
 
-test('preserva os 15 destinos uma vez cada, sem alterar URLs', () => {
+test('preserva os 17 destinos uma vez cada, sem alterar URLs', () => {
   const destinations = [
     ...PRIMARY_NAV,
     ...GROUPED_NAV.flatMap((group) => group.items),
   ].map((item) => item.to)
-  assert.equal(new Set(destinations).size, 15)
+  assert.equal(new Set(destinations).size, 17)
   assert.deepEqual(
     [...destinations].sort(),
     [
@@ -44,7 +45,9 @@ test('preserva os 15 destinos uma vez cada, sem alterar URLs', () => {
       '/producao',
       '/setores',
       '/estatisticas',
+      '/orcamentos',
       '/links',
+      '/diario',
       '/ocorrencias',
       '/financeiro',
       '/clientes',

@@ -8,7 +8,8 @@ import { cepDigits, formatCep, lookupCep, mergeCep, type CepAddress } from '@/li
 /**
  * O local de entrega do pedido (F280 do Aeris): do pedido, não do cliente —
  * o time que joga fora recebe lá. O CEP preenche o resto e a pessoa corrige
- * o que vier errado.
+ * o que vier errado. Só a cidade é obrigatória: muitas vezes a loja já sabe
+ * para onde vai e ainda não sabe o endereço exato.
  */
 
 export type AddressDraft = {
@@ -35,30 +36,30 @@ export const addressDraftOf = (address: DeliveryAddressType | null): AddressDraf
   address
     ? {
         cep: address.cep ? formatCep(address.cep) : '',
-        street: address.street,
+        street: address.street ?? '',
         number: address.number ?? '',
         complement: address.complement ?? '',
         district: address.district ?? '',
         city: address.city,
-        uf: address.uf,
+        uf: address.uf ?? '',
       }
     : EMPTY_ADDRESS
 
 const blank = (a: AddressDraft) => Object.values(a).every((v) => v.trim() === '')
 
-/** O que vai para o Aeris: nulo em branco; `'incompleto'` sem rua ou cidade. */
+/** O que vai para o Aeris: nulo em branco; `'incompleto'` sem cidade. */
 export const addressToSave = (a: AddressDraft): DeliveryAddressType | null | 'incompleto' => {
   if (blank(a)) return null
-  if (!a.street.trim() || !a.city.trim() || !/^[A-Z]{2}$/.test(a.uf)) return 'incompleto'
+  if (!a.city.trim() || (a.uf !== '' && !/^[A-Z]{2}$/.test(a.uf))) return 'incompleto'
   const cep = cepDigits(a.cep)
   return {
     cep: cep.length === 8 ? cep : null,
-    street: a.street.trim(),
+    street: a.street.trim() || null,
     number: a.number.trim() || null,
     complement: a.complement.trim() || null,
     district: a.district.trim() || null,
     city: a.city.trim(),
-    uf: a.uf,
+    uf: a.uf || null,
   }
 }
 
@@ -68,7 +69,7 @@ export const addressLine = (a: DeliveryAddressType): string =>
     [a.street, a.number].filter(Boolean).join(', '),
     a.complement,
     a.district,
-    `${a.city}/${a.uf}`,
+    a.uf ? `${a.city}/${a.uf}` : a.city,
     a.cep ? `CEP ${formatCep(a.cep)}` : null,
   ]
     .filter(Boolean)
@@ -128,6 +129,11 @@ export const DeliveryAddressFields = ({
 
   return (
     <div className="space-y-3 rounded-2xl bg-paper p-3">
+      {!disabled && (
+        <p className="text-xs font-semibold text-muted">
+          Ainda não sabe o endereço? Preencha só a cidade: o resto pode vir depois.
+        </p>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-36">
           <label className="label" htmlFor="d-cep">CEP</label>

@@ -129,6 +129,23 @@ export type PriceResponderPreview = z.infer<
   typeof PriceResponderPreviewResponse
 >
 
+/**
+ * A resposta do robô para o vendedor copiar (F345): a mesma do robô de preço,
+ * pedida pela tela Atalhos — sem número, sem enviar nada.
+ */
+export const PriceAnswerRequest = z.object({
+  message: z.string().trim().min(1).max(500),
+})
+
+export const PriceAnswerResponse = z.object({
+  outcome: z.enum(['reply', 'no_match', 'no_trigger', 'no_branch']),
+  /** Em Markdown do WhatsApp, pronta para colar. */
+  body: z.string().nullable(),
+  silence: z.enum(['price', 'after_sale', 'vague']).nullable(),
+})
+
+export type PriceAnswer = z.infer<typeof PriceAnswerResponse>
+
 export const ResponderExclusionListResponse = z.object({
   exclusions: z.array(
     z.object({

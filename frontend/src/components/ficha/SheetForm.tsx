@@ -162,7 +162,7 @@ export const SheetForm = ({
   const doSave = (version: number) =>
     addressToSave(draft.address) === 'incompleto'
       ? Promise.reject(
-          new UserError('Para gravar o local de entrega, preencha a rua, a cidade e a UF (ou deixe o endereço todo em branco).')
+          new UserError('Para gravar o local de entrega, preencha pelo menos a cidade (ou deixe o endereço todo em branco).')
         )
       : seeMoney && freightToSave(draft) === 'invalido'
         ? Promise.reject(new UserError('O frete precisa ser um valor, como 90 ou 90,50 (ou fique em branco).'))

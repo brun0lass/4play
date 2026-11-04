@@ -162,9 +162,6 @@ export const Modal = ({
       onCancel={(event) => {
         event.preventDefault()
       }}
-      onClick={(event) => {
-        if (event.target === ref.current) onClose()
-      }}
       className={clsx(
         'm-auto w-[calc(100%-2rem)] rounded-3xl bg-white p-0 text-ink shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm',
         wide ? 'max-w-3xl' : 'max-w-lg'

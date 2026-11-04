@@ -6,6 +6,7 @@ export const storeKeys = {
   fabrics: ['uniform-fabrics'],
   pieces: ['uniform-pieces'],
   types: ['personalization-types'],
+  paymentTerms: ['uniform-payment-terms'],
   rolls: ['fabric-rolls'],
   uses: ['roll-uses'],
 } as const
@@ -33,6 +34,34 @@ export const updateFabric = async (
   ).fabric
 export const archiveFabric = async (id: string, version: number) => {
   await request(`${BASE}/fabrics/${id}/archive`, {
+    method: 'POST',
+    body: { version },
+  })
+}
+
+export const fetchPaymentTerms = async (signal?: AbortSignal) =>
+  U.UniformPaymentTermListResponse.parse(
+    await request(`${BASE}/payment-terms`, { signal })
+  ).terms
+export const createPaymentTerm = async (body: U.CreateUniformPaymentTermBody) =>
+  U.UniformPaymentTermResponse.parse(
+    await request(`${BASE}/payment-terms`, {
+      method: 'POST',
+      body: U.CreateUniformPaymentTermRequest.parse(body),
+    })
+  ).term
+export const updatePaymentTerm = async (
+  id: string,
+  body: U.UpdateUniformPaymentTermBody
+) =>
+  U.UniformPaymentTermResponse.parse(
+    await request(`${BASE}/payment-terms/${id}`, {
+      method: 'PUT',
+      body: U.UpdateUniformPaymentTermRequest.parse(body),
+    })
+  ).term
+export const archivePaymentTerm = async (id: string, version: number) => {
+  await request(`${BASE}/payment-terms/${id}/archive`, {
     method: 'POST',
     body: { version },
   })

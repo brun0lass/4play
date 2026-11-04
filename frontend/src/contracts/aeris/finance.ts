@@ -67,6 +67,19 @@ export const FinanceSettlementSummary = z.object({
   isReversed: z.boolean(),
   note: z.string().nullable(),
   actorUserId: z.string().nullable(),
+  /**
+   * O título a prazo que esta baixa fez nascer (F349): estorná-la cancela ele
+   * junto, e a tela avisa antes. Nulo quando a baixa não criou nada.
+   */
+  raisedEntry: z
+    .object({
+      id: z.string(),
+      dueAt: z.string(),
+      amount: z.string(),
+      status: z.string(),
+    })
+    .nullable()
+    .default(null),
 })
 
 export type FinanceSettlementSummary = z.infer<typeof FinanceSettlementSummary>
@@ -114,6 +127,11 @@ export type FinanceEntrySummary = z.infer<typeof FinanceEntrySummary>
 
 export const FinanceEntryDetail = FinanceEntrySummary.extend({
   settlements: z.array(FinanceSettlementSummary),
+  /** De que título este nasceu, quando veio de uma baixa a prazo (F349). */
+  raisedFrom: z
+    .object({ id: z.string(), description: z.string(), dueAt: z.string() })
+    .nullable()
+    .default(null),
 })
 
 export type FinanceEntryDetail = z.infer<typeof FinanceEntryDetail>

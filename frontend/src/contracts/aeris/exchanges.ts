@@ -325,6 +325,7 @@ export const CreateExchangeRequest = z.object({
   /**
    * O id da troca, gerado pela tela (F148). Obrigatório na troca sem venda: a
    * senha do admin autoriza ESTE id, e uma senha não serve para duas trocas.
+   * Mandado de novo, devolve a troca já gravada com 200 (F342).
    */
   id: z.uuid().optional(),
   kind: ExchangeKindSchema,

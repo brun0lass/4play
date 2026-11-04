@@ -482,6 +482,12 @@ export const MessageListResponse = z.object({
 
 export const SendMessageRequest = z.object({
   body: z.string().trim().min(1).max(4096),
+  /**
+   * Gerado no aparelho (F342): o mesmo id duas vezes é a mesma mensagem, e o
+   * cliente não a recebe duas vezes. A segunda resposta (200) devolve a
+   * primeira.
+   */
+  id: z.uuid().optional(),
 })
 
 export type SendMessageBody = z.infer<typeof SendMessageRequest>
@@ -1091,6 +1097,8 @@ export type TemplateVariablesUpdateBody = z.infer<
  * chamada ao gateway.
  */
 export const SendTemplateMessageRequest = z.object({
+  /** Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo envio. */
+  id: z.uuid().optional(),
   templateId: z.uuid(),
   /** Posicional: `values[0]` preenche `{{1}}`, e assim por diante. */
   values: z.array(z.string().trim().min(1).max(500)).max(20).default([]),

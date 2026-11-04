@@ -140,6 +140,21 @@
   }
 }
 
+/* A linha dos nomes das colunas acompanha a rolagem da folha. */
+@media screen {
+  .planilha thead th {
+    position: sticky;
+    /* Com border-collapse a borda fica para trás e o texto das linhas aparece
+       na fresta: sobe 1px, e a sombra faz o papel da borda. */
+    top: -1px;
+    z-index: 10;
+    background: var(--color-paper);
+    box-shadow:
+      inset 0 1px 0 var(--color-line),
+      0 1px 0 var(--color-line);
+  }
+}
+
 /* Impressão: só a folha, em paisagem, sem menu nem botões. */
 @media print {
   @page {

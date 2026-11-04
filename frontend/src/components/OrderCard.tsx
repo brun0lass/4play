@@ -18,6 +18,7 @@ import {
   PAYMENT_MARK_META,
   STAGES,
   STAGE_META,
+  orderCity,
   orderRef,
   partLabel,
   piecesText,
@@ -129,8 +130,8 @@ export const OrderCard = ({
         <p className="mt-0.5 line-clamp-2 text-sm leading-snug font-bold">
           {order.customerName}
         </p>
-        {order.customerCity && (
-          <p className="text-[11px] text-muted">{order.customerCity}</p>
+        {orderCity(order) && (
+          <p className="text-[11px] text-muted">{orderCity(order)}</p>
         )}
 
         <div className="mt-2.5 flex flex-wrap gap-1.5">

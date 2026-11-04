@@ -476,6 +476,11 @@ export const PosCancelRequest = z.object({
    * session.
    */
   cashSessionId: z.string().min(1).nullable().default(null),
+  /**
+   * A senha de cancelamento da loja, ou a do gerente (F319). Exigida quando a
+   * loja criou a senha (F294): todo cancelamento passa por ela.
+   */
+  authorisationId: z.string().min(1).nullable().default(null),
 })
 
 export type PosCancelRequest = z.input<typeof PosCancelRequest>

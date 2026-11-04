@@ -422,7 +422,7 @@ const FichaSheet = ({ id, last = true }: { id: string; last?: boolean }) => {
   )
 }
 
-const PrintBar = ({
+export const PrintBar = ({
   back,
   backLabel,
   children,

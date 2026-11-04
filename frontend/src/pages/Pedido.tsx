@@ -33,6 +33,7 @@ import {
   canWork,
   fabricLabel,
   isSplit,
+  orderCity,
   orderRef,
   partLabel,
   partsNotReady,
@@ -132,7 +133,7 @@ export const PedidoPage = () => {
             </div>
             <h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">{order.customerName}</h1>
             <p className="mt-1 text-sm text-white/60">
-              {[order.customerCity, order.salespersonName && `Vendedor: ${order.salespersonName}`, `Emitido ${day(order.issuedAt)}`]
+              {[orderCity(order), order.salespersonName && `Vendedor: ${order.salespersonName}`, `Emitido ${day(order.issuedAt)}`]
                 .filter(Boolean)
                 .join(' · ')}
             </p>

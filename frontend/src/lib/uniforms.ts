@@ -68,6 +68,12 @@ export const fabricLabel = (order: {
       ? `${order.fabricName} · ${order.fabricFinish}`
       : order.fabricName
 
+/** Para onde o pedido vai: a cidade do local de entrega; sem ela, a do cliente. */
+export const orderCity = (order: {
+  deliveryAddress?: { city: string } | null | undefined
+  customerCity: string | null
+}): string | null => order.deliveryAddress?.city ?? order.customerCity
+
 export const totalWithFreight = (order: {
   totalAmount: string | null
   freight: { amount: string; charged: boolean } | null

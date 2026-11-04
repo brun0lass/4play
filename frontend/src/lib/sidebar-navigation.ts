@@ -4,6 +4,7 @@ import {
   BookOpen,
   ClipboardList,
   Boxes,
+  FileText,
   Factory,
   KanbanSquare,
   LayoutDashboard,
@@ -51,6 +52,12 @@ export const PRIMARY_NAV: NavItem[] = [
     show: (_, can) => can('uniforms.read'),
   },
   { to: '/clientes', label: 'Clientes', icon: Users, show: (a) => a.customers },
+  {
+    to: '/orcamentos',
+    label: 'Orçamentos',
+    icon: FileText,
+    show: (a) => a.quotes,
+  },
   {
     to: '/links',
     label: 'Links do cliente',

@@ -4,6 +4,7 @@ import {
   madeIn,
   personalizationCharges,
   priceAt,
+  quantitiesBySize,
   tiersOf,
   type OfferType,
 } from '../src/lib/intake-offer.ts'
@@ -135,4 +136,17 @@ test('campo desativado não cobra; link sem preços não revela valores', () => 
     ),
     []
   )
+})
+
+test('as linhas do mesmo tamanho somam: o link reaberto não perde peças', () => {
+  assert.deepEqual(
+    quantitiesBySize([
+      { size: 'M', quantity: 1 },
+      { size: 'M', quantity: 1 },
+      { size: 'G', quantity: 5 },
+      { size: 'M', quantity: 1 },
+    ]),
+    { M: '3', G: '5' }
+  )
+  assert.deepEqual(quantitiesBySize([]), {})
 })

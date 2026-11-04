@@ -21,6 +21,7 @@ import {
   STAGES,
   STAGE_META,
   logisticsText,
+  orderCity,
   orderRef,
   type Stage,
   totalWithFreight,
@@ -199,9 +200,9 @@ export const OrderList = () => {
                       </td>
                       <td className="min-w-[220px] px-3 py-3">
                         <p className="font-bold">{order.customerName}</p>
-                        {order.customerCity && (
+                        {orderCity(order) && (
                           <p className="text-xs text-muted">
-                            {order.customerCity}
+                            {orderCity(order)}
                           </p>
                         )}
                       </td>

@@ -21,6 +21,8 @@ import { EquipePage } from '@/pages/Equipe'
 import { EstoquePage } from '@/pages/RolosEstoque'
 import { CostureirasPage } from '@/pages/Costureiras'
 import { LinksPage } from '@/pages/Links'
+import { OrcamentoImpressaoPage } from '@/pages/OrcamentoImpressao'
+import { OrcamentosPage } from '@/pages/Orcamentos'
 import { OcorrenciasPage } from '@/pages/Ocorrencias'
 import { DiarioPage } from '@/pages/Diario'
 import { ProdutosPage } from '@/pages/ProdutosLoja'
@@ -108,6 +110,16 @@ const App = () => (
         </RequireSession>
       }
     />
+    <Route
+      path="/orcamentos/:id/imprimir"
+      element={
+        <RequireSession>
+          <Guard allow={(a) => a.quotes}>
+            <OrcamentoImpressaoPage />
+          </Guard>
+        </RequireSession>
+      }
+    />
     {/* Várias fichas de uma vez, marcadas na Planilha. */}
     <Route
       path="/fichas"
@@ -144,6 +156,14 @@ const App = () => (
         element={
           <Guard allow={(a) => a.customers}>
             <ClientesPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="orcamentos"
+        element={
+          <Guard allow={(a) => a.quotes}>
+            <OrcamentosPage />
           </Guard>
         }
       />

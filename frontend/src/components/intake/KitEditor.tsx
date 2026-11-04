@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { Button, Modal } from '@/components/ui'
 import { int } from '@/lib/format'
+import { quantitiesBySize } from '@/lib/intake-offer'
 
 /**
  * O conjunto preenchido por partes no link do cliente (F300): "a camisa de um
@@ -58,6 +59,45 @@ const blankCount = (part: Part, sizeChartId?: string): KitCount => ({
   partId: part.id,
   sizeChartId: sizeChartId ?? part.options[0]?.sizeChartId ?? '',
   bySize: {},
+})
+
+/** O tamanho especial é sob medida: quem atende precisa combinar com o cliente. */
+export const SpecialSizeNotice = () => (
+  <p role="status" className="rounded-xl bg-amber-50 p-2.5 text-xs font-semibold text-amber-900">
+    O tamanho especial (ESP) é feito sob medida. Fale com o nosso atendimento para combinar as medidas.
+  </p>
+)
+
+/** O conjunto como o cliente tinha mandado, para ele editar o link reaberto. */
+export const kitFromSubmission = (
+  product: Product,
+  sent: NonNullable<NonNullable<PublicIntakeResponseType['previous']>['items'][number]['kit']>
+): KitDraft => ({
+  people: sent.people.map((person) => ({
+    key: nextKey++,
+    quantity: String(person.quantity),
+    pieces: Object.fromEntries(
+      person.pieces.map((piece) => [
+        piece.partId,
+        {
+          sizeChartId: piece.sizeChartId,
+          size: piece.size,
+          name: piece.name ?? '',
+          number: piece.number ?? '',
+        },
+      ])
+    ),
+  })),
+  counts: product.parts.flatMap((part) => {
+    const counts = sent.counts.filter((entry) => entry.partId === part.id)
+    const charts = [...new Set(counts.map((entry) => entry.sizeChartId))]
+    return charts.length === 0
+      ? [blankCount(part)]
+      : charts.map((sizeChartId) => ({
+          ...blankCount(part, sizeChartId),
+          bySize: quantitiesBySize(counts.filter((entry) => entry.sizeChartId === sizeChartId)),
+        }))
+  }),
 })
 
 /** O conjunto novo: as grades sem nome, uma por parte. */
@@ -177,7 +217,18 @@ export const KitEditor = ({
   kit: KitDraft
   onChange: (kit: KitDraft) => void
 }) => {
-  const [allSizes, setAllSizes] = useState(false)
+  // Só a peça de duas partes ou mais é conjunto: a camiseta sozinha é peça.
+  const isSet = product.parts.length > 1
+  // O que já veio preenchido fora dos tamanhos de adulto não pode ficar escondido.
+  const [allSizes, setAllSizes] = useState(() =>
+    [
+      ...kit.counts.flatMap((count) => Object.keys(count.bySize)),
+      ...kit.people.flatMap((person) => Object.values(person.pieces).map((piece) => piece.size)),
+    ].some((size) => size !== '' && !ADULT.includes(size))
+  )
+  const special =
+    kit.counts.some((count) => quantityOf(count.bySize.ESP ?? '') > 0) ||
+    kit.people.some((person) => Object.values(person.pieces).some((piece) => piece.size === 'ESP'))
   const shownSizes = allSizes ? sizes : sizes.filter((size) => ADULT.includes(size))
   /**
    * Os tamanhos de um tipo: o tipo só infantil ("Shorts infantil") mostra os
@@ -238,7 +289,7 @@ export const KitEditor = ({
           <p className="mb-1 text-xs font-extrabold tracking-wide uppercase">
             Personalização: {fields.map((f) => (f === 'nome' ? 'nome' : 'número')).join(' e ')}
           </p>
-          <p className="mb-2 text-xs text-muted">Cada peça do conjunto pode ter o seu nome e número — ou nenhum.</p>
+          {isSet && <p className="mb-2 text-xs text-muted">Cada peça do conjunto pode ter o seu nome e número — ou nenhum.</p>}
           <div className="space-y-2">
             {kit.people.map((person) => (
               <div key={person.key} className="flex items-center gap-2 rounded-2xl border border-line bg-white p-3">
@@ -252,13 +303,17 @@ export const KitEditor = ({
                       </span>
                     )
                   })}
-                  {Number(person.quantity) > 1 && <span className="text-xs text-muted">{person.quantity} conjuntos</span>}
+                  {Number(person.quantity) > 1 && (
+                    <span className="text-xs text-muted">
+                      {person.quantity} {isSet ? 'conjuntos' : 'peças'}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => onChange({ ...kit, people: kit.people.filter((entry) => entry.key !== person.key) })}
                   className="rounded-full p-2 text-muted hover:text-red-700"
-                  aria-label="Tirar este conjunto"
+                  aria-label={isSet ? 'Tirar este conjunto' : 'Tirar esta peça'}
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -419,8 +474,9 @@ export const KitEditor = ({
                 Mais tamanhos (G1–G4, infantil)
               </button>
             )}
+            {Object.values(editing.pieces).some((piece) => piece.size === 'ESP') && <SpecialSizeNotice />}
             <label className="flex items-center justify-between gap-2 text-sm">
-              <span className="font-bold">Quantos conjuntos iguais a este</span>
+              <span className="font-bold">{isSet ? 'Quantos conjuntos iguais a este' : 'Quantas peças iguais a esta'}</span>
               <input
                 value={editing.quantity}
                 onChange={(e) => {
@@ -429,7 +485,7 @@ export const KitEditor = ({
                 }}
                 inputMode="numeric"
                 className="field w-16 text-center"
-                aria-label="Quantos conjuntos"
+                aria-label={isSet ? 'Quantos conjuntos' : 'Quantas peças'}
               />
             </label>
           </div>
@@ -517,6 +573,8 @@ export const KitEditor = ({
         )}
       </div>
 
+      {special && <SpecialSizeNotice />}
+
       <div
         className={clsx(
           'flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-bold',
@@ -526,7 +584,8 @@ export const KitEditor = ({
         <span>{totals.perPart.map((entry) => `${entry.part.label}: ${int(entry.total)}`).join(' · ')}</span>
         {totals.count !== null ? (
           <span className="inline-flex items-center gap-1 text-emerald-800">
-            <CheckCircle2 className="h-4 w-4" /> {int(totals.count)} conjunto(s)
+            <CheckCircle2 className="h-4 w-4" /> {int(totals.count)}{' '}
+            {isSet ? (totals.count === 1 ? 'conjunto' : 'conjuntos') : totals.count === 1 ? 'peça' : 'peças'}
           </span>
         ) : (
           totals.biggest > 0 && <span>As partes precisam bater</span>

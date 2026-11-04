@@ -210,8 +210,15 @@ export const PlatformMapsUsageRow = z.object({
   calls: z.number().int(),
 })
 
+/** Quem responde o mapa: o Google ou o OpenRouteService, grátis (F343). */
+export const MapsProviderSchema = z.enum(['google', 'openroute'])
+
+export type MapsProviderName = z.infer<typeof MapsProviderSchema>
+
 export const PlatformMapsResponse = z.object({
+  provider: MapsProviderSchema,
   hasGoogleKey: z.boolean(),
+  hasOpenRouteKey: z.boolean(),
   defaultMonthlyCallCap: z.number().int(),
   version: z.number().int().nullable(),
   /** `YYYY-MM`, o mês do uso abaixo (São Paulo). */
@@ -224,6 +231,10 @@ export type PlatformMapsResponse = z.infer<typeof PlatformMapsResponse>
 export const SavePlatformMapsRequest = z.object({
   /** Ausente: mantém a chave gravada. `null`: apaga. */
   googleKey: z.string().trim().min(20).max(200).nullable().optional(),
+  /** Ausente: mantém o fornecedor gravado. */
+  provider: MapsProviderSchema.optional(),
+  /** Mesma regra da chave do Google. */
+  openRouteKey: z.string().trim().min(20).max(200).nullable().optional(),
   defaultMonthlyCallCap: z.number().int().min(1).max(1_000_000),
   version: z.number().int().nullable(),
 })

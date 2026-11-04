@@ -59,6 +59,32 @@ export const madeIn = (
   fabricId === null ||
   product.fabricIds.includes(fabricId)
 
+/**
+ * A grade da tela a partir do que o cliente enviou. O envio pode ter várias
+ * linhas do mesmo tamanho (três linhas "M" sem nome), e elas somam: se a última
+ * ganhasse, o link reaberto perderia peças sem o cliente mexer em nada.
+ */
+export const quantitiesBySize = <S extends string>(
+  rows: readonly { size: S; quantity: number }[]
+): Partial<Record<S, string>> => {
+  const totals = new Map<S, number>()
+  for (const row of rows) totals.set(row.size, (totals.get(row.size) ?? 0) + row.quantity)
+  return Object.fromEntries([...totals].map(([size, quantity]) => [size, String(quantity)])) as Partial<
+    Record<S, string>
+  >
+}
+
+/** "5 conjuntos · 3 peças": cada um só quando tem. */
+export const tallyLabel = (sets: number, pieces: number): string =>
+  [
+    sets > 0 ? `${sets.toLocaleString('pt-BR')} ${sets === 1 ? 'conjunto' : 'conjuntos'}` : null,
+    pieces > 0 || sets === 0
+      ? `${pieces.toLocaleString('pt-BR')} ${pieces === 1 ? 'peça' : 'peças'}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
 /** Mesma regra do servidor: opção por item, dados por linha, por-pedido uma vez só. */
 export const personalizationCharges = (
   types: readonly OfferType[],

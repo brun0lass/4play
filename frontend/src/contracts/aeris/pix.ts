@@ -45,8 +45,11 @@ export const CreatePixChargeRequest = z.object({
     .refine((value) => Number(value) > 0, 'O valor tem de ser maior que zero.'),
   payer: z.object({
     name: z.string().trim().min(1).max(50),
-    /** CPF ou CNPJ; a rota confere os dígitos. */
-    document: z.string().trim().min(11).max(18),
+    /**
+     * CPF ou CNPJ; a rota confere os dígitos. Nulo (o Pix da bolha, F359): vai
+     * o CNPJ da loja, como o e-mail abaixo — o vendedor não digita documento.
+     */
+    document: z.string().trim().min(11).max(18).nullable().default(null),
     /**
      * A Monedd exige um e-mail do pagador, e o vendedor quase nunca tem o do
      * cliente. Nulo, vai o e-mail da conta Monedd da loja (06/10).

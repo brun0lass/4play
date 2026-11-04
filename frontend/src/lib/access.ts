@@ -32,6 +32,8 @@ export type Access = {
   createOrder: boolean
   /** Gerar o link do cliente. Padrão ligado; a equipe desliga pessoa a pessoa. */
   clientLink: boolean
+  /** Os orçamentos: de quem atende, como o preço que vai neles. */
+  quotes: boolean
   customers: boolean
   products: boolean
   stock: boolean
@@ -69,6 +71,7 @@ export const useAccess = (): Access => {
     seeMoney: isManager || isFinance || has('atendimento'),
     createOrder: (isManager || functions.includes('atendimento')) && can('sales.write') && can('uniforms.write'),
     clientLink: can('uniforms.write') && (viewer.data?.clientLink ?? true),
+    quotes: can('uniforms.write') && has('atendimento'),
     customers: can('party.read') && (isManager || isFinance || has('atendimento')),
     products: can('catalog.read') && (isManager || has('atendimento')),
     stock: can('inventory.read') && (isManager || has('producao')),

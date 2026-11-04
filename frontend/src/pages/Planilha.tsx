@@ -13,6 +13,7 @@ import {
   STAGES,
   STAGE_META,
   logisticsText,
+  orderCity,
   type Order,
   type Stage,
   totalWithFreight,
@@ -97,7 +98,7 @@ const COLUMNS: Col[] = [
     key: 'cidade',
     label: 'CIDADE',
     print: true,
-    cell: (o) => <span className="uppercase">{o.customerCity ?? '—'}</span>,
+    cell: (o) => <span className="uppercase">{orderCity(o) ?? '—'}</span>,
   },
   {
     key: 'designer',
@@ -511,7 +512,8 @@ export const Planilha = () => {
               Fila de produção - 4 Play{range ? ` - ${range.label}` : ''}
             </h2>
           </div>
-          <div className="scroll-thin overflow-x-auto print:overflow-visible">
+          {/* Rola aqui dentro: é assim que a linha dos nomes das colunas fica no topo. */}
+          <div className="scroll-thin max-h-[calc(100dvh-6rem)] overflow-auto print:max-h-none print:overflow-visible">
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-paper text-[10px] font-extrabold tracking-wide print:bg-transparent">

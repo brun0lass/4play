@@ -325,6 +325,9 @@ const addressText = (max: number) =>
 /**
  * O local de entrega do pedido (F280): do pedido, não do cliente — o time
  * que joga fora recebe lá. O CEP vai só com os dígitos.
+ *
+ * Só a cidade é obrigatória: no atendimento a loja muitas vezes já sabe para
+ * onde o pedido vai e ainda não sabe o endereço exato.
  */
 export const DeliveryAddressSchema = z.object({
   cep: z
@@ -332,12 +335,16 @@ export const DeliveryAddressSchema = z.object({
     .regex(/^\d{8}$/, 'CEP com 8 números.')
     .nullable()
     .default(null),
-  street: z.string().trim().min(1, 'Diga a rua.').max(200),
+  street: addressText(200),
   number: addressText(20),
   complement: addressText(120),
   district: addressText(120),
   city: z.string().trim().min(1, 'Diga a cidade.').max(120),
-  uf: z.string().regex(/^[A-Z]{2}$/, 'UF com duas letras.'),
+  uf: z
+    .string()
+    .regex(/^[A-Z]{2}$/, 'UF com duas letras.')
+    .nullable()
+    .default(null),
 })
 
 export type DeliveryAddressType = z.infer<typeof DeliveryAddressSchema>
@@ -855,6 +862,12 @@ export const UniformMemberListResponse = z.object({
   members: z.array(UniformMemberSummary),
 })
 
+export const SetClientLinkRequest = z.object({
+  enabled: z.boolean(),
+})
+
+export type SetClientLinkBody = z.infer<typeof SetClientLinkRequest>
+
 export const ReplaceMemberFunctionsRequest = z.object({
   functions: z
     .array(UniformFunctionSchema)
@@ -1314,14 +1327,68 @@ export type PublicPersonalizationTypeType = z.infer<
   typeof PublicPersonalizationTypeSchema
 >
 
+/**
+ * O envio de antes, para a página vir preenchida quando o link foi reaberto.
+ * Sem o cadastro: ele continua o que o cliente mandou, e CPF e endereço não
+ * voltam para uma página aberta só com o link.
+ */
+const PublicIntakePrevious = z.object({
+  items: z.array(
+    z.object({
+      productId: z.string(),
+      rows: z.array(
+        z.object({
+          size: UniformSizeSchema,
+          quantity: z.number().int(),
+          name: z.string().nullable(),
+          number: z.string().nullable(),
+        })
+      ),
+      options: z.array(z.string()),
+      color: z.string().nullable(),
+      kit: z
+        .object({
+          people: z.array(
+            z.object({
+              quantity: z.number().int(),
+              pieces: z.array(
+                z.object({
+                  partId: z.string(),
+                  sizeChartId: z.string(),
+                  size: UniformSizeSchema,
+                  name: z.string().nullable(),
+                  number: z.string().nullable(),
+                })
+              ),
+            })
+          ),
+          counts: z.array(
+            z.object({
+              partId: z.string(),
+              sizeChartId: z.string(),
+              size: UniformSizeSchema,
+              quantity: z.number().int(),
+            })
+          ),
+        })
+        .nullable(),
+    })
+  ),
+  notes: z.string().nullable(),
+  event: z.object({ date: z.string(), name: z.string().nullable() }).nullable(),
+  fabricId: z.string().nullable(),
+  fabricFinish: z.string().nullable(),
+})
+
 /** A página pública do link: o que o cliente vê. */
 export const PublicIntakeResponse = z.object({
   status: IntakeViewSchema,
-  /** "Olá, Maria" — só o primeiro nome do cadastro já existente. */
+  /** "Olá, Maria" — o primeiro nome do cadastro, ou o que a atendente disse. */
   customerFirstName: z.string().nullable(),
   /** Cliente novo: a página pede o cadastro. */
   needsRegistration: z.boolean(),
   /** Para já vir preenchido no cadastro do cliente novo. */
+  contactName: z.string().nullable().default(null),
   contactPhone: z.string().nullable(),
   contactEmail: z.string().nullable(),
   message: z.string().nullable(),
@@ -1389,6 +1456,9 @@ export const PublicIntakeResponse = z.object({
   today: z.string(),
   expiresAt: z.string(),
   submittedAt: z.string().nullable(),
+  /** O link foi reaberto: o que o cliente tinha mandado, para editar. */
+  // Com default: a tela nova continua de pé sobre a API de antes (rollback, deploy pela metade).
+  previous: PublicIntakePrevious.nullable().default(null),
 })
 
 export type PublicIntakeResponseType = z.infer<typeof PublicIntakeResponse>
@@ -1398,10 +1468,12 @@ export const PublicIntakeSubmitResponse = z.object({
   submittedAt: z.string(),
 })
 
-/** A atendente gera o link: para um cliente já cadastrado, ou pelo telefone/e-mail. */
+/** A atendente gera o link: para um cliente já cadastrado, ou pelo nome e telefone/e-mail. */
 export const CreateIntakeRequest = z
   .object({
     customerPartyId: z.uuid().nullable().default(null),
+    /** O nome do cliente novo: é por ele que a loja acha o link depois. */
+    contactName: optionalText(200),
     phone: optionalText(30),
     email: optionalText(200),
     showPrices: z.boolean().default(false),
@@ -1412,6 +1484,16 @@ export const CreateIntakeRequest = z
     productIds: z.array(z.uuid()).max(100).default([]),
     /** Os tecidos do link. Vazio: os que não estão descontinuados (F260). */
     fabricIds: z.array(z.uuid()).max(30).default([]),
+    /** Os acabamentos que o link oferece; o tecido fora da lista oferece todos. */
+    fabricFinishes: z
+      .array(
+        z.object({
+          fabricId: z.uuid(),
+          finishes: z.array(FabricFinish).min(1).max(10),
+        })
+      )
+      .max(30)
+      .default([]),
     expiresInDays: z.number().int().min(1).max(60).default(7),
     /** O prazo de produção: o despacho sem evento é o envio mais estes dias (F233). */
     leadDays: z.number().int().min(1).max(180).default(30),
@@ -1427,6 +1509,11 @@ export const CreateIntakeRequest = z
       path: ['phone'],
     }
   )
+  .refine(
+    (value) =>
+      value.customerPartyId !== null || (value.contactName?.length ?? 0) >= 2,
+    { message: 'Diga o nome do cliente.', path: ['contactName'] }
+  )
 
 export type CreateIntakeBody = z.input<typeof CreateIntakeRequest>
 
@@ -1436,6 +1523,7 @@ export const IntakeSummary = z.object({
   token: z.string(),
   status: IntakeViewSchema,
   customer: z.object({ id: z.string(), name: z.string() }).nullable(),
+  contactName: z.string().nullable().default(null),
   contactPhone: z.string().nullable(),
   contactEmail: z.string().nullable(),
   showPrices: z.boolean(),
@@ -1448,10 +1536,14 @@ export const IntakeSummary = z.object({
   createdAt: z.string(),
   createdByName: z.string().nullable(),
   submittedAt: z.string().nullable(),
-  /** O nome que o cliente novo escreveu, ou o do cadastro. */
+  /** O nome que o cliente novo escreveu, o do cadastro ou o que a atendente disse. */
   submittedName: z.string().nullable(),
-  /** Quantas peças o cliente pediu. */
+  /** Quantos conjuntos (peças de duas partes ou mais) o cliente pediu. */
+  submittedSets: z.number().int().default(0),
+  /** Quantas peças o cliente pediu, fora as dos conjuntos. */
   submittedPieces: z.number().int(),
+  /** Quando quem atende reabriu o link para o cliente editar. */
+  reopenedAt: z.string().nullable().default(null),
   order: z
     .object({ id: z.string(), number: z.number().int().nullable() })
     .nullable(),
@@ -1496,68 +1588,68 @@ const IntakeCustomerOut = z.object({
     .nullable(),
 })
 
-/** A conferência: o link e o que o cliente mandou, com o nome de cada peça. */
-export const IntakeDetailResponse = z.object({
-  intake: IntakeSummary,
-  submission: z
-    .object({
-      customer: IntakeCustomerOut.nullable(),
-      items: z.array(
-        z.object({
-          productId: z.string(),
-          productName: z.string(),
-          rows: z.array(IntakeRowOut),
-          /** A cor que o cliente escolheu (F302); nula, a loja define. */
-          color: z.string().nullable().default(null),
-          /**
-           * O conjunto por partes (F300), com os nomes das partes e das
-           * peças; nulo na peça sem partes.
-           */
-          kit: z
-            .object({
-              people: z.array(
-                z.object({
-                  quantity: z.number().int(),
-                  pieces: z.array(
-                    z.object({
-                      part: z.string(),
-                      piece: z.string(),
-                      size: z.string(),
-                      name: z.string().nullable(),
-                      number: z.string().nullable(),
-                    })
-                  ),
-                })
-              ),
-              counts: z.array(
+/** O que o cliente mandou, com o nome de cada peça. */
+const IntakeSubmissionOut = z.object({
+  customer: IntakeCustomerOut.nullable(),
+  items: z.array(
+    z.object({
+      productId: z.string(),
+      productName: z.string(),
+      rows: z.array(IntakeRowOut),
+      /** A cor que o cliente escolheu (F302); nula, a loja define. */
+      color: z.string().nullable().default(null),
+      /**
+       * O conjunto por partes (F300), com os nomes das partes e das
+       * peças; nulo na peça sem partes.
+       */
+      kit: z
+        .object({
+          people: z.array(
+            z.object({
+              quantity: z.number().int(),
+              pieces: z.array(
                 z.object({
                   part: z.string(),
                   piece: z.string(),
                   size: z.string(),
-                  quantity: z.number().int(),
+                  name: z.string().nullable(),
+                  number: z.string().nullable(),
                 })
               ),
             })
-            .nullable()
-            .default(null),
-          /** As personalizações de marcar que o cliente quis (F261). */
-          options: z.array(z.object({ id: z.string(), name: z.string() })),
+          ),
+          counts: z.array(
+            z.object({
+              part: z.string(),
+              piece: z.string(),
+              size: z.string(),
+              quantity: z.number().int(),
+            })
+          ),
         })
-      ),
-      notes: z.string().nullable(),
-      event: z
-        .object({ date: z.string(), name: z.string().nullable() })
-        .nullable(),
-      fabricId: z.string().nullable(),
-      fabricName: z.string().nullable(),
-      /** O acabamento que o cliente escolheu (F303). */
-      fabricFinish: z.string().nullable().default(null),
-      /** O despacho que o link calcula (F233); a atendente muda na ficha. */
-      dispatchDate: z.string().nullable(),
-      /** Evento com menos de uma semana: prazo curto. */
-      tight: z.boolean(),
+        .nullable()
+        .default(null),
+      /** As personalizações de marcar que o cliente quis (F261). */
+      options: z.array(z.object({ id: z.string(), name: z.string() })),
     })
-    .nullable(),
+  ),
+  notes: z.string().nullable(),
+  event: z.object({ date: z.string(), name: z.string().nullable() }).nullable(),
+  fabricId: z.string().nullable(),
+  fabricName: z.string().nullable(),
+  /** O acabamento que o cliente escolheu (F303). */
+  fabricFinish: z.string().nullable().default(null),
+  /** O despacho que o link calcula (F233); a atendente muda na ficha. */
+  dispatchDate: z.string().nullable(),
+  /** Evento com menos de uma semana: prazo curto. */
+  tight: z.boolean(),
+})
+
+/** A conferência: o link, o que o cliente mandou e o que ele tinha mandado antes de editar. */
+export const IntakeDetailResponse = z.object({
+  intake: IntakeSummary,
+  submission: IntakeSubmissionOut.nullable(),
+  previous: IntakeSubmissionOut.nullable().default(null),
 })
 
 export type IntakeDetailResponseType = z.infer<typeof IntakeDetailResponse>
@@ -1566,10 +1658,117 @@ export const IntakeVersionRequest = z.object({
   version: z.number().int().positive(),
 })
 
+/** Reabre o link enviado: ele vale ao menos mais estes dias a partir de agora. */
+export const ReopenIntakeRequest = IntakeVersionRequest.extend({
+  expiresInDays: z.number().int().min(1).max(60).default(30),
+})
+
+export type ReopenIntakeBody = z.input<typeof ReopenIntakeRequest>
+
 export const ConvertIntakeResponse = z.object({
   id: z.string(),
   number: z.number().int().nullable(),
 })
+
+// ---------------------------------------------------------------------------
+// O orçamento da 4Play: o papel que a loja manda antes do link do cliente
+// ---------------------------------------------------------------------------
+
+/** Com ponto: "69.00". */
+const QuoteMoney = z
+  .string()
+  .trim()
+  .regex(/^\d{1,9}(\.\d{1,2})?$/, 'Use um valor como 90 ou 90.50.')
+
+const QuoteFields = z.object({
+  date: Day,
+  /** Quantos dias o orçamento vale, a contar da data dele. */
+  validDays: z
+    .number()
+    .int()
+    .min(1, 'A validade é de pelo menos 1 dia.')
+    .max(365, 'A validade é de no máximo 365 dias.')
+    .default(30),
+  customerName: z.string().trim().min(2, 'Diga o nome do cliente.').max(200),
+  customerAddress: optionalText(300),
+  /** O "Cidade/Estado/CEP" do papel: uma linha só. */
+  customerCity: optionalText(200),
+  customerPhone: optionalText(30),
+  customerEmail: optionalText(200),
+  salespersonName: optionalText(120),
+  project: optionalText(200),
+  /** "50% + 50%". */
+  paymentTerms: optionalText(200),
+  paymentDate: Day.nullable().default(null),
+  /** "Esta proposta inclui as seguintes condições". */
+  conditions: optionalText(2000),
+  otherAmount: QuoteMoney.default('0'),
+  freightAmount: QuoteMoney.default('0'),
+  lines: z
+    .array(
+      z.object({
+        quantity: z.number().int().min(1).max(1_000_000),
+        /** Texto livre: é escrito para o cliente, não é o nome do catálogo. */
+        description: z.string().trim().min(1, 'Descreva o item.').max(300),
+        /** "VÁRIOS", "P ao GG". */
+        size: optionalText(40),
+        unitPrice: QuoteMoney,
+      })
+    )
+    .min(1, 'Ponha pelo menos um item.')
+    .max(60),
+})
+
+export const CreateQuoteRequest = QuoteFields
+
+export type CreateQuoteBody = z.input<typeof CreateQuoteRequest>
+
+export const UpdateQuoteRequest = QuoteFields.extend({
+  version: z.number().int().positive(),
+})
+
+export type UpdateQuoteBody = z.input<typeof UpdateQuoteRequest>
+
+export const QuoteSummary = z.object({
+  id: z.string(),
+  number: z.number().int(),
+  date: z.string(),
+  validDays: z.number().int(),
+  /** A data do orçamento mais os dias de validade. */
+  validUntil: z.string(),
+  customerName: z.string(),
+  customerAddress: z.string().nullable(),
+  customerCity: z.string().nullable(),
+  customerPhone: z.string().nullable(),
+  customerEmail: z.string().nullable(),
+  salespersonName: z.string().nullable(),
+  project: z.string().nullable(),
+  paymentTerms: z.string().nullable(),
+  paymentDate: z.string().nullable(),
+  conditions: z.string().nullable(),
+  lines: z.array(
+    z.object({
+      quantity: z.number().int(),
+      description: z.string(),
+      size: z.string().nullable(),
+      unitPrice: z.string(),
+      amount: z.string(),
+    })
+  ),
+  subtotal: z.string(),
+  otherAmount: z.string(),
+  freightAmount: z.string(),
+  total: z.string(),
+  createdByName: z.string().nullable(),
+  createdAt: z.string(),
+  version: z.number().int(),
+})
+
+export type QuoteSummaryType = z.infer<typeof QuoteSummary>
+
+export const QuoteListResponse = z.object({ quotes: z.array(QuoteSummary) })
+
+export const QuoteResponse = z.object({ quote: QuoteSummary })
 
 // ---------------------------------------------------------------------------
 // O andamento da grade e as ocorrências (F234)
@@ -2019,6 +2218,49 @@ export type UpdateUniformFabricBody = z.input<typeof UpdateUniformFabricRequest>
 export const UniformVersionRequest = z.object({
   version: z.number().int().positive(),
 })
+
+/** As condições de pagamento do orçamento (0195): a lista é da loja. */
+export const UniformPaymentTermSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** A que já vem marcada no orçamento novo: uma só, ou nenhuma. */
+  isDefault: z.boolean(),
+  version: z.number().int(),
+})
+
+export type UniformPaymentTermType = z.infer<typeof UniformPaymentTermSchema>
+
+export const UniformPaymentTermListResponse = z.object({
+  terms: z.array(UniformPaymentTermSchema),
+})
+
+export const UniformPaymentTermResponse = z.object({
+  term: UniformPaymentTermSchema,
+})
+
+const PaymentTermName = z
+  .string()
+  .trim()
+  .min(1, 'Escreva a condição de pagamento.')
+  .max(200, 'Use no máximo 200 caracteres.')
+
+export const CreateUniformPaymentTermRequest = z.object({
+  name: PaymentTermName,
+})
+
+export type CreateUniformPaymentTermBody = z.input<
+  typeof CreateUniformPaymentTermRequest
+>
+
+export const UpdateUniformPaymentTermRequest = z.object({
+  name: PaymentTermName,
+  isDefault: z.boolean(),
+  version: z.number().int().positive(),
+})
+
+export type UpdateUniformPaymentTermBody = z.input<
+  typeof UpdateUniformPaymentTermRequest
+>
 
 // ---------------------------------------------------------------------------
 // As personalizações da loja (F261)

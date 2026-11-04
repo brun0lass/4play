@@ -387,6 +387,11 @@ export const RecordEntryRequest = z.object({
     .nullable()
     .default(null),
   note: optionalNote,
+  /**
+   * Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo movimento, e a
+   * segunda resposta (200) devolve o primeiro sem mexer no saldo.
+   */
+  id: z.uuid().optional(),
 })
 
 export type RecordEntryRequest = z.input<typeof RecordEntryRequest>
@@ -397,6 +402,11 @@ export const RecordExitRequest = z.object({
   branchId: z.string().optional(),
   quantity: positiveQuantityField,
   note: optionalNote,
+  /**
+   * Gerado no aparelho (F342): o mesmo id duas vezes é o mesmo movimento, e a
+   * segunda resposta (200) devolve o primeiro sem mexer no saldo.
+   */
+  id: z.uuid().optional(),
 })
 
 export type RecordExitRequest = z.input<typeof RecordExitRequest>
