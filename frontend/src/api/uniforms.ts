@@ -123,6 +123,7 @@ import {
 } from '@/contracts/aeris/uniforms.ts'
 import { z } from 'zod'
 
+import { track } from '@/lib/analytics'
 import { qs, request } from '@/lib/http'
 
 /**
@@ -191,13 +192,16 @@ export const savePersonalization = async (
 export const moveStage = async (
   id: string,
   input: MoveStageBody
-): Promise<MoveStageResponseType> =>
-  MoveStageResponse.parse(
+): Promise<MoveStageResponseType> => {
+  const moved = MoveStageResponse.parse(
     await request(`${BASE}/orders/${id}/stage`, {
       method: 'POST',
       body: MoveStageRequest.parse(input),
     })
   )
+  track('pedido_etapa_alterada', { de: input.from, para: input.to, leva: false, forcado: input.force ?? false })
+  return moved
+}
 
 /** Separa uma leva: estas peças vão, como leva nova, para outra etapa (F230 do Aeris). */
 export const splitBatch = async (
@@ -216,13 +220,16 @@ export const moveBatch = async (
   id: string,
   batchId: string,
   input: MoveStageBody
-): Promise<ProductionBatchType> =>
-  BatchResponse.parse(
+): Promise<ProductionBatchType> => {
+  const { batch } = BatchResponse.parse(
     await request(`${BASE}/orders/${id}/batches/${batchId}/stage`, {
       method: 'POST',
       body: MoveStageRequest.parse(input),
     })
-  ).batch
+  )
+  track('pedido_etapa_alterada', { de: input.from, para: input.to, leva: true, forcado: input.force ?? false })
+  return batch
+}
 
 // ---------------------------------------------------------------------------
 // As costureiras (F231 do Aeris)

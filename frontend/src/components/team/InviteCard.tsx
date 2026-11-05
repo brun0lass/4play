@@ -36,7 +36,8 @@ export const InviteCard = ({
   const wa = `https://wa.me/${digits ? (digits.startsWith('55') ? digits : `55${digits}`) : ''}?text=${encodeURIComponent(text)}`
 
   return (
-    <div className="space-y-4">
+    // A senha temporária: fora das gravações e dos cliques do PostHog.
+    <div className="ph-no-capture space-y-4">
       <div className="rounded-2xl bg-ink p-4 text-white">
         <p className="text-[11px] font-bold tracking-widest text-white/50 uppercase">Dados de acesso</p>
         <dl className="mt-2 space-y-1 text-sm">

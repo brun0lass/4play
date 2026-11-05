@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router'
 
 import { useAuth } from '@/auth/AuthProvider'
 import { archiveQuote, createQuote, updateQuote } from '@/api/uniforms'
+import { track } from '@/lib/analytics'
 import { fetchCustomers } from '@/api/store'
 import {
   archivePaymentTerm,
@@ -496,6 +497,7 @@ const QuoteDialog = ({
       return quote ? updateQuote(quote.id, { ...body, version: quote.version }) : createQuote(body)
     },
     onSuccess: (saved) => {
+      track(quote ? 'orcamento_editado' : 'orcamento_criado')
       void queryClient.invalidateQueries({ queryKey: keys.quotes })
       onClose()
       void navigate(`/orcamentos/${saved.id}/imprimir`)

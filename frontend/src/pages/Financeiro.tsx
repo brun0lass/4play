@@ -129,7 +129,7 @@ export const FinanceiroPage = () => {
   const receiving = direction === 'receivable'
 
   return (
-    <div>
+    <div className="ph-no-capture">
       <PageHeader
         kicker="Contas a receber e a pagar"
         title="Financeiro"

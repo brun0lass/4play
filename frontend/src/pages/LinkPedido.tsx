@@ -41,6 +41,7 @@ import {
   tallyLabel,
   tiersOf,
 } from '@/lib/intake-offer'
+import { track } from '@/lib/analytics'
 import { day, int, money } from '@/lib/format'
 import { ColorDot, parseColors, serializeColors, swatchOf } from '@/lib/grade-color'
 import { ApiError, errorMessage } from '@/lib/http'
@@ -147,6 +148,23 @@ export const LinkPedidoPage = () => {
     queryFn: ({ signal }) => fetchPublicIntake(token, signal),
     retry: false,
   })
+
+  // Uma vez por visita: a página volta a buscar os dados ao voltar para a aba.
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current || !page.data) return
+    opened.current = true
+    track('link_aberto', {
+      status: page.data.status,
+      precisa_cadastro: page.data.needsRegistration,
+      reaberto: page.data.previous !== null,
+      mostra_precos: page.data.showPrices,
+      pecas_oferecidas: page.data.products.length,
+    })
+  }, [page.data])
+  useEffect(() => {
+    if (page.isError) track('link_nao_abriu', { http_status: page.error instanceof ApiError ? page.error.status : null })
+  }, [page.isError, page.error])
 
   return (
     <div className="min-h-full bg-paper">
@@ -297,6 +315,18 @@ const IntakeForm = ({
   useEffect(() => {
     window.scrollTo({ top: 0 })
   }, [screen])
+  // O funil do link no PostHog: por onde o cliente passa e onde para.
+  const lastScreen = useRef<Screen | null>(null)
+  const resumedOnOpen = useRef(resumed)
+  useEffect(() => {
+    if (lastScreen.current === screen) return
+    lastScreen.current = screen
+    track('link_etapa', {
+      etapa: screen.kind,
+      produto: 'productId' in screen ? data.products.find((entry) => entry.id === screen.productId)?.name : undefined,
+      retomou_rascunho: resumedOnOpen.current,
+    })
+  }, [screen, data.products])
   const [customer, setCustomer] = useState({
     kind: 'person' as 'person' | 'company',
     name: data.contactName ?? '',
@@ -483,6 +513,16 @@ const IntakeForm = ({
       })
     },
     onSuccess: () => {
+      track('link_enviado', {
+        pecas: pieces,
+        conjuntos: sets,
+        modelos: chosen.length,
+        valor: value,
+        com_evento: isEvent === true,
+        tecido: fabric === null ? 'nao_sei' : (data.fabrics.find((f) => f.id === fabric)?.name ?? null),
+        precisa_cadastro: data.needsRegistration,
+        reaberto: data.previous !== null,
+      })
       try {
         localStorage.removeItem(storageKey)
       } catch {
@@ -490,6 +530,12 @@ const IntakeForm = ({
       }
       window.scrollTo({ top: 0 })
       onSent()
+    },
+    onError: (error) => {
+      track('link_envio_falhou', {
+        http_status: error instanceof ApiError ? error.status : null,
+        erro: errorMessage(error),
+      })
     },
   })
 
@@ -577,8 +623,10 @@ const IntakeForm = ({
         !window.confirm(`Tirar ${product.name} do pedido? O que você preencheu nela some.`)
       )
         return
+      track('link_peca_removida', { produto: product.name })
       setItems((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== product.id)))
     } else {
+      track('link_peca_marcada', { produto: product.name })
       setItems((all) => ({ ...all, [product.id]: startItem(product) }))
     }
   }
@@ -678,7 +726,13 @@ const IntakeForm = ({
         <>
           <section>
             <h1 className="display text-3xl sm:text-4xl">
-              {data.customerFirstName ? `Olá, ${data.customerFirstName}!` : 'Olá!'}
+              {data.customerFirstName ? (
+                <>
+                  Olá, <span className="ph-no-capture">{data.customerFirstName}</span>!
+                </>
+              ) : (
+                'Olá!'
+              )}
             </h1>
             <p className="mt-2 text-sm text-muted">
               Marque as peças que o time vai usar — quantas quiser. Depois você monta cada uma: tamanhos, nomes e números. O link
@@ -1308,6 +1362,7 @@ const IntakeForm = ({
             {data.fabrics.length > 0 && <ReviewRow title="Tecido" text={fabricLabel} onEdit={() => go({ kind: 'escolher' })} />}
             <ReviewRow
               title="Para quando"
+              sensitive
               text={
                 isEvent
                   ? `Evento em ${day(eventDate)}${eventName.trim() ? ` · ${eventName.trim()}` : ''}`
@@ -1315,9 +1370,9 @@ const IntakeForm = ({
               }
               onEdit={() => go({ kind: 'prazo' })}
             />
-            {notes.trim() && <ReviewRow title="Observação" text={notes.trim()} onEdit={() => go({ kind: 'prazo' })} />}
+            {notes.trim() && <ReviewRow title="Observação" sensitive text={notes.trim()} onEdit={() => go({ kind: 'prazo' })} />}
             {data.needsRegistration && (
-              <ReviewRow title="Seus dados" text={`${customer.name} · ${customer.phone}`} onEdit={() => go({ kind: 'dados' })} />
+              <ReviewRow title="Seus dados" sensitive text={`${customer.name} · ${customer.phone}`} onEdit={() => go({ kind: 'dados' })} />
             )}
             {value !== null && pieces > 0 && (
               <div className="card p-4 text-sm">
@@ -1468,11 +1523,22 @@ const ColorChoice = ({ value, onChange, kit }: { value: string; onChange: (block
 }
 
 /** Uma linha da conferência, com o "editar" que volta à tela dela. */
-const ReviewRow = ({ title, text, onEdit }: { title: string; text: string; onEdit: () => void }) => (
+const ReviewRow = ({
+  title,
+  text,
+  sensitive = false,
+  onEdit,
+}: {
+  title: string
+  text: string
+  /** O que o cliente digitou: fora das gravações do PostHog. */
+  sensitive?: boolean
+  onEdit: () => void
+}) => (
   <div className="card flex items-center justify-between gap-3 p-4">
     <div className="min-w-0">
       <p className="font-extrabold">{title}</p>
-      <p className="text-xs text-muted">{text}</p>
+      <p className={clsx('text-xs text-muted', sensitive && 'ph-no-capture')}>{text}</p>
     </div>
     <button type="button" onClick={onEdit} className="shrink-0 text-xs font-bold underline">
       editar

@@ -18,6 +18,7 @@ import { useDeferredValue, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import { confirmOrder, createOrder, uuidv7 } from '@/api/sales'
+import { track } from '@/lib/analytics'
 import { fetchCustomers } from '@/api/store'
 import { assignDesigner, saveSheet } from '@/api/uniforms'
 import { fetchFabrics, storeKeys } from '@/api/uniform-store'
@@ -176,6 +177,7 @@ export const NewOrderWizard = ({
           'error'
         )
       }
+      track('pedido_criado', { origem: 'novo_pedido', linhas: lines.length, confirmado: confirmed })
       if (confirmed) {
         try {
           await saveSheet(created.id, {

@@ -10,11 +10,13 @@ import {
 } from 'react-router'
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { AnalyticsUser } from '@/components/AnalyticsUser'
 import { Guard } from '@/components/Guard'
 import { Logo } from '@/components/Logo'
 import { Shell } from '@/components/Shell'
 import { ToastProvider } from '@/components/Toast'
 import { ErrorBox } from '@/components/ui'
+import { initAnalytics } from '@/lib/analytics'
 import { ApiError, UnauthenticatedError, errorMessage } from '@/lib/http'
 import { ClientesPage } from '@/pages/Clientes'
 import { EquipePage } from '@/pages/Equipe'
@@ -261,11 +263,14 @@ const App = () => (
   </Routes>
 )
 
+initAnalytics()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <AnalyticsUser />
           <ToastProvider>
             <App />
           </ToastProvider>

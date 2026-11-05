@@ -34,6 +34,7 @@ import {
   PageHeader,
   Spinner,
 } from '@/components/ui'
+import { linkProps, track } from '@/lib/analytics'
 import { day } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
 import { useAccess } from '@/lib/access'
@@ -187,6 +188,7 @@ const CopyButton = ({ intake }: { intake: IntakeSummaryType }) => {
         )
       }
       onClick={() => {
+        track('link_compartilhado', { ...linkProps(intake.token), canal: 'copiar' })
         void navigator.clipboard.writeText(linkUrl(intake.token)).then(() => {
           setCopied(true)
           setTimeout(() => setCopied(false), 2000)
@@ -214,12 +216,15 @@ const IntakeRow = ({
   const wa = whatsappUrl(intake)
   const cancel = useMutation({
     mutationFn: () => cancelIntake(intake.id, intake.version),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: keys.intakesAll }),
+    onSuccess: () => {
+      track('link_cancelado', linkProps(intake.token))
+      void queryClient.invalidateQueries({ queryKey: keys.intakesAll })
+    },
   })
   const reopen = useMutation({
     mutationFn: () => reopenIntake(intake.id, intake.version),
     onSuccess: (reopened) => {
+      track('link_reaberto', linkProps(reopened.token))
       void queryClient.invalidateQueries({ queryKey: keys.intakesAll })
       onReopened(reopened)
     },
@@ -284,7 +289,14 @@ const IntakeRow = ({
         )}
         {intake.status === 'aberto' && <CopyButton intake={intake} />}
         {intake.status === 'aberto' && wa && (
-          <a href={wa} target="_blank" rel="noreferrer">
+          <a
+            href={wa}
+            target="_blank"
+            rel="noreferrer"
+            // O endereço leva o telefone e o token: o clique é contado à mão.
+            className="ph-no-capture"
+            onClick={() => track('link_compartilhado', { ...linkProps(intake.token), canal: 'whatsapp' })}
+          >
             <Button
               size="sm"
               variant="outline"
@@ -434,6 +446,13 @@ const CreateDialog = ({
         message: message.trim() || null,
       }),
     onSuccess: (intake) => {
+      track('link_gerado', {
+        ...linkProps(intake.token),
+        cliente_novo: customer === null,
+        mostra_precos: showPrices,
+        pecas_restritas: restrict,
+        validade_dias: days,
+      })
       void queryClient.invalidateQueries({ queryKey: keys.intakesAll })
       onCreated(intake)
     },
@@ -809,7 +828,13 @@ const CreatedDialog = ({
           <div className="flex flex-wrap gap-2">
             <CopyButton intake={intake} />
             {wa && (
-              <a href={wa} target="_blank" rel="noreferrer">
+              <a
+                href={wa}
+                target="_blank"
+                rel="noreferrer"
+                className="ph-no-capture"
+                onClick={() => track('link_compartilhado', { ...linkProps(intake.token), canal: 'whatsapp' })}
+              >
                 <Button
                   size="sm"
                   variant="lime"
@@ -840,6 +865,7 @@ const ReviewDialog = ({
   const convert = useMutation({
     mutationFn: () => convertIntake(id ?? '', detail.data?.intake.version ?? 0),
     onSuccess: (order) => {
+      track('link_virou_pedido', detail.data ? linkProps(detail.data.intake.token) : {})
       toast(`Pedido ${orderRef(order)} criado. Ele está em Atendimento.`)
       void queryClient.invalidateQueries({ queryKey: keys.intakesAll })
       void queryClient.invalidateQueries({ queryKey: keys.queueAll })
@@ -905,7 +931,7 @@ const ReviewDialog = ({
             </section>
           )}
           {customer ? (
-            <section className="rounded-2xl border border-line p-4">
+            <section className="ph-no-capture rounded-2xl border border-line p-4">
               <p className="mb-2 text-xs font-extrabold tracking-wide uppercase">
                 Cadastro novo — confira
               </p>

@@ -35,7 +35,7 @@ export const ClientesPage = () => {
   const pages = customers.data ? Math.max(1, Math.ceil(customers.data.total / PAGE_SIZE)) : 1
 
   return (
-    <div>
+    <div className="ph-no-capture">
       <PageHeader
         kicker="Times, escolas e eventos"
         title="Clientes"

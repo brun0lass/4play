@@ -103,6 +103,16 @@ docker run -p 8080:8080 4play-front
 
 O nginx (`deploy/nginx.conf.template`) serve o build e encaminha `/api/` para `AERIS_API_URL` (padrão `https://api.aerisone.com.br`). O domínio da 4Play precisa estar em **HTTPS**, senão o navegador descarta o cookie `Secure` da sessão. O nginx repassa `X-Forwarded-For` para que o limite de tentativas de login do Aeris veja o IP de cada pessoa, e não o do proxy.
 
+## PostHog
+
+Mostra como o cliente faz o pedido pelo link e como a equipe usa o sistema. O token e o endereço de envio estão em `.env.production`, então só o build de produção manda dados; para testar no `npm run dev`, ponha as mesmas variáveis no `.env.local`.
+
+- **Quem é quem:** a equipe é identificada no login (`AnalyticsUser`), com o nome e o `perfil`. O cliente do link fica anônimo. Todo evento leva `area` (`link_cliente` ou `sistema`). Para contar só clientes de verdade, filtre `area = link_cliente` e `perfil` não preenchido.
+- **O link:** `link_aberto` → `link_etapa` (`escolher`, `pedido`, `montar`, `pronto`, `prazo`, `dados`, `revisar`) → `link_enviado`. Falhas: `link_nao_abriu` e `link_envio_falhou`. O `link_ref` liga esses eventos aos da equipe sobre o mesmo link: `link_gerado`, `link_compartilhado`, `link_reaberto`, `link_cancelado`, `link_virou_pedido`.
+- **A equipe:** páginas e cliques vêm sozinhos, mais `pedido_criado`, `pedido_etapa_alterada`, `orcamento_criado` e `orcamento_editado`.
+- **Privacidade (`src/lib/analytics-privacy.ts`):** o token do link nunca sai do navegador, porque ele abre o pedido; no lugar vai o `link_ref`. Nas gravações, o que se digita é mascarado, e CPF, CNPJ, telefone, e-mail e CEP viram asteriscos em qualquer texto. Nomes e valores continuam visíveis nas telas da equipe.
+- **Tela nova com dado sensível:** ponha a classe `ph-no-capture` no elemento. Ele vira um bloco cinza na gravação e não gera clique. Já estão assim as páginas Financeiro e Clientes, o convite com a senha temporária e os botões de WhatsApp dos links. Um `href` com dado pessoal precisa dessa classe, porque as máscaras de texto não alcançam atributos.
+
 ## Estrutura
 
 ```
