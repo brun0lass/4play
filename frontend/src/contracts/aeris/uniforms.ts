@@ -1193,6 +1193,12 @@ const IntakeKitPiece = z.object({
   /** O tipo de peça: uma tabela de medidas da parte. */
   sizeChartId: z.uuid(),
   size: UniformSizeSchema,
+  /**
+   * A cor desta peça (a 4Play, 10/11): o texto da cor da grade, "Preto e
+   * Vermelho". Cada linha tem a sua, como na ficha. Nula: a `color` da peça
+   * do envio, se houver (o envio de antes); senão a loja define.
+   */
+  color: optionalText(60),
 })
 
 /** O conjunto preenchido por partes (F300). */
@@ -1358,6 +1364,8 @@ const PublicIntakePrevious = z.object({
                   size: UniformSizeSchema,
                   name: z.string().nullable(),
                   number: z.string().nullable(),
+                  // Com default: a tela nova continua de pé sobre a API de antes.
+                  color: z.string().nullable().default(null),
                 })
               ),
             })
@@ -1368,6 +1376,7 @@ const PublicIntakePrevious = z.object({
               sizeChartId: z.string(),
               size: UniformSizeSchema,
               quantity: z.number().int(),
+              color: z.string().nullable().default(null),
             })
           ),
         })
@@ -1600,7 +1609,7 @@ const IntakeSubmissionOut = z.object({
       color: z.string().nullable().default(null),
       /**
        * O conjunto por partes (F300), com os nomes das partes e das
-       * peças; nulo na peça sem partes.
+       * peças e a cor de cada uma (10/11); nulo na peça sem partes.
        */
       kit: z
         .object({
@@ -1614,6 +1623,7 @@ const IntakeSubmissionOut = z.object({
                   size: z.string(),
                   name: z.string().nullable(),
                   number: z.string().nullable(),
+                  color: z.string().nullable().default(null),
                 })
               ),
             })
@@ -1624,6 +1634,7 @@ const IntakeSubmissionOut = z.object({
               piece: z.string(),
               size: z.string(),
               quantity: z.number().int(),
+              color: z.string().nullable().default(null),
             })
           ),
         })

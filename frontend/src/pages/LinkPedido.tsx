@@ -24,11 +24,14 @@ import {
   KitEditor,
   SpecialSizeNotice,
   kitChargeRows,
+  kitColors,
   kitFromSubmission,
+  kitNamedCount,
   kitProblem,
   kitToSubmit,
   kitTotals,
   newKit,
+  normalizeKit,
   type KitDraft,
 } from '@/components/intake/KitEditor'
 import { Button, ErrorBox, Modal, Spinner } from '@/components/ui'
@@ -78,7 +81,10 @@ type Item = {
   options: string[]
   /** A peça com partes (F300): o conjunto preenchido parte por parte. */
   kit?: KitDraft
-  /** A cor escolhida (F302): o mesmo texto da cor da grade; vazio, a loja define. */
+  /**
+   * A cor escolhida (F302) na peça sem partes: o mesmo texto da cor da grade;
+   * vazio, a loja define. No conjunto a cor vai em cada linha (10/11).
+   */
   color?: string
 }
 
@@ -118,8 +124,8 @@ const draftFromPrevious = (data: PublicIntakeResponseType): Partial<Draft> | nul
             })),
           bySize: quantitiesBySize(sent.rows.filter((row) => row.name === null && row.number === null)),
           options: sent.options,
-          color: sent.color ?? '',
-          ...(sent.kit !== null ? { kit: kitFromSubmission(product, sent.kit) } : {}),
+          color: sent.kit !== null ? '' : (sent.color ?? ''),
+          ...(sent.kit !== null ? { kit: kitFromSubmission(product, sent.kit, sent.color) } : {}),
         }
         return [[sent.productId, item]]
       })
@@ -277,9 +283,15 @@ const IntakeForm = ({
     return draftFromPrevious(data)
   })
   const [items, setItems] = useState<Record<string, Item>>(() =>
-    // Só as peças que o link ainda oferece.
+    // Só as peças que o link ainda oferece; o conjunto, na forma de agora.
     Object.fromEntries(
-      Object.entries(saved?.items ?? {}).filter(([id]) => data.products.some((product) => product.id === id))
+      Object.entries(saved?.items ?? {}).flatMap(([id, item]) => {
+        const product = data.products.find((entry) => entry.id === id)
+        if (product === undefined) return []
+        if (!item.kit) return [[id, item]]
+        // O rascunho de antes tinha uma cor para o conjunto todo: ela vai para as linhas.
+        return [[id, { ...item, color: '', kit: normalizeKit(product, item.kit, item.color ?? '') }]]
+      })
     )
   )
   const [notes, setNotes] = useState(saved?.notes ?? '')
@@ -487,7 +499,8 @@ const IntakeForm = ({
                 productId: product.id,
                 rows: [],
                 options: item.options,
-                color: item.color?.trim() || null,
+                // No conjunto, a cor vai em cada linha (10/11).
+                color: null,
                 kit,
                 filled: kit.people.length + kit.counts.length > 0,
               }
@@ -594,9 +607,7 @@ const IntakeForm = ({
     const { pieces: count } = statusOf(product)
     if (!item || count === 0) return 'Falta montar'
     const named = item.kit
-      ? item.kit.people.filter((person) =>
-          Object.values(person.pieces).some((piece) => piece.name.trim() !== '' || piece.number.trim() !== '')
-        ).length
+      ? kitNamedCount(item.kit)
       : item.named.filter((row) => row.name.trim() !== '' || row.number.trim() !== '').length
     const unit = product.parts.length > 1 ? (count === 1 ? 'conjunto' : 'conjuntos') : count === 1 ? 'peça' : 'peças'
     return `${int(count)} ${unit}${named > 0 ? ` · ${int(named)} com nome` : ''}`
@@ -918,11 +929,12 @@ const IntakeForm = ({
             </div>
             <Tiers product={product} fabric={fabric} quantity={statusOf(product).pieces} />
           </section>
-          <ColorChoice
-            value={item.color ?? ''}
-            onChange={(color) => setItems((all) => ({ ...all, [product.id]: { ...item, color } }))}
-            kit={product.parts.length > 1}
-          />
+          {!item.kit && (
+            <ColorChoice
+              value={item.color ?? ''}
+              onChange={(color) => setItems((all) => ({ ...all, [product.id]: { ...item, color } }))}
+            />
+          )}
           <section className="card p-4">
             {data.personalizationTypes
               .filter((type) => product.personalizationTypeIds.includes(type.id) && type.kind === 'dados')
@@ -1348,7 +1360,7 @@ const IntakeForm = ({
               <ReviewRow
                 key={entry.id}
                 title={entry.name}
-                text={`${describe(entry)} · cor: ${colorLabel(items[entry.id]?.color) ?? 'a loja define'}`}
+                text={`${describe(entry)} · cor: ${itemColorLabel(items[entry.id])}`}
                 onEdit={() => go({ kind: 'montar', productId: entry.id })}
               />
             ))}
@@ -1478,19 +1490,49 @@ const colorLabel = (block: string | undefined): string | null => {
   return colors.length === 0 ? null : colors.map((c) => c.name || c.hex).join(' e ')
 }
 
+/** A cor da peça para ler: a da peça sem partes, ou as das linhas do conjunto (10/11). */
+const itemColorLabel = (item: Item | undefined): string => {
+  if (item?.kit) {
+    const colors = kitColors(item.kit)
+    return colors.length === 0 ? 'a loja define' : colors.join(', ')
+  }
+  return colorLabel(item?.color) ?? 'a loja define'
+}
+
 /**
- * A cor do uniforme (F302): as cores comuns ou qualquer outra pelo RGB, com
- * o aviso de que a tela engana. Aberta na própria tela — no celular, uma
- * janela por cima atrapalha.
+ * A cor da peça sem partes (F302): as cores comuns ou qualquer outra pelo
+ * RGB, com o aviso de que a tela engana. O conjunto pede a cor em cada linha,
+ * no editor dele (10/11).
  */
-const ColorChoice = ({ value, onChange, kit }: { value: string; onChange: (block: string) => void; kit: boolean }) => {
+const ColorChoice = ({ value, onChange }: { value: string; onChange: (block: string) => void }) => (
+  <section className="card p-4">
+    <p className="text-sm font-extrabold">Cor</p>
+    <ColorLine label={null} value={value} onChange={onChange} />
+    <p className="mt-3 text-xs text-muted">Dá para marcar mais de uma cor na mesma peça, como “Preto e Vermelho”.</p>
+    <p className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-900">
+      A cor na tela do celular é diferente da cor do tecido de verdade. Quem te atendeu confirma a cor com você antes de
+      produzir.
+    </p>
+  </section>
+)
+
+/** Uma cor para escolher, com o botão que abre a escolha na própria tela. */
+const ColorLine = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string | null
+  value: string
+  onChange: (block: string) => void
+}) => {
   const [open, setOpen] = useState(false)
   const colors = parseColors(value)
   return (
-    <section className="card p-4">
+    <div className={label === null ? 'mt-1' : 'rounded-xl border border-line p-3'}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-extrabold">Cor</p>
+          {label !== null && <p className="text-sm font-extrabold">{label}</p>}
           {colors.length > 0 ? (
             <p className="flex items-center gap-1.5 text-xs font-semibold">
               <span className="inline-flex shrink-0 -space-x-1">
@@ -1501,7 +1543,9 @@ const ColorChoice = ({ value, onChange, kit }: { value: string; onChange: (block
               <span className="truncate">{colorLabel(value)}</span>
             </p>
           ) : (
-            <p className="text-xs text-muted">Opcional — se não escolher, a loja combina com você.</p>
+            <p className="text-xs text-muted">
+              {label === null ? 'Opcional — se não escolher, a loja combina com você.' : 'Sem cor: a loja combina com você.'}
+            </p>
           )}
         </div>
         <Button size="sm" variant="outline" onClick={() => setOpen((current) => !current)}>
@@ -1510,15 +1554,15 @@ const ColorChoice = ({ value, onChange, kit }: { value: string; onChange: (block
       </div>
       {open && (
         <div className="mt-3 border-t border-line pt-3">
-          <ColorPanel colors={colors} onChange={(next) => onChange(serializeColors(next))} onDone={() => setOpen(false)} />
+          <ColorPanel
+            title={label === null ? 'Cores' : `Cores — ${label}`}
+            colors={colors}
+            onChange={(next) => onChange(serializeColors(next))}
+            onDone={() => setOpen(false)}
+          />
         </div>
       )}
-      <p className="mt-3 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-900">
-        A cor na tela do celular é diferente da cor do tecido de verdade. Quem te atendeu confirma a cor com você antes de
-        produzir.
-        {kit && ' Se cada peça do conjunto for de uma cor, conte na observação.'}
-      </p>
-    </section>
+    </div>
   )
 }
 

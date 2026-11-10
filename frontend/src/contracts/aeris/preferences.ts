@@ -84,6 +84,7 @@ export const STOCK_COLUMN_IDS = [
   'gtin',
   'name',
   'brand',
+  'supplierReference',
   'category',
   'unit',
   'onHand',

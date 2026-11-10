@@ -44,6 +44,8 @@ export const CollectionChannel = z.enum([
   'phone',
   'whatsapp',
   'whatsapp_official',
+  // F400: o lembrete automático pelo número da vendedora.
+  'whatsapp_auto',
   'in_person',
   'other',
 ])
@@ -110,6 +112,8 @@ export const CollectionQueueItem = z.object({
   oldestOverdueDays: z.number().int().nonnegative(),
   nextDueAt: z.string().nullable(),
   creditBlocked: z.boolean(),
+  /** F399: o saldo de vale do cliente — o que a loja deve a ele. */
+  voucherBalance: z.string().default('0.00'),
   lastContact: LastContact.nullable(),
   promise: CollectionPromise.nullable(),
 })
@@ -258,6 +262,8 @@ export const CollectionDetailResponse = z.object({
     creditLimit: z.string().nullable(),
     creditBlocked: z.boolean(),
     creditBlockReason: z.string().nullable(),
+    /** F399: o saldo de vale do cliente. */
+    voucherBalance: z.string().default('0.00'),
   }),
   entries: z.array(CollectionEntry),
   documents: z.array(CollectionDocument).default([]),
@@ -273,7 +279,8 @@ export type CollectionDetailResponse = z.infer<typeof CollectionDetailResponse>
 
 export const RecordCollectionContactRequest = z
   .object({
-    channel: CollectionChannel,
+    // O lembrete automático (F400) só o worker grava.
+    channel: CollectionChannel.exclude(['whatsapp_auto']),
     outcome: CollectionOutcome,
     note: z.string().trim().max(2000).nullable().default(null),
     promisedAmount: money(

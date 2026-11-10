@@ -106,3 +106,39 @@ test('tecido, data e observação ficam em "O pedido"', () => {
     },
   ])
 })
+
+test('no conjunto, trocar a cor de uma linha aparece como linha que saiu e entrou', () => {
+  const conjunto = {
+    ...camiseta,
+    productId: 'conjunto',
+    productName: 'Conjunto',
+    rows: [],
+    kit: {
+      people: [
+        {
+          quantity: 1,
+          pieces: [
+            { piece: 'Camiseta', size: 'M', name: 'Ana', number: '10', color: 'Preto' },
+            { piece: 'Shorts', size: 'G', name: null, number: null, color: 'Preto' },
+          ],
+        },
+      ],
+      counts: [{ piece: 'Camiseta', size: 'P', quantity: 2, color: null }],
+    },
+  }
+  const changes = intakeChanges(
+    { ...sent, items: [conjunto] },
+    {
+      ...sent,
+      items: [
+        {
+          ...conjunto,
+          kit: { ...conjunto.kit, counts: [{ piece: 'Camiseta', size: 'P', quantity: 2, color: 'Branco' }] },
+        },
+      ],
+    }
+  )
+  assert.deepEqual(changes, [
+    { title: 'Conjunto', lines: ['+ 2 × Camiseta (Branco) P sem nome', '− 2 × Camiseta P sem nome'] },
+  ])
+})

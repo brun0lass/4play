@@ -575,6 +575,12 @@ export const ConversationPartyPanelSchema = z.object({
   salespersonUserId: z.string().nullable().default(null),
   salespersonName: z.string().nullable().default(null),
   /**
+   * O WhatsApp da vendedora do cliente (o número de que ela é dona), para o
+   * "Mandar o contato da vendedora" quando ele escreve no número de outra
+   * (F402). Nulo sem vendedora ou sem número ligado.
+   */
+  salespersonPhone: z.string().nullable().default(null),
+  /**
    * A situação de crédito deste cliente (F085, ADR-0022).
    *
    * `null` quando ele não tem crédito concedido E não deve nada — não há o que

@@ -136,10 +136,13 @@ export const ColorPanel = ({
   colors,
   onChange,
   onDone,
+  title = 'Cores da linha',
 }: {
   colors: GradeColor[]
   onChange: (colors: GradeColor[]) => void
   onDone: () => void
+  /** "Cores da linha" na ficha; no link do cliente, a peça ("Cores da camiseta"). */
+  title?: string
 }) => {
   const [name, setName] = useState('')
   const [hex, setHex] = useState('#00cfd5')
@@ -162,7 +165,7 @@ export const ColorPanel = ({
   return (
     <div className="space-y-3 text-xs">
       <div>
-        <p className="mb-1.5 font-extrabold tracking-wider text-muted uppercase">Cores da linha</p>
+        <p className="mb-1.5 font-extrabold tracking-wider text-muted uppercase">{title}</p>
         {colors.length === 0 ? (
           <p className="text-muted">Nenhuma ainda. Marque uma ou mais abaixo.</p>
         ) : (

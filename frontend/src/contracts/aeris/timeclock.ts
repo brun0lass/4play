@@ -160,6 +160,8 @@ export const TimeclockBranchSettingSchema = z.object({
   latitude: z.string().nullable(),
   longitude: z.string().nullable(),
   radiusM: z.number().int(),
+  /** F376: o primeiro dia em que o ponto vale (`YYYY-MM-DD`); nulo, desde sempre. */
+  officialFrom: z.string().nullable(),
   version: z.number().int().nullable(),
 })
 export type TimeclockBranchSetting = z.infer<
@@ -178,6 +180,15 @@ export const SaveTimeclockBranchSettingRequest = z
     latitude: coordinate(90).nullable(),
     longitude: coordinate(180).nullable(),
     radiusM: z.number().int().min(30).max(5000),
+    /**
+     * F376. Sem o campo, a data gravada continua; `null` volta a "desde
+     * sempre".
+     */
+    officialFrom: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/u, 'Data inválida.')
+      .nullable()
+      .optional(),
     version: z.number().int().nullable(),
   })
   .refine(
@@ -233,6 +244,19 @@ export const TimeclockMarkSchema = z.object({
 })
 export type TimeclockMark = z.infer<typeof TimeclockMarkSchema>
 
+/**
+ * F397: o motivo das férias e dos afastamentos. "folga" é a folga combinada
+ * de vários dias (banco de horas, um acerto), que não é feriado nem escala.
+ */
+export const TIMECLOCK_LEAVE_KIND_VALUES = [
+  'ferias',
+  'atestado',
+  'licenca',
+  'folga',
+] as const
+export const TimeclockLeaveKind = z.enum(TIMECLOCK_LEAVE_KIND_VALUES)
+export type TimeclockLeaveKind = z.infer<typeof TimeclockLeaveKind>
+
 export const TIMECLOCK_SHIFT_KIND_VALUES = ['trabalho', 'folga'] as const
 export const TimeclockShiftKind = z.enum(TIMECLOCK_SHIFT_KIND_VALUES)
 export type TimeclockShiftKind = z.infer<typeof TimeclockShiftKind>
@@ -260,6 +284,17 @@ export const TimeclockTodayResponse = z.object({
       shift: TimeclockDayShiftSchema.nullable(),
       /** Escalado, passou do começo mais a tolerância, e não entrou. */
       late: z.boolean(),
+      /**
+       * F380: o problema que o gerente resolve agora — não veio, atrasado
+       * (ainda não entrou) ou esqueceu a saída; nulo quando está tudo certo.
+       */
+      alert: z.enum(['nao_veio', 'atrasado', 'esqueceu_saida']).nullable(),
+      /** F380: entrou depois da tolerância; continua depois de chegar. */
+      arrivedLate: z.boolean(),
+      /** F380: o turno de hoje é de folga (inclusive o feriado). */
+      dayOff: z.boolean(),
+      /** F397: de férias ou afastada hoje; nulo quando não. */
+      leave: TimeclockLeaveKind.nullable().default(null),
       marks: z.array(TimeclockMarkSchema),
     })
   ),
@@ -350,8 +385,22 @@ export const TimeclockSheetDaySchema = z.object({
   /** O dia fechou abaixo do previsto (almoço longo, saiu cedo): o que faltou. */
   shortMinutes: z.number().int(),
   incomplete: z.boolean(),
+  /** F376: o dia ainda está acontecendo; não é incompleto nem tem saldo. */
+  open: z.boolean(),
+  /** F376: horas de um dia sem escala; não são extra até alguém escalar. */
+  unscheduledMinutes: z.number().int(),
   absent: z.boolean(),
-  note: z.enum(['sem_escala', 'folga', 'trabalhou_na_folga']).nullable(),
+  note: z
+    .enum([
+      'sem_escala',
+      'folga',
+      'trabalhou_na_folga',
+      'antes_do_inicio',
+      'afastado',
+    ])
+    .nullable(),
+  /** F397: as férias ou o afastamento do dia; nulo quando não há. */
+  leave: TimeclockLeaveKind.nullable().default(null),
   /** Tem inclusão ou anulação neste dia. */
   adjusted: z.boolean(),
 })
@@ -364,6 +413,8 @@ export const TimeclockSheetResponse = z.object({
     branchName: z.string(),
   }),
   month: z.string(),
+  /** F376: o dia em que o ponto passou a valer nesta loja. */
+  officialFrom: z.string().nullable(),
   days: z.array(TimeclockSheetDaySchema),
   totals: z.object({
     workedMinutes: z.number().int(),
@@ -374,6 +425,11 @@ export const TimeclockSheetResponse = z.object({
     shortMinutes: z.number().int(),
     absences: z.number().int(),
     incompleteDays: z.number().int(),
+    /** F376: as horas e os dias com marca e sem escala. */
+    unscheduledMinutes: z.number().int(),
+    unscheduledDays: z.number().int(),
+    /** F397: os dias de férias ou afastamento no mês. */
+    leaveDays: z.number().int().default(0),
   }),
 })
 export type TimeclockSheetResponse = z.infer<typeof TimeclockSheetResponse>
@@ -447,8 +503,16 @@ export const TimeclockScheduleResponse = z.object({
       cells: z.array(
         z.object({
           day: z.string(),
+          /** O turno que vale no dia (a exceção ou a escala fixa). */
           shiftId: z.string().nullable(),
+          /** F379: de onde veio o turno; nulo é dia sem escala. */
+          source: z.enum(['excecao', 'padrao']).nullable(),
+          /** F379: o que a escala fixa daria nesse dia. */
+          patternShiftId: z.string().nullable(),
+          /** A versão da EXCEÇÃO do dia; nula quando não há exceção. */
           version: z.number().int().nullable(),
+          /** F397: de férias ou afastada no dia; vale por cima do turno. */
+          leave: TimeclockLeaveKind.nullable().default(null),
         })
       ),
     })
@@ -490,4 +554,95 @@ export const CopyTimeclockScheduleResponse = z.object({
 })
 export type CopyTimeclockScheduleResponse = z.infer<
   typeof CopyTimeclockScheduleResponse
+>
+
+// ---------------------------------------------------------------------------
+// A escala fixa (F379)
+// ---------------------------------------------------------------------------
+
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, 'Data inválida.')
+
+/** Segunda a domingo; nulo é o dia sem turno. */
+const WeekDays = z.array(z.uuid().nullable()).length(7)
+
+export const TimeclockPatternListResponse = z.object({
+  /** Hoje em São Paulo: a versão vigente é a última que começa até hoje. */
+  today: z.string(),
+  people: z.array(
+    z.object({
+      employeeId: z.string(),
+      name: z.string(),
+      /** As versões em ordem de `validFrom`, inclusive as que ainda vão valer. */
+      versions: z.array(
+        z.object({
+          validFrom: z.string(),
+          days: z.array(z.string().nullable()).length(7),
+        })
+      ),
+    })
+  ),
+})
+export type TimeclockPatternListResponse = z.infer<
+  typeof TimeclockPatternListResponse
+>
+
+export const SaveTimeclockPatternRequest = z.object({
+  /** De hoje em diante: a escala fixa não reescreve dia que já passou. */
+  validFrom: IsoDay,
+  people: z
+    .array(z.object({ employeeId: z.uuid(), days: WeekDays }))
+    .min(1)
+    .max(200),
+})
+export type SaveTimeclockPatternRequest = z.infer<
+  typeof SaveTimeclockPatternRequest
+>
+
+// ---------------------------------------------------------------------------
+// Férias e afastamentos (F397)
+// ---------------------------------------------------------------------------
+
+export const TimeclockLeaveSchema = z.object({
+  id: z.string(),
+  employeeId: z.string(),
+  kind: TimeclockLeaveKind,
+  /** `YYYY-MM-DD`, inclusive nas duas pontas. */
+  startsOn: z.string(),
+  endsOn: z.string(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+  createdByName: z.string().nullable(),
+  /** Lançado errado: fica na lista, riscado, e não conta mais. */
+  voidedAt: z.string().nullable(),
+  voidedByName: z.string().nullable(),
+})
+export type TimeclockLeave = z.infer<typeof TimeclockLeaveSchema>
+
+export const TimeclockLeaveListResponse = z.object({
+  leaves: z.array(TimeclockLeaveSchema),
+})
+export type TimeclockLeaveListResponse = z.infer<
+  typeof TimeclockLeaveListResponse
+>
+
+export const CreateTimeclockLeaveRequest = z
+  .object({
+    employeeId: z.uuid(),
+    kind: TimeclockLeaveKind,
+    startsOn: IsoDay,
+    endsOn: IsoDay,
+    note: z
+      .string()
+      .trim()
+      .max(300)
+      .transform((value) => (value === '' ? null : value))
+      .nullable()
+      .default(null),
+  })
+  .refine((body) => body.endsOn >= body.startsOn, {
+    message: 'A volta não pode ser antes da saída.',
+    path: ['endsOn'],
+  })
+export type CreateTimeclockLeaveRequest = z.input<
+  typeof CreateTimeclockLeaveRequest
 >

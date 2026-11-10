@@ -137,6 +137,8 @@ export const StockBalanceSummary = z.object({
    */
   brand: z.string().nullable().optional(),
   categoryName: z.string().nullable().optional(),
+  /** O fornecedor da variante (F396), texto livre como em Produtos. */
+  supplierReference: z.string().nullable().optional(),
   /** Custo médio da variante, texto decimal. Nulo é "ninguém informou". */
   averageCost: z.string().nullable().optional(),
   /** Preço da tabela padrão, texto decimal. Nulo é "sem preço". */
@@ -198,6 +200,18 @@ export const StockBalanceList = z.object({
 })
 
 export type StockBalanceList = z.infer<typeof StockBalanceList>
+
+/**
+ * Os fornecedores escritos no cadastro, para o menu do Estoque (F396).
+ *
+ * Texto, porque `supplierReference` é texto livre desde a F077 — não há
+ * cadastro de fornecedor de onde tirar um id.
+ */
+export const StockSupplierList = z.object({
+  suppliers: z.array(z.string()),
+})
+
+export type StockSupplierList = z.infer<typeof StockSupplierList>
 
 export const StockMovementSummary = z.object({
   id: z.string(),
@@ -268,8 +282,21 @@ export const StockBalanceListQuery = z.object({
     .enum(['true', 'false'])
     .transform((value) => value === 'true')
     .optional(),
+  /**
+   * Só o que não tem nada na prateleira (F396): zero, negativo ou nunca
+   * entrou. A lista de compra, que a loja tira por fornecedor.
+   */
+  zeroed: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
   /** Só uma família de peça (F163): tela, bateria. */
   categoryId: z.string().min(1).optional(),
+  /**
+   * Só um fornecedor (F396). Texto livre na variante, comparado sem caixa e
+   * sem os espaços das pontas; o menu vem de `/inventory/suppliers`.
+   */
+  supplier: z.string().trim().min(1).max(80).optional(),
   /**
    * Só uma marca (F167).
    *
@@ -303,6 +330,7 @@ export const StockBalanceListQuery = z.object({
       'name',
       'sku',
       'brand',
+      'supplier',
       'category',
       'onHand',
       'reserved',
@@ -330,8 +358,10 @@ export type StockBalanceListRequest = {
   onlyWithStock?: boolean | undefined
   negative?: boolean | undefined
   belowMinimum?: boolean | undefined
+  zeroed?: boolean | undefined
   categoryId?: string | undefined
   brand?: string | undefined
+  supplier?: string | undefined
   searchMode?: SearchMode | undefined
   page?: number | undefined
   pageSize?: number | undefined
@@ -339,6 +369,7 @@ export type StockBalanceListRequest = {
     | 'name'
     | 'sku'
     | 'brand'
+    | 'supplier'
     | 'category'
     | 'onHand'
     | 'reserved'

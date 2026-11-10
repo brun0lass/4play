@@ -3,8 +3,10 @@ import { clsx } from 'clsx'
 import { CheckCircle2, Copy, Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
 
+import { ColorField } from '@/components/intake/ColorField'
 import { Button, Modal } from '@/components/ui'
 import { int } from '@/lib/format'
+import { ColorDots, colorLabel } from '@/lib/grade-color'
 import { quantitiesBySize } from '@/lib/intake-offer'
 
 /**
@@ -12,13 +14,16 @@ import { quantitiesBySize } from '@/lib/intake-offer'
  * tamanho e o shorts de outro", o tipo de cada peça (babylook, shorts
  * feminino…) e o nome e o número de cada peça — a camisa "AMANDA 22", o
  * shorts só "22". Cada parte é uma peça da ficha.
+ *
+ * Cada linha tem a sua cor, como na ficha (10/11): a peça sem nome ao lado do
+ * tipo, e cada peça do personalizado na janela dele.
  */
 
 type Product = PublicIntakeResponseType['products'][number]
 type Part = Product['parts'][number]
 type Size = PublicIntakeResponseType['sizes'][number]
 
-type KitPiece = { sizeChartId: string; size: Size | ''; name: string; number: string }
+type KitPiece = { sizeChartId: string; size: Size | ''; name: string; number: string; color: string }
 /** Um conjunto personalizado: uma peça de cada parte, cada uma com o seu nome e número. */
 export type KitPerson = {
   key: number
@@ -29,6 +34,8 @@ export type KitCount = {
   key: number
   partId: string
   sizeChartId: string
+  /** A cor da linha (10/11): o texto da cor da grade; vazio, a loja combina. */
+  color: string
   bySize: Partial<Record<Size, string>>
 }
 export type KitDraft = {
@@ -41,23 +48,26 @@ const ADULT: readonly string[] = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG']
 // As chaves sobrevivem ao rascunho guardado no celular: começam do relógio.
 let nextKey = Date.now()
 
-const blankPiece = (part: Part): KitPiece => ({
+const blankPiece = (part: Part, color = ''): KitPiece => ({
   sizeChartId: part.options[0]?.sizeChartId ?? '',
   size: '',
   name: '',
   number: '',
+  color,
 })
 
-const blankPerson = (parts: readonly Part[]): KitPerson => ({
+/** O personalizado novo já vem com a cor de cada peça do anterior: o time costuma ser de uma cor só. */
+const blankPerson = (parts: readonly Part[], from?: KitPerson): KitPerson => ({
   key: nextKey++,
   quantity: '1',
-  pieces: Object.fromEntries(parts.map((part) => [part.id, blankPiece(part)])),
+  pieces: Object.fromEntries(parts.map((part) => [part.id, blankPiece(part, from?.pieces[part.id]?.color ?? '')])),
 })
 
-const blankCount = (part: Part, sizeChartId?: string): KitCount => ({
+const blankCount = (part: Part, sizeChartId?: string, color = ''): KitCount => ({
   key: nextKey++,
   partId: part.id,
   sizeChartId: sizeChartId ?? part.options[0]?.sizeChartId ?? '',
+  color,
   bySize: {},
 })
 
@@ -68,10 +78,15 @@ export const SpecialSizeNotice = () => (
   </p>
 )
 
-/** O conjunto como o cliente tinha mandado, para ele editar o link reaberto. */
+/**
+ * O conjunto como o cliente tinha mandado, para ele editar o link reaberto. O
+ * envio de antes de 10/11 tinha uma cor só para a peça (`itemColor`): ela vale
+ * para todas as linhas.
+ */
 export const kitFromSubmission = (
   product: Product,
-  sent: NonNullable<NonNullable<PublicIntakeResponseType['previous']>['items'][number]['kit']>
+  sent: NonNullable<NonNullable<PublicIntakeResponseType['previous']>['items'][number]['kit']>,
+  itemColor: string | null = null
 ): KitDraft => ({
   people: sent.people.map((person) => ({
     key: nextKey++,
@@ -84,21 +99,51 @@ export const kitFromSubmission = (
           size: piece.size,
           name: piece.name ?? '',
           number: piece.number ?? '',
+          color: piece.color ?? itemColor ?? '',
         },
       ])
     ),
   })),
   counts: product.parts.flatMap((part) => {
-    const counts = sent.counts.filter((entry) => entry.partId === part.id)
-    const charts = [...new Set(counts.map((entry) => entry.sizeChartId))]
-    return charts.length === 0
-      ? [blankCount(part)]
-      : charts.map((sizeChartId) => ({
-          ...blankCount(part, sizeChartId),
-          bySize: quantitiesBySize(counts.filter((entry) => entry.sizeChartId === sizeChartId)),
+    const counts = sent.counts
+      .filter((entry) => entry.partId === part.id)
+      .map((entry) => ({ ...entry, color: entry.color ?? itemColor ?? '' }))
+    // Uma linha por tipo e cor: o mesmo tipo em duas cores são duas linhas.
+    const lines = [...new Map(counts.map((entry) => [`${entry.sizeChartId}|${entry.color}`, entry])).values()]
+    return lines.length === 0
+      ? [blankCount(part, undefined, itemColor ?? '')]
+      : lines.map((line) => ({
+          ...blankCount(part, line.sizeChartId, line.color),
+          bySize: quantitiesBySize(
+            counts.filter((entry) => entry.sizeChartId === line.sizeChartId && entry.color === line.color)
+          ),
         }))
   }),
 })
+
+/**
+ * O rascunho guardado no celular com a cor de cada linha. O de antes de 10/11
+ * não tinha cor nas linhas, e sim uma cor para o conjunto (`itemColor`): ela
+ * vai para todas.
+ */
+export const normalizeKit = (product: Product, raw: unknown, itemColor = ''): KitDraft => {
+  const kit = (raw ?? {}) as Partial<KitDraft>
+  const counts = (Array.isArray(kit.counts) ? kit.counts : [])
+    .filter((count) => product.parts.some((part) => part.id === count.partId))
+    .map((count) => ({ ...count, color: typeof count.color === 'string' ? count.color : itemColor }))
+  return {
+    people: (Array.isArray(kit.people) ? kit.people : []).map((person) => ({
+      ...person,
+      pieces: Object.fromEntries(
+        Object.entries(person.pieces ?? {}).map(([partId, piece]) => [
+          partId,
+          { ...piece, color: typeof piece.color === 'string' ? piece.color : itemColor },
+        ])
+      ),
+    })),
+    counts: counts.length > 0 ? counts : product.parts.map((part) => blankCount(part, undefined, itemColor)),
+  }
+}
 
 /** O conjunto novo: as grades sem nome, uma por parte. */
 export const newKit = (product: Product): KitDraft => ({
@@ -115,6 +160,24 @@ const filledPerson = (person: KitPerson) =>
 /** O conjunto tem alguma peça com nome ou número. */
 export const kitNamed = (kit: KitDraft) =>
   kit.people.some((person) => Object.values(person.pieces).some(personal))
+
+/** Quantos personalizados têm nome ou número. */
+export const kitNamedCount = (kit: KitDraft) =>
+  kit.people.filter((person) => Object.values(person.pieces).some(personal)).length
+
+/** As cores que o cliente escolheu, sem repetir: para o resumo. */
+export const kitColors = (kit: KitDraft): string[] => [
+  ...new Set(
+    [
+      ...kit.people.filter(filledPerson).flatMap((person) => Object.values(person.pieces).map((piece) => piece.color)),
+      ...kit.counts
+        .filter((count) => Object.values(count.bySize).some((value) => quantityOf(value ?? '') > 0))
+        .map((count) => count.color),
+    ]
+      .map((color) => colorLabel(color))
+      .filter(Boolean)
+  ),
+]
 
 const quantityOf = (text: string) => Number(text) || 0
 
@@ -181,6 +244,7 @@ export const kitToSubmit = (product: Product, kit: KitDraft) => ({
         size: piece.size as Size,
         name: piece.name.trim() || null,
         number: piece.number.trim() || null,
+        color: piece.color.trim() || null,
       }
     }),
   })),
@@ -192,6 +256,7 @@ export const kitToSubmit = (product: Product, kit: KitDraft) => ({
         sizeChartId: count.sizeChartId,
         size: size as Size,
         quantity: quantityOf(value ?? ''),
+        color: count.color.trim() || null,
       }))
   ),
 })
@@ -297,9 +362,16 @@ export const KitEditor = ({
                   {product.parts.map((part) => {
                     const piece = person.pieces[part.id]
                     return (
-                      <span key={part.id} className="block truncate text-xs">
+                      // Quebra a linha em vez de cortar: a cor não pode esconder o nome.
+                      <span key={part.id} className="block text-xs">
                         <strong>{piece ? optionName(part, piece.sizeChartId) : part.label}</strong> {piece?.size || '?'}
                         {markOf(piece) && <span className="text-muted"> · {markOf(piece)}</span>}
+                        {piece?.color && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 align-middle">
+                            <ColorDots block={piece.color} className="h-3 w-3" />
+                            {colorLabel(piece.color)}
+                          </span>
+                        )}
                       </span>
                     )
                   })}
@@ -322,7 +394,7 @@ export const KitEditor = ({
           </div>
           <button
             type="button"
-            onClick={() => setEditing(blankPerson(product.parts))}
+            onClick={() => setEditing(blankPerson(product.parts, kit.people.at(-1)))}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-ink/30 p-3 text-sm font-extrabold hover:border-ink"
           >
             <Plus className="h-4 w-4" /> Adicionar personalizado
@@ -403,6 +475,13 @@ export const KitEditor = ({
                       ))}
                     </div>
                   )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <ColorField
+                      value={piece.color}
+                      onChange={(color) => setPiece({ color })}
+                      label={optionName(part, piece.sizeChartId)}
+                    />
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {sizesFor(piece.sizeChartId).map((size) => (
                       <button
@@ -501,11 +580,22 @@ export const KitEditor = ({
                 .filter((count) => count.partId === part.id)
                 .map((count, index) => (
                   <div key={count.key} className="rounded-2xl bg-paper p-3">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="text-sm font-extrabold">{part.label}</span>
+                      {index > 0 && (
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-muted hover:text-red-700"
+                          onClick={() => onChange({ ...kit, counts: kit.counts.filter((entry) => entry.key !== count.key) })}
+                        >
+                          Tirar
+                        </button>
+                      )}
+                    </div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       {part.options.length > 1 ? (
                         <select
-                          className="field h-9 w-auto py-1 text-xs"
+                          className="field h-9 w-auto min-w-40 flex-1 py-1 text-xs sm:flex-none"
                           value={count.sizeChartId}
                           onChange={(e) => updateCount(count.key, { sizeChartId: e.target.value })}
                           aria-label={`Tipo de ${part.label}`}
@@ -519,15 +609,11 @@ export const KitEditor = ({
                       ) : (
                         <span className="text-xs text-muted">{optionName(part, count.sizeChartId)}</span>
                       )}
-                      {index > 0 && (
-                        <button
-                          type="button"
-                          className="ml-auto text-xs font-bold text-muted hover:text-red-700"
-                          onClick={() => onChange({ ...kit, counts: kit.counts.filter((entry) => entry.key !== count.key) })}
-                        >
-                          Tirar
-                        </button>
-                      )}
+                      <ColorField
+                        value={count.color}
+                        onChange={(color) => updateCount(count.key, { color })}
+                        label={optionName(part, count.sizeChartId)}
+                      />
                     </div>
                     <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
                       {sizesFor(count.sizeChartId).map((size) => (
@@ -550,19 +636,17 @@ export const KitEditor = ({
                     </div>
                   </div>
                 ))}
-              {part.options.length > 1 && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs font-bold hover:underline"
-                  onClick={() => {
-                    const used = new Set(kit.counts.filter((count) => count.partId === part.id).map((count) => count.sizeChartId))
-                    const next = part.options.find((option) => !used.has(option.sizeChartId))
-                    onChange({ ...kit, counts: [...kit.counts, blankCount(part, next?.sizeChartId)] })
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Outro tipo de {part.label.toLowerCase()}
-                </button>
-              )}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs font-bold hover:underline"
+                onClick={() => {
+                  const used = new Set(kit.counts.filter((count) => count.partId === part.id).map((count) => count.sizeChartId))
+                  const next = part.options.find((option) => !used.has(option.sizeChartId))
+                  onChange({ ...kit, counts: [...kit.counts, blankCount(part, next?.sizeChartId)] })
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Outra {part.label.toLowerCase()} (outro tipo ou outra cor)
+              </button>
             </div>
           ))}
         </div>

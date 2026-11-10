@@ -14,12 +14,13 @@ type Item = {
   productName: string
   rows: Row[]
   color: string | null
+  /** O conjunto, com a cor de cada linha (10/11); ausente no envio de antes. */
   kit: {
     people: {
       quantity: number
-      pieces: { piece: string; size: string; name: string | null; number: string | null }[]
+      pieces: { piece: string; size: string; name: string | null; number: string | null; color?: string | null }[]
     }[]
-    counts: { piece: string; size: string; quantity: number }[]
+    counts: { piece: string; size: string; quantity: number; color?: string | null }[]
   } | null
   options: { id: string; name: string }[]
 }
@@ -36,6 +37,10 @@ export type IntakeChange = { title: string; lines: string[] }
 const mark = (entry: { name: string | null; number: string | null }) =>
   [entry.name, entry.number].filter(Boolean).join(' ')
 
+/** "Camiseta masculina (Preto) M": a cor entra no nome da linha, e trocar a cor aparece. */
+const pieceOf = (entry: { piece: string; size: string; color?: string | null }) =>
+  `${entry.piece}${entry.color ? ` (${entry.color})` : ''} ${entry.size}`
+
 /** Cada coisa pedida na peça, como texto, com a quantidade. */
 const entriesOf = (item: Item): Map<string, number> => {
   const entries = new Map<string, number>()
@@ -46,12 +51,12 @@ const entriesOf = (item: Item): Map<string, number> => {
   for (const person of item.kit?.people ?? [])
     add(
       person.pieces
-        .map((piece) => `${piece.piece} ${piece.size}${mark(piece) ? ` · ${mark(piece)}` : ''}`)
+        .map((piece) => `${pieceOf(piece)}${mark(piece) ? ` · ${mark(piece)}` : ''}`)
         .join(' + '),
       person.quantity
     )
   for (const count of item.kit?.counts ?? [])
-    add(`${count.piece} ${count.size} sem nome`, count.quantity)
+    add(`${pieceOf(count)} sem nome`, count.quantity)
   return entries
 }
 
@@ -69,6 +74,9 @@ const entryLines = (before: Map<string, number>, after: Map<string, number>): st
 
 const changed = (label: string, before: string, after: string): string[] =>
   before === after ? [] : [`${label}: ${before} → ${after}`]
+
+/** A cor da peça sem partes (a do conjunto vai em cada linha). */
+const colorOf = (item: Item): string => item.color ?? 'a loja define'
 
 const fabricOf = (sent: IntakeSent) =>
   sent.fabricName === null
@@ -94,7 +102,7 @@ export const intakeChanges = (before: IntakeSent, after: IntakeSent): IntakeChan
         title: `${item.productName} — entrou`,
         lines: [
           ...entryLines(new Map(), entriesOf(item)),
-          ...(item.color ? [`Cor: ${item.color}`] : []),
+          ...(colorOf(item) === 'a loja define' ? [] : [`Cor: ${colorOf(item)}`]),
           ...item.options.map((option) => `+ ${option.name}`),
         ],
       })
@@ -104,7 +112,7 @@ export const intakeChanges = (before: IntakeSent, after: IntakeSent): IntakeChan
     const newOptions = item.options.map((option) => option.name)
     const lines = [
       ...entryLines(entriesOf(old), entriesOf(item)),
-      ...changed('Cor', old.color ?? 'a loja define', item.color ?? 'a loja define'),
+      ...changed('Cor', colorOf(old), colorOf(item)),
       ...newOptions.filter((name) => !oldOptions.includes(name)).map((name) => `+ ${name}`),
       ...oldOptions.filter((name) => !newOptions.includes(name)).map((name) => `− ${name}`),
     ]

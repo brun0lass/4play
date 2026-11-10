@@ -36,6 +36,7 @@ import {
 } from '@/components/ui'
 import { linkProps, track } from '@/lib/analytics'
 import { day } from '@/lib/format'
+import { ColorDots, colorLabel } from '@/lib/grade-color'
 import { errorMessage } from '@/lib/http'
 import { useAccess } from '@/lib/access'
 import { intakeChanges } from '@/lib/intake-changes'
@@ -1028,7 +1029,7 @@ const ReviewDialog = ({
                       <table className="w-full">
                         <thead>
                           <tr className="text-left text-muted">
-                            <th className="py-1">Personalizados — cada peça com o seu nome e número</th>
+                            <th className="py-1">Personalizados — a peça, a cor, o tamanho e o nome</th>
                             <th className="text-right">Qtde</th>
                           </tr>
                         </thead>
@@ -1038,7 +1039,8 @@ const ReviewDialog = ({
                               <td className="py-1">
                                 {person.pieces.map((piece) => (
                                   <span key={piece.part} className="block">
-                                    {piece.piece} {piece.size}
+                                    {piece.piece}
+                                    {piece.color && <PieceColor block={piece.color} />} {piece.size}
                                     {(piece.name || piece.number) && (
                                       <strong> · {[piece.name, piece.number].filter(Boolean).join(' ')}</strong>
                                     )}
@@ -1054,7 +1056,13 @@ const ReviewDialog = ({
                     {kit.counts.length > 0 && (
                       <p>
                         Sem nome:{' '}
-                        {kit.counts.map((count) => `${String(count.quantity)} ${count.piece} ${count.size}`).join(' · ')}
+                        {kit.counts.map((count, index) => (
+                          <span key={index}>
+                            {index > 0 && ' · '}
+                            {count.quantity} {count.piece}
+                            {count.color && <PieceColor block={count.color} />} {count.size}
+                          </span>
+                        ))}
                       </p>
                     )}
                   </div>
@@ -1120,3 +1128,11 @@ const ReviewDialog = ({
     </Modal>
   )
 }
+
+/** A cor de uma linha do conjunto (10/11): as bolinhas e o nome, como na ficha. */
+const PieceColor = ({ block }: { block: string }) => (
+  <span className="ml-1 inline-flex items-center gap-1 font-semibold">
+    <ColorDots block={block} className="h-3 w-3" />
+    {colorLabel(block)}
+  </span>
+)

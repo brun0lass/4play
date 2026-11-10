@@ -414,6 +414,7 @@ export {
   StockTotals,
   StockBalanceListQuery,
   StockBalanceSummary,
+  StockSupplierList,
   StockMovementList,
   StockMovementListQuery,
   StockMovementResponse,
@@ -1554,3 +1555,5 @@ export * from './repair.ts'
 export * from './field.ts'
 export * from './timeclock.ts'
 export * from './fiscal.ts'
+export * from './broadcast.ts'
+export * from './portfolio.ts'
