@@ -262,6 +262,12 @@ export const SalesDocumentSummary = z.object({
    * ficha, que lista os pagamentos inteiros.
    */
   paymentMethods: z.array(z.string()).nullable().default(null),
+  /**
+   * O que já entrou no pedido confirmado (F418): o sinal ou a parte paga do
+   * orçamento. Só na lista, só em pedido confirmado e só para quem lê
+   * pagamentos; zero nos outros. O "falta" é o total menos isto.
+   */
+  paidAmount: z.string().default('0.00'),
   /** The optimistic-concurrency token. ADR-0014. */
   version: z.number().int(),
   updatedAt: z.string(),
@@ -1111,6 +1117,20 @@ export const PayAndHoldRequest = z.object({
 })
 
 export type PayAndHoldRequest = z.input<typeof PayAndHoldRequest>
+
+/**
+ * Receber parte do orçamento (F418).
+ *
+ * O Eduardo, 12/11: "o pedido é de 500, o cara pagou 400, eu dou baixa nos
+ * 400… e fica aparecendo falta pagar 100". Numa operação só, o orçamento vira
+ * pedido confirmado e recebe um SINAL (F173): menos que o total, sem troco e
+ * sem forma que gere recebível. Retirar e Entregar cobram depois só o que
+ * falta.
+ */
+export const PayPartOfQuoteRequest = PayAndHoldRequest
+
+export type PayPartOfQuoteRequest = z.input<typeof PayPartOfQuoteRequest>
+export type PayPartOfQuoteBody = z.output<typeof PayPartOfQuoteRequest>
 
 /**
  * Receber o sinal de um pedido confirmado (F173).

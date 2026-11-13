@@ -965,7 +965,7 @@ export const PmocMonthlyReport = z.object({
   contract: PmocContract,
   month: z.string(),
   items: z.array(z.string()),
-  visit: z.object({ id: z.string(), stage: z.enum(FIELD_VISIT_STAGE_VALUES), scheduledAt: z.string(), technicianName: z.string().nullable() }).nullable(),
+  visit: z.object({ id: z.string(), stage: z.enum(FIELD_VISIT_STAGE_VALUES), scheduledAt: z.string(), technicianName: z.string().nullable(), publicToken: z.string() }).nullable(),
   report: FieldReportSnapshot.nullable(),
   acceptance: z.object({ by: z.string(), at: z.string() }).nullable(),
 })

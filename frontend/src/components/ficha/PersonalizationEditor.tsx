@@ -48,7 +48,9 @@ const asSaved = (rows: Row[]): Row[] => toRows(toSave(rows))
 
 /** Peças vendidas: o conjunto conta duas (camisa e shorts), como no "Itens do pedido". */
 const soldPieces = (lines: readonly ProductionOrderLineType[]) =>
-  lines.reduce((sum, line) => sum + Number(line.quantity) * (/^\s*conjunto\b/i.test(line.description) ? 2 : 1), 0)
+  lines
+    .filter((line) => !line.freight)
+    .reduce((sum, line) => sum + Number(line.quantity) * (/^\s*conjunto\b/i.test(line.description) ? 2 : 1), 0)
 
 type Warnings = {
   /** O mesmo nome e número na mesma peça, em mais de uma linha (o tamanho não importa). */

@@ -111,7 +111,12 @@ import {
   type UniformMemberSummaryType,
   type UniformPrinterSummaryType,
   type UniformViewerResponseType,
+  type AddGradePieceBody,
+  AddGradePieceRequest,
+  AddGradePieceResponse,
+  type UpdateOrderFreightBody,
   type UpdateProductionSheetBody,
+  UpdateOrderFreightRequest,
   UpdateProductionSheetRequest,
   CreateSizeChartRequest,
   SizeChartListResponse,
@@ -164,6 +169,33 @@ export const saveSheet = async (
     await request(`${BASE}/orders/${id}`, {
       method: 'PUT',
       body: UpdateProductionSheetRequest.parse(input),
+    })
+  ).version
+
+/**
+ * A peça da grade que não está nos itens vira item (F422 do Aeris): o Aeris
+ * conta a quantidade na grade e cobra o preço da tabela no tecido do pedido.
+ */
+export const addGradePiece = async (id: string, input: AddGradePieceBody) =>
+  AddGradePieceResponse.parse(
+    await request(`${BASE}/orders/${id}/grade-pieces`, {
+      method: 'POST',
+      body: AddGradePieceRequest.parse(input),
+    })
+  )
+
+/**
+ * Só o frete da ficha (F422 do Aeris) — o "Editar itens" mexe nele sem
+ * regravar o atendimento. Repassado, entra no total do pedido de vendas.
+ */
+export const saveFreight = async (
+  id: string,
+  input: UpdateOrderFreightBody
+): Promise<number> =>
+  ProductionSheetVersionResponse.parse(
+    await request(`${BASE}/orders/${id}/freight`, {
+      method: 'PUT',
+      body: UpdateOrderFreightRequest.parse(input),
     })
   ).version
 

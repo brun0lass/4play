@@ -358,3 +358,58 @@ export const SummaryCandidatesResponse = z.object({
 export type SummaryCandidatesResponse = z.infer<
   typeof SummaryCandidatesResponse
 >
+
+/**
+ * A fila da próxima cobrança (F413): quem vai receber, por qual número e a
+ * que horas — a de hoje, se já nasceu e ainda tem gente esperando; senão, a
+ * próxima. As horas são estimativa.
+ */
+export const BROADCAST_COLLECTION_QUEUE_STATUS_VALUES = [
+  'planned',
+  'pending',
+  'sent',
+  'failed',
+  'skipped',
+  'cancelled',
+] as const
+
+export const BroadcastCollectionQueueItemSchema = z.object({
+  partyId: z.uuid(),
+  name: z.string(),
+  amount: z.string().nullable(),
+  dueDay: z.string().nullable(),
+  days: z.number().int().nullable(),
+  recipientId: z.uuid().nullable(),
+  status: z.enum(BROADCAST_COLLECTION_QUEUE_STATUS_VALUES),
+  skipReason: BroadcastSkipReason.nullable(),
+  at: z.iso.datetime().nullable(),
+  estimated: z.boolean(),
+  overCap: z.boolean(),
+  hasDocument: z.boolean(),
+})
+export type BroadcastCollectionQueueItem = z.infer<
+  typeof BroadcastCollectionQueueItemSchema
+>
+
+export const BroadcastCollectionQueueResponse = z.object({
+  day: z.string().nullable(),
+  live: z.boolean(),
+  broadcastId: z.uuid().nullable(),
+  enabled: z.boolean(),
+  summary: z.boolean(),
+  dailyCap: z.number().int(),
+  groups: z.array(
+    z.object({
+      accountId: z.uuid(),
+      label: z.string(),
+      sellerName: z.string().nullable(),
+      connected: z.boolean(),
+      /** Na ordem em que saem. */
+      customers: z.array(BroadcastCollectionQueueItemSchema),
+    })
+  ),
+  outside: z.array(z.object({ partyId: z.uuid(), name: z.string() })),
+})
+export type BroadcastCollectionQueueResponse = z.infer<
+  typeof BroadcastCollectionQueueResponse
+>

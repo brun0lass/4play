@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { clsx } from 'clsx'
-import { Ban, CircleDollarSign, HandCoins, PackageCheck, Pencil, Plus, Send, Trash2 } from 'lucide-react'
+import { Ban, CircleDollarSign, HandCoins, PackageCheck, Pencil, Plus, Send, Trash2, Truck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { fetchPaymentMethods } from '@/api/finance'
@@ -13,6 +13,7 @@ import {
   updateOrderLines,
 } from '@/api/orders'
 import { confirmOrder } from '@/api/sales'
+import { saveFreight } from '@/api/uniforms'
 import { fetchParties } from '@/api/store'
 import { useAuth } from '@/auth/AuthProvider'
 import { Section } from '@/components/ficha/Section'
@@ -26,6 +27,16 @@ import { keys } from '@/lib/queries'
 import { useSalesDocument } from '@/lib/order-lines'
 
 type Action = 'deposit' | 'dispatch' | 'pickup' | 'edit' | 'cancel' | null
+
+/** O frete da ficha (F296) e se ele já está no pedido de vendas (F422 do Aeris). */
+export type OrderFreightInfo = {
+  sheetVersion: number
+  freight: { amount: string; charged: boolean } | null
+  freightInTotal: boolean
+}
+
+/** A descrição que o Aeris dá à linha do frete repassado (F422). */
+const FREIGHT_LINE = 'Frete'
 
 /**
  * Pagamento e saída do pedido: receber o sinal, despachar, o cliente retirar,
@@ -41,9 +52,12 @@ type Action = 'deposit' | 'dispatch' | 'pickup' | 'edit' | 'cancel' | null
  */
 export const OrderActions = ({
   orderId,
+  order,
   blockedReason = null,
 }: {
   orderId: string
+  /** O frete da ficha: o "Editar itens" mexe nele, e o pedido de antes ganha o botão de somar. */
+  order: OrderFreightInfo
   /** Por que o pedido ainda não pode sair — as levas que faltam (F230). */
   blockedReason?: string | null
 }) => {
@@ -76,10 +90,16 @@ export const OrderActions = ({
   return (
     <Section title="Pagamento e saída" icon={<CircleDollarSign className="h-3.5 w-3.5" />}>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <Figure label="Total" value={money(total)} />
+        <Figure label={order.freightInTotal ? 'Total c/ frete' : 'Total'} value={money(total)} />
         <Figure label="Já pago" value={money(paid)} good={Number(paid) > 0} />
         <Figure label="Falta" value={money(remaining)} warn={Number(remaining) > 0} />
       </div>
+      {order.freightInTotal && order.freight && (
+        <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-muted">
+          <Truck className="h-3.5 w-3.5" /> Inclui o frete de {money(order.freight.amount)}, repassado ao cliente.
+        </p>
+      )}
+      {open && order.freight?.charged && !order.freightInTotal && <LegacyFreight orderId={orderId} order={order} />}
 
       {!open ? (
         <p className="mt-4 text-xs font-semibold text-muted">Este pedido já saiu da fila. Para mexer, use o Aeris.</p>
@@ -123,7 +143,7 @@ export const OrderActions = ({
       <PayDialog kind="pickup" open={action === 'pickup'} onClose={() => setAction(null)} orderId={orderId} version={d.version} remaining={remaining} till={usesTill ? openTill : null} />
       <DispatchDialog open={action === 'dispatch'} onClose={() => setAction(null)} orderId={orderId} version={d.version} remaining={remaining} />
       <CancelDialog open={action === 'cancel'} onClose={() => setAction(null)} orderId={orderId} version={d.version} paid={paid} />
-      <EditDialog open={action === 'edit'} onClose={() => setAction(null)} orderId={orderId} version={d.version} lines={d.lines} />
+      <EditDialog open={action === 'edit'} onClose={() => setAction(null)} orderId={orderId} version={d.version} lines={d.lines} order={order} />
     </Section>
   )
 }
@@ -134,6 +154,36 @@ const Figure = ({ label, value, good, warn }: { label: string; value: string; go
     <p className="text-sm font-extrabold">{value}</p>
   </div>
 )
+
+/**
+ * O pedido de antes da F422: o frete marcado para repassar ainda não está no
+ * pedido de vendas, então o sinal e o título não o cobram. Um clique o põe lá
+ * (gravar o Atendimento de novo faz o mesmo).
+ */
+const LegacyFreight = ({ orderId, order }: { orderId: string; order: OrderFreightInfo }) => {
+  const refresh = useRefresh(orderId)
+  const toast = useToast()
+  const m = useMutation({
+    mutationFn: () => saveFreight(orderId, { version: order.sheetVersion, freight: order.freight }),
+    onSuccess: () => {
+      toast('Frete somado ao pedido.')
+      refresh()
+    },
+  })
+  if (!order.freight) return null
+  return (
+    <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+      <p>
+        O frete de {money(order.freight.amount)} está para repassar ao cliente, mas ainda não entra no que ele paga (o
+        sinal e o título não o cobram).
+      </p>
+      <Button variant="outline" size="sm" className="mt-2" busy={m.isPending} icon={<Truck className="h-4 w-4" />} onClick={() => m.mutate()}>
+        Somar o frete ao pedido
+      </Button>
+      {m.isError && <div className="mt-2"><ErrorBox message={errorMessage(m.error)} /></div>}
+    </div>
+  )
+}
 
 /** Depois de qualquer ação: o pedido, a fila e o financeiro se atualizam. */
 const useRefresh = (orderId: string) => {
@@ -419,12 +469,14 @@ const EditDialog = ({
   orderId,
   version,
   lines,
+  order,
 }: {
   open: boolean
   onClose: () => void
   orderId: string
   version: number
-  lines: { variantId: string; description: string; unit: string; quantity: string; unitPrice: string; discountAmount: string; priceListId: string | null }[]
+  lines: { variantId: string; description: string; unit: string; quantity: string; unitPrice: string; discountAmount: string; priceListId: string | null; priceBasis?: 'base-price' | 'quantity-tier' | 'manual' }[]
+  order: OrderFreightInfo
 }) => {
   const refresh = useRefresh(orderId)
   const toast = useToast()
@@ -432,53 +484,109 @@ const EditDialog = ({
   const [rows, setRows] = useState<EditLine[]>([])
   const [adding, setAdding] = useState(false)
   const [reason, setReason] = useState('')
+  // O frete é o mesmo da ficha (F296): valor e "repassar". Repassado, o Aeris
+  // põe a linha dele no pedido (F422) — aqui ele não aparece como produto.
+  const [freight, setFreight] = useState('')
+  const [freightCharged, setFreightCharged] = useState(false)
+
+  // A linha do frete que o Aeris mantém: passa intacta quando só os itens mudam.
+  const freightLine = order.freightInTotal ? lines.find((l) => l.description === FREIGHT_LINE) : undefined
+  const itemLines = lines.filter((l) => l !== freightLine)
+
+  const initial = (): EditLine[] =>
+    itemLines.map((l) => ({
+      key: crypto.randomUUID(),
+      variantId: l.variantId,
+      description: l.description,
+      unit: l.unit,
+      quantity: String(Number(l.quantity)),
+      price: decimalToInput(l.unitPrice),
+      discountAmount: l.discountAmount,
+      priceListId: l.priceListId,
+    }))
 
   useEffect(() => {
     if (!open) return
     setAdding(false)
     setReason('')
-    setRows(
-      lines.map((l) => ({
-        key: crypto.randomUUID(),
-        variantId: l.variantId,
-        description: l.description,
-        unit: l.unit,
-        quantity: String(Number(l.quantity)),
-        price: decimalToInput(l.unitPrice),
-        discountAmount: l.discountAmount,
-        priceListId: l.priceListId,
-      }))
-    )
+    setRows(initial())
+    setFreight(decimalToInput(order.freight?.amount))
+    setFreightCharged(order.freight?.charged ?? false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const set = (key: string, patch: Partial<EditLine>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)))
 
+  const freightAmount = freight.trim() === '' ? null : toDecimal(freight)
+  const freightValid = freight.trim() === '' || (freightAmount !== null && Number(freightAmount) > 0)
+  const freightWanted = freightAmount === null ? null : { amount: freightAmount, charged: freightCharged }
+  const freightChanged =
+    (freightWanted === null) !== (order.freight === null) ||
+    (freightWanted !== null &&
+      order.freight !== null &&
+      (cents(freightWanted.amount) !== cents(order.freight.amount) || freightWanted.charged !== order.freight.charged))
+
+  const lineKey = (l: { variantId: string; quantity: string; price: string }) =>
+    `${l.variantId}|${String(Number(l.quantity))}|${String(cents(toDecimal(l.price) ?? '0'))}`
+  const linesChanged =
+    rows.map(lineKey).join(',') !==
+    itemLines.map((l) => lineKey({ variantId: l.variantId, quantity: l.quantity, price: decimalToInput(l.unitPrice) })).join(',')
+
   const m = useMutation({
-    mutationFn: () =>
-      updateOrderLines(orderId, {
-        version,
-        reason: amendmentReason(reason),
-        lines: rows.map((r) => ({
-          variantId: r.variantId,
-          description: r.description,
-          unit: r.unit,
-          unitPrice: toDecimal(r.price) ?? '0.00',
-          quantity: String(Number(r.quantity)),
-          discountAmount: r.discountAmount,
-          priceListId: r.priceListId,
-          priceBasis: 'manual' as const,
-        })),
-      }),
+    mutationFn: async () => {
+      // Os itens primeiro, pela versão do pedido que a tela leu; o frete depois, que o Aeris relê o pedido.
+      if (linesChanged) {
+        await updateOrderLines(orderId, {
+          version,
+          reason: amendmentReason(reason),
+          lines: [
+            ...rows.map((r) => ({
+              variantId: r.variantId,
+              description: r.description,
+              unit: r.unit,
+              unitPrice: toDecimal(r.price) ?? '0.00',
+              quantity: String(Number(r.quantity)),
+              discountAmount: r.discountAmount,
+              priceListId: r.priceListId,
+              priceBasis: 'manual' as const,
+            })),
+            ...(freightLine
+              ? [
+                  {
+                    variantId: freightLine.variantId,
+                    description: freightLine.description,
+                    unit: freightLine.unit,
+                    unitPrice: freightLine.unitPrice,
+                    quantity: freightLine.quantity,
+                    discountAmount: freightLine.discountAmount,
+                    priceListId: freightLine.priceListId,
+                    priceBasis: 'manual' as const,
+                  },
+                ]
+              : []),
+          ],
+        })
+      }
+      if (freightChanged) {
+        await saveFreight(orderId, { version: order.sheetVersion, freight: freightWanted })
+      }
+    },
     onSuccess: () => {
-      toast('Itens do pedido atualizados.')
+      toast(freightChanged && !linesChanged ? 'Frete do pedido atualizado.' : 'Itens do pedido atualizados.')
       refresh()
       onClose()
     },
+    // Os itens podem ter gravado e o frete não: a tela relê o que ficou.
+    onError: () => refresh(),
   })
 
-  const valid = rows.length > 0 && rows.every((r) => Number(r.quantity) > 0 && toDecimal(r.price) !== null)
-  const total = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * Number(toDecimal(r.price) ?? 0), 0)
+  const valid =
+    rows.length > 0 &&
+    rows.every((r) => Number(r.quantity) > 0 && toDecimal(r.price) !== null) &&
+    freightValid &&
+    (linesChanged || freightChanged)
+  const itemsTotal = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * Number(toDecimal(r.price) ?? 0), 0)
+  const total = itemsTotal + (freightCharged && freightAmount !== null ? Number(freightAmount) : 0)
   const pieces = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0)
 
   return (
@@ -526,8 +634,46 @@ const EditDialog = ({
           <Button variant="outline" size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>Outro produto</Button>
         )}
         {!can('catalog.write') && adding && <p className="text-[11px] text-muted">Produto que não existe só o gerente ou o dono cadastram.</p>}
+
+        <div className="rounded-2xl border border-line p-3">
+          <label className="label" htmlFor="edit-freight">
+            Frete
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-36">
+              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted">R$</span>
+              <input
+                id="edit-freight"
+                inputMode="decimal"
+                maxLength={14}
+                placeholder="0,00"
+                className={clsx('field pl-9', !freightValid && 'border-red-400')}
+                value={freight}
+                onChange={(e) => setFreight(e.target.value)}
+              />
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-ink"
+                disabled={freight.trim() === ''}
+                checked={freightCharged && freight.trim() !== ''}
+                onChange={(e) => setFreightCharged(e.target.checked)}
+              />
+              Repassar ao cliente (soma no total)
+            </label>
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            {!freightValid
+              ? 'O frete precisa ser um valor, como 90 ou 90,50 (ou fique em branco).'
+              : 'É o mesmo frete do Atendimento. Sem repassar, fica só como custo da loja.'}
+          </p>
+        </div>
+
         <div className="flex items-center justify-between rounded-2xl bg-ink px-4 py-3 text-white">
-          <span className="text-sm font-bold">{int(pieces)} peças</span>
+          <span className="text-sm font-bold">
+            {int(pieces)} peças{freightCharged && freightAmount !== null ? ` + frete ${money(freightAmount)}` : ''}
+          </span>
           <span className="display text-2xl text-lime">{money(total.toFixed(2))}</span>
         </div>
         <div>

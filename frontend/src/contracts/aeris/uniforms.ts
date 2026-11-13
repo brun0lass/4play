@@ -265,6 +265,11 @@ export const ProductionOrderLine = z.object({
   unit: z.string(),
   unitPrice: z.string().nullable(),
   lineTotal: z.string().nullable(),
+  /**
+   * A linha do frete repassado (F422). Não é peça: a ficha põe e tira, e a
+   * conta de peças do pedido não a soma.
+   */
+  freight: z.boolean().default(false),
 })
 
 export type ProductionOrderLineType = z.infer<typeof ProductionOrderLine>
@@ -363,7 +368,10 @@ export const OrderFreightSchema = z.object({
       (value) => Number(value) > 0,
       'O frete precisa ser maior que zero.'
     ),
-  /** Repassado ao cliente: entra no total que o 4Play mostra. */
+  /**
+   * Repassado ao cliente: entra no total do pedido de vendas como a linha do
+   * frete (F422) — no sinal, na retirada e no título do despacho.
+   */
   charged: z.boolean(),
 })
 
@@ -402,6 +410,11 @@ export const ProductionOrderSummary = z.object({
   deliveryAddress: DeliveryAddressSchema.nullable().default(null),
   /** O frete (F296); nulo é "sem frete" — e para quem não vê dinheiro. */
   freight: OrderFreightSchema.nullable().default(null),
+  /**
+   * O frete repassado já está no `totalAmount`, como a linha do frete (F422).
+   * Falso no pedido de antes, em que a tela ainda soma o frete por fora.
+   */
+  freightInTotal: z.boolean().default(false),
   /** Anotação, não dinheiro. O sinal recebido de verdade é `paidAmount` (F173). */
   paymentMark: UniformPaymentMarkSchema,
   /** O andamento da arte (F171). */
@@ -421,7 +434,10 @@ export const ProductionOrderSummary = z.object({
   stageVersion: z.number().int(),
   /** Grade + personalizados. */
   pieces: z.number().int(),
-  /** Total ÷ peças, no centavo. Nulo sem peça, ou para quem não vê dinheiro. */
+  /**
+   * Total com o frete repassado ÷ peças, no centavo (F422). Nulo sem peça, ou
+   * para quem não vê dinheiro.
+   */
   ticketPerPiece: z.string().nullable(),
   /** Os itens do pedido de vendas, na ordem dele (F220). */
   lines: z.array(ProductionOrderLine),
@@ -659,6 +675,43 @@ export const UpdateProductionSheetRequest = z.object({
 export type UpdateProductionSheetBody = z.input<
   typeof UpdateProductionSheetRequest
 >
+
+/**
+ * Só o frete da ficha (F422): o "Editar itens" do pedido mexe nele sem
+ * regravar o atendimento. Nulo apaga; repassado, vira a linha do frete.
+ */
+export const UpdateOrderFreightRequest = z.object({
+  /** A versão da ficha; 0 = o pedido ainda não tinha ficha. */
+  version: z.number().int().min(0),
+  freight: OrderFreightSchema.nullable(),
+})
+
+export type UpdateOrderFreightBody = z.input<typeof UpdateOrderFreightRequest>
+
+/**
+ * A peça que está na grade e não nos itens vira item do pedido (F422): o
+ * manguito do #83. O servidor confere a quantidade com a grade e dá o preço
+ * da tabela no tecido do pedido — quem chama diz o produto e, se quiser,
+ * quantos.
+ */
+export const AddGradePieceRequest = z.object({
+  productId: z.uuid(),
+  /**
+   * Quantos, quando a pessoa escolhe (o modal). Ausente: tudo o que a grade
+   * tem do produto fora dos itens. No conjunto é obrigatória.
+   */
+  quantity: z.number().int().min(1).max(100_000).optional(),
+})
+
+export type AddGradePieceBody = z.input<typeof AddGradePieceRequest>
+
+export const AddGradePieceResponse = z.object({
+  description: z.string(),
+  quantity: z.number().int(),
+  unitPrice: z.string(),
+})
+
+export type AddGradePieceResponseType = z.infer<typeof AddGradePieceResponse>
 
 export const ProductionSheetVersionResponse = z.object({
   version: z.number().int(),

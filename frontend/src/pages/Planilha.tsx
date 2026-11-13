@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
-import { Columns3, FileStack, Printer } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { Columns3, FileStack, Printer, Search } from 'lucide-react'
+import { useDeferredValue, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
 import { useStageMover } from '@/components/StageMover'
@@ -381,6 +381,9 @@ export const Planilha = () => {
   const navigate = useNavigate()
   const months = useMemo(monthOptions, [])
   const [month, setMonth] = useState('')
+  // A busca do Quadro e da Lista (o sócio, 11/11): número do pedido ou cliente.
+  const [search, setSearch] = useState('')
+  const deferred = useDeferredValue(search.trim())
   const [printCols, setPrintCols] = useState<string[]>(readPrint)
   const [choosing, setChoosing] = useState(false)
   // Os pedidos marcados para imprimir as fichas de uma vez.
@@ -391,6 +394,7 @@ export const Planilha = () => {
   const range = months.find((m) => m.value === month)
 
   const queue = useQueue({
+    search: deferred === '' ? undefined : deferred,
     pageSize: 500,
     sort: 'dispatchDate',
     direction: 'asc',
@@ -432,6 +436,17 @@ export const Planilha = () => {
   return (
     <div>
       <div className="no-print mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Número ou cliente"
+            aria-label="Buscar pedido pelo número ou pelo cliente"
+            className="field pl-9"
+          />
+        </div>
         <select
           className="field w-auto"
           value={month}

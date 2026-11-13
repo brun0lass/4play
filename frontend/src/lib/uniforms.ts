@@ -52,11 +52,6 @@ export const STAGES: readonly Stage[] = [
  */
 export const UNNAMED_PERSON = '—'
 
-/**
- * O total do pedido com o frete repassado ao cliente (F296). O frete só de
- * custo não entra. Nulo para quem não vê dinheiro. O pedido de vendas do Aeris
- * (e o título, quando o pedido sai) continua sem o frete.
- */
 /** O tecido com o acabamento (F303): "92/8 · Furadinho"; nulo sem tecido. */
 export const fabricLabel = (order: {
   fabricName: string | null
@@ -74,14 +69,34 @@ export const orderCity = (order: {
   customerCity: string | null
 }): string | null => order.deliveryAddress?.city ?? order.customerCity
 
-export const totalWithFreight = (order: {
+type FreightTotals = {
   totalAmount: string | null
   freight: { amount: string; charged: boolean } | null
-}): string | null => {
+  /** O frete repassado já está no total do pedido de vendas (F422 do Aeris). */
+  freightInTotal?: boolean
+}
+
+const centsOf = (value: string) => Math.round(Number(value) * 100)
+
+/**
+ * O total do pedido com o frete repassado ao cliente (F296). O frete só de
+ * custo não entra. Nulo para quem não vê dinheiro.
+ *
+ * Desde a F422 do Aeris, repassar põe a linha do frete no pedido de vendas: o
+ * total já vem com ele (e o sinal, o "falta" e o título também). Só o pedido
+ * de antes, ainda com o frete fora do pedido de vendas, soma aqui.
+ */
+export const totalWithFreight = (order: FreightTotals): string | null => {
   if (order.totalAmount === null) return null
-  if (!order.freight?.charged) return order.totalAmount
-  const cents = Math.round(Number(order.totalAmount) * 100) + Math.round(Number(order.freight.amount) * 100)
-  return (cents / 100).toFixed(2)
+  if (!order.freight?.charged || order.freightInTotal) return order.totalAmount
+  return ((centsOf(order.totalAmount) + centsOf(order.freight.amount)) / 100).toFixed(2)
+}
+
+/** Só os itens, sem o frete que já está dentro do total (F422). */
+export const itemsTotal = (order: FreightTotals): string | null => {
+  if (order.totalAmount === null) return null
+  if (!order.freightInTotal || !order.freight) return order.totalAmount
+  return ((centsOf(order.totalAmount) - centsOf(order.freight.amount)) / 100).toFixed(2)
 }
 
 export const SIZES: readonly Size[] = [

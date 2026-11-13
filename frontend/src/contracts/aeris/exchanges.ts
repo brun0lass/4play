@@ -288,6 +288,11 @@ export const ExchangeListQuery = z.object({
    * quando o cadastro nasceu.
    */
   brand: z.string().trim().min(1).max(120).optional(),
+  /**
+   * O cliente, pelo nome ou pelo código — F412. O Swat: "em Vale dá para
+   * pesquisar o nome do cliente, para eu conseguir achar um vale específico".
+   */
+  search: z.string().trim().max(120).optional(),
   sort: ExchangeSortSchema.default('when'),
   direction: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
@@ -307,6 +312,7 @@ export type ExchangeListRequest = {
   completedTo?: string | undefined
   reasonCode?: ExchangeReasonCode | 'sem-motivo' | undefined
   brand?: string | undefined
+  search?: string | undefined
   sort?: ExchangeSort | undefined
   direction?: 'asc' | 'desc' | undefined
   page?: number | undefined

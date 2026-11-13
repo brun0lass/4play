@@ -35,6 +35,7 @@ import {
   type Fabric,
   type Logistics,
   type PaymentMark,
+  itemsTotal,
   totalWithFreight,
 } from '@/lib/uniforms'
 
@@ -175,6 +176,8 @@ export const SheetForm = ({
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: keys.order(order.id) })
       void queryClient.invalidateQueries({ queryKey: keys.queueAll })
+      // O frete repassado muda o total do pedido de vendas (F422): o "Pagamento e saída" relê.
+      void queryClient.invalidateQueries({ queryKey: ['sales-document', order.id] })
     },
   })
 
@@ -431,9 +434,9 @@ export const SheetForm = ({
             </label>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {draft.freightCharged && draft.freight.trim() !== '' && order.totalAmount !== null && toDecimal(draft.freight) !== null
-              ? `Total com frete: ${money(totalWithFreight({ totalAmount: order.totalAmount, freight: { amount: toDecimal(draft.freight) ?? '0', charged: true } }))}.`
-              : 'Sem repassar, o frete fica só como custo, para a loja saber.'}
+            {draft.freightCharged && draft.freight.trim() !== '' && itemsTotal(order) !== null && toDecimal(draft.freight) !== null
+              ? `Total com frete: ${money(totalWithFreight({ totalAmount: itemsTotal(order), freight: { amount: toDecimal(draft.freight) ?? '0', charged: true } }))}. Entra no que o cliente paga: sinal, o que falta e o título.`
+              : 'Sem repassar, o frete fica só como custo, para a loja saber. O cliente paga só os itens.'}
           </p>
         </div>
       )}

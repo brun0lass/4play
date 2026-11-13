@@ -71,6 +71,8 @@ export const PedidoPage = () => {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: keys.order(id) })
       void queryClient.invalidateQueries({ queryKey: keys.queueAll })
+      // O frete repassado muda o total do pedido de vendas (F422).
+      void queryClient.invalidateQueries({ queryKey: ['sales-document', id] })
     },
   })
 
@@ -277,14 +279,17 @@ export const PedidoPage = () => {
 
           <div role="tabpanel" hidden={tab !== 'atendimento'} className={clsx('grid items-start gap-6', access.seeMoney && 'lg:grid-cols-2')}>
             <SheetForm order={order} editable={open && canWork(viewer, 'atendimento')} readOnlyReason={closedReason} />
-            {access.seeMoney && <OrderActions orderId={order.id} blockedReason={blockedReason} />}
+            {access.seeMoney && <OrderActions orderId={order.id} order={order} blockedReason={blockedReason} />}
           </div>
 
           <div role="tabpanel" hidden={tab !== 'grade'} className="space-y-6">
             <OrderItems
               order={order}
+              counted={[...grade, ...personalization]}
               gradePieces={grade.reduce((sum, entry) => sum + entry.quantity, 0)}
               personalizedPieces={personalization.reduce((sum, row) => sum + row.quantity, 0)}
+              canAdd={open && access.seeMoney && canWork(viewer, 'atendimento')}
+              active={tab === 'grade'}
             />
             <GradeEditor
               orderId={order.id}

@@ -569,3 +569,105 @@ export const SalesByDayResponse = z.object({
 })
 
 export type SalesByDayResponseType = z.infer<typeof SalesByDayResponse>
+
+// ---------------------------------------------------------------------------
+// A vida da peça (F410)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tudo o que aconteceu com um produto no período, todas as cores — F410.
+ *
+ * O Swat, em 09/11: "eu coloco o nome do produto ou o código e consigo saber
+ * todos os clientes que compraram e a forma de pagamento… essa tampa aqui
+ * gerou vale no dia X… entrou um a mais, saiu um a mais por causa desse
+ * motivo".
+ */
+export const ProductLifeQuery = z
+  .object({
+    productId: z.uuid(),
+    from: z.iso.datetime({ offset: true }),
+    /** Fim EXCLUSIVO, como todo período do produto. */
+    to: z.iso.datetime({ offset: true }),
+    branchId: z.uuid().optional(),
+  })
+  .refine(ordered, startsBeforeItEnds)
+  .refine(fits, withinCeiling)
+
+export type ProductLifeQuery = z.input<typeof ProductLifeQuery>
+export type ProductLifeParams = z.output<typeof ProductLifeQuery>
+
+/** Quantos acontecimentos voltam numa resposta; o resto, só nos totais. */
+export const PRODUCT_LIFE_MAX_EVENTS = 2000
+
+export const PRODUCT_LIFE_KINDS = [
+  /** Saiu numa venda ou pedido. */
+  'venda',
+  /** Voltou porque a venda foi cancelada ou corrigida. */
+  'estorno',
+  /** Voltou ao estoque numa troca ou devolução. */
+  'devolucao',
+  /** Voltou numa troca e NÃO entrou no estoque ("já era", peça de fora). */
+  'baixa',
+  /** Saiu como peça nova de uma troca. */
+  'troca',
+  'compra',
+  'contagem',
+  'transferencia',
+  'manual',
+] as const
+
+export type ProductLifeKind = (typeof PRODUCT_LIFE_KINDS)[number]
+
+export const ProductLifeEventSchema = z.object({
+  id: z.string(),
+  occurredAt: z.string(),
+  kind: z.enum(PRODUCT_LIFE_KINDS),
+  /** A observação do movimento, ou o motivo da peça que não voltou. */
+  note: z.string().nullable(),
+  /** A cor (o nome da variação); nulo no produto sem variação com nome. */
+  colour: z.string().nullable(),
+  sku: z.string().nullable(),
+  branchName: z.string().nullable(),
+  /** Com sinal: + entrou, − saiu; 0 na peça que voltou e não entrou. */
+  quantity: decimal,
+  /** O saldo da filial depois do movimento; nulo no que não mexe no estoque. */
+  balanceAfter: decimal.nullable(),
+  partyName: z.string().nullable(),
+  partyRole: z.enum(['customer', 'supplier']).nullable(),
+  documentNumber: z.number().int().nullable(),
+  /** `sale`, `exchange`, `purchase`… — para a tela abrir o documento. */
+  sourceType: z.string().nullable(),
+  sourceId: z.string().nullable(),
+  /** Vazio para quem não tem `payment.read`. */
+  paymentMethods: z.array(z.string()),
+  /** O valor desta peça no documento: o que foi cobrado ou devolvido. */
+  amount: decimal.nullable(),
+  /** O vale da troca inteira — não só desta peça. */
+  voucherAmount: decimal.nullable(),
+  actorName: z.string().nullable(),
+})
+
+export type ProductLifeEvent = z.infer<typeof ProductLifeEventSchema>
+
+export const ProductLifeResponse = z.object({
+  product: z.object({ id: z.string(), name: z.string() }),
+  period: z.object({ from: z.string(), to: z.string() }),
+  branchId: z.string().nullable(),
+  /** Do período inteiro, mesmo quando a lista foi cortada. */
+  totals: z.object({
+    entered: decimal,
+    left: decimal,
+    soldQuantity: decimal,
+    soldAmount: decimal,
+    returnedQuantity: decimal,
+    writtenOffQuantity: decimal,
+    /** Contagem, com sinal. */
+    adjustments: decimal,
+    /** A soma dos vales das trocas em que a peça voltou. */
+    vouchers: decimal,
+  }),
+  events: z.array(ProductLifeEventSchema),
+  truncated: z.boolean(),
+})
+
+export type ProductLifeResponseType = z.infer<typeof ProductLifeResponse>

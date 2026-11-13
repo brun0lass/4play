@@ -231,6 +231,22 @@ export const StockMovementSummary = z.object({
   /** The branch balance immediately after this movement. */
   onHandAfter: z.string(),
   occurredAt: z.string(),
+  /**
+   * Do outro lado do movimento (F409): o cliente da venda ou da troca, o
+   * fornecedor da compra. Nulo em contagem e transferência — e para quem não
+   * tem `sales.read` (o cliente) ou `purchasing.read` (o fornecedor).
+   */
+  partyName: z.string().nullable().default(null),
+  partyRole: z.enum(['customer', 'supplier']).nullable().default(null),
+  /** O número da venda, da troca ou da compra. */
+  documentNumber: z.number().int().nullable().default(null),
+  /**
+   * Como a venda foi paga, a forma de mais valor primeiro. Vazio para quem
+   * não tem `payment.read` — a vendedora vê o cliente, não o caixa.
+   */
+  paymentMethods: z.array(z.string()).default([]),
+  /** Quanto a troca virou vale; só para quem tem `exchange.read`. */
+  voucherAmount: z.string().nullable().default(null),
 })
 
 export type StockMovementSummary = z.infer<typeof StockMovementSummary>
